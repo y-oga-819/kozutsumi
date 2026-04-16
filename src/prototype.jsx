@@ -4,12 +4,13 @@ import { TODAY } from "./mocks/today.js";
 import { initialEvents } from "./mocks/events.js";
 import { initialTasks } from "./mocks/tasks.js";
 import { historyData } from "./mocks/history.js";
-import { fmtDuration, formatDate, timeToMin } from "./shared/lib/time.js";
+import { fmtDuration, timeToMin } from "./shared/lib/time.js";
 import { renderMarkdown } from "./shared/lib/markdown.jsx";
 import { ACTION_TYPES, log } from "./entities/action-log/logger.js";
 import { DayTimeline } from "./features/day-timeline/DayTimeline.jsx";
 import { TaskDetailPanel } from "./features/task-detail/TaskDetailPanel.jsx";
 import { EventDetailPanel } from "./features/event-detail/EventDetailPanel.jsx";
+import { TreeView } from "./features/tree-view/TreeView.jsx";
 
 // ─── Main ───────────────────────────────────────────────────────────
 export default function App() {
@@ -148,7 +149,7 @@ export default function App() {
           onOpenEvent={setEventDetailId}
         />
       ) : (
-        <TreeView historyData={historyData} />
+        <TreeView historyData={historyData} projectOrder={projectOrder} />
       )}
 
       {/* Detail panel overlay */}
@@ -658,145 +659,3 @@ function StackView({
   );
 }
 
-// ─── Tree View ──────────────────────────────────────────────────────
-function TreeView({ historyData }) {
-  const COL = 16,
-    GRAPH_LEFT = 12;
-  const groups = {};
-  historyData.forEach((t) => {
-    if (!groups[t.date]) groups[t.date] = [];
-    groups[t.date].push(t);
-  });
-  const dateGroups = Object.entries(groups).sort(([a], [b]) =>
-    b.localeCompare(a),
-  );
-
-  return (
-    <div style={{ position: "relative", paddingBottom: 40 }}>
-      {projectOrder.map((pk, pi) => (
-        <div
-          key={pk}
-          style={{
-            position: "absolute",
-            left: GRAPH_LEFT + pi * COL + COL / 2 - 1 + 16,
-            top: 0,
-            bottom: 0,
-            width: 2,
-            background: PROJECTS[pk].color,
-            opacity: 0.3,
-            zIndex: 1,
-            pointerEvents: "none",
-          }}
-        />
-      ))}
-      <div
-        style={{
-          padding: "14px 16px 6px",
-          display: "flex",
-          gap: 12,
-          position: "relative",
-          zIndex: 2,
-        }}
-      >
-        {projectOrder.map((k) => (
-          <div
-            key={k}
-            style={{ display: "flex", alignItems: "center", gap: 4 }}
-          >
-            <div
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: PROJECTS[k].color,
-              }}
-            />
-            <span
-              style={{
-                fontSize: 9,
-                color: "#52525b",
-                fontFamily: "'Noto Sans JP', sans-serif",
-              }}
-            >
-              {PROJECTS[k].name}
-            </span>
-          </div>
-        ))}
-      </div>
-      <div style={{ position: "relative", zIndex: 2 }}>
-        {dateGroups.map(([date, items]) => (
-          <div key={date}>
-            <div
-              style={{
-                padding: "10px 16px 2px",
-                display: "flex",
-                alignItems: "center",
-              }}
-            >
-              <div
-                style={{ width: GRAPH_LEFT + COL * projectOrder.length + 6 }}
-              />
-              <span style={{ fontSize: 10, color: "#52525b" }}>
-                {formatDate(date)}
-              </span>
-              <div
-                style={{
-                  flex: 1,
-                  height: 1,
-                  background: "#18181b",
-                  marginLeft: 8,
-                }}
-              />
-            </div>
-            {items.map((task) => {
-              const pi = projectOrder.indexOf(task.project);
-              const nodeLeft = 16 + GRAPH_LEFT + pi * COL + COL / 2;
-              return (
-                <div
-                  key={task.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    minHeight: 30,
-                    padding: "2px 16px",
-                    position: "relative",
-                  }}
-                >
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: nodeLeft - 4,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      background: "#0a0a0b",
-                      border: `2px solid ${PROJECTS[task.project].color}`,
-                      zIndex: 3,
-                    }}
-                  />
-                  <div
-                    style={{
-                      width: GRAPH_LEFT + COL * projectOrder.length + 6,
-                      flexShrink: 0,
-                    }}
-                  />
-                  <span
-                    style={{
-                      fontFamily: "'Noto Sans JP', sans-serif",
-                      fontSize: 11,
-                      color: "#71717a",
-                    }}
-                  >
-                    {task.title}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
