@@ -1,0 +1,58 @@
+import type { Task } from "../entities/task/types";
+
+export const initialTasks: Task[] = [
+  {
+    id: "t1",
+    project: "career",
+    title: "面接対策：志望動機の最終整理",
+    size: "M",
+    done: false,
+    dependsOn: "e3",
+    body: "## やること\n\n- **志望動機**を3パターン用意\n- 技術的な強みの整理\n  - DDD / Clean Architecture\n  - SLI/SLO導入経験\n- 逆質問リストの準備\n\n## 参考\n\n`転職ドラフト`のフィードバックを確認\n\n> 上流工程への関与意欲が伝わる内容にすること",
+  },
+  {
+    id: "t2",
+    project: "slo",
+    title: "SLI定義ドキュメント更新",
+    size: "M",
+    done: false,
+    dependsOn: "e2",
+    body: "## 対象\n\nWeb Cart フロントエンドの SLI\n\n## 更新内容\n\n- Availability SLI: `成功リクエスト / 全リクエスト`\n- Latency SLI: `p99 < 500ms`\n- 計測ポイントをNew Relicの`Transaction`に合わせる",
+  },
+  {
+    id: "t3",
+    project: "loadtest",
+    title: "WireMock stub定義作成",
+    size: "M",
+    done: false,
+    dependsOn: null,
+    body: "chaos test用のstub定義ファイルを作成する\n\n### エンドポイント\n\n1. `/api/v1/orders` — 正常レスポンス\n2. `/api/v1/orders` — 429 レスポンス (rate limit)\n3. `/api/v1/payments` — 500ms遅延",
+  },
+  {
+    id: "t4",
+    project: "career",
+    title: "職務経歴書PDF最終版を送付",
+    size: "S",
+    done: false,
+    dependsOn: null,
+    body: "最終版PDFを浅野さんにメール送付\n\n確認ポイント:\n- 誤字脱字チェック済み\n- BASE在籍期間の記載が正確か",
+  },
+  {
+    id: "t5",
+    project: "tasuki",
+    title: "AnalyzerContract trait設計",
+    size: "L",
+    done: false,
+    dependsOn: null,
+    body: "## 目的\n\ncode-inspector用の抽象化層を設計する\n\n## 設計メモ\n\n```rust\ntrait AnalyzerContract {\n    fn analyze(&self, input: &SourceFile) -> AnalysisResult;\n    fn supports(&self, file_type: &FileType) -> bool;\n}\n```\n\n- php-parser と tree-sitter の両方に対応\n- call chain 解析は別traitに分離",
+  },
+  {
+    id: "t6",
+    project: "loadtest",
+    title: "Locustシナリオ実装",
+    size: "L",
+    done: false,
+    dependsOn: null,
+    body: "ピーク負荷パターンのシナリオを実装\n\n## 要件\n\n- 通常: 100 RPS\n- ピーク: 500 RPS (10分間)\n- ramp-up: 5分\n\n## メモ\n\n分散モードで ECS 上に展開予定",
+  },
+];
