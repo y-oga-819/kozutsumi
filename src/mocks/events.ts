@@ -1,6 +1,7 @@
-import { TODAY } from "./today.js";
+import type { Event } from "../entities/event/types";
+import { TODAY } from "./today";
 
-export const initialEvents = [
+export const initialEvents: Event[] = [
   {
     id: "e2",
     title: "SLOレビューMTG",

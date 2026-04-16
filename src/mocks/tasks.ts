@@ -1,4 +1,6 @@
-export const initialTasks = [
+import type { Task } from "../entities/task/types";
+
+export const initialTasks: Task[] = [
   {
     id: "t1",
     project: "career",

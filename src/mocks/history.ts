@@ -1,4 +1,6 @@
-export const historyData = [
+import type { HistoryEntry } from "../entities/task/types";
+
+export const historyData: HistoryEntry[] = [
   {
     id: "h1",
     project: "career",

@@ -1,3 +1,9 @@
+import type {
+  ActionLogEntry,
+  ActionMetadataMap,
+  ActionType,
+} from "./types";
+
 /**
  * action-log logger
  *
@@ -19,30 +25,33 @@ export const ACTION_TYPES = Object.freeze({
   INTERRUPTION_COMPLETED: "interruption_completed",
   STACK_PROPOSED: "stack_proposed",
   STACK_PROPOSAL_ACCEPTED: "stack_proposal_accepted",
-});
+}) satisfies Readonly<Record<string, ActionType>>;
 
-const KNOWN_TYPES = new Set(Object.values(ACTION_TYPES));
+const KNOWN_TYPES = new Set<ActionType>(Object.values(ACTION_TYPES));
 
-let memoryLog = [];
+let memoryLog: ActionLogEntry[] = [];
 
-export function log(actionType, metadata = {}) {
+export function log<T extends ActionType>(
+  actionType: T,
+  metadata?: ActionMetadataMap[T],
+): ActionLogEntry<T> {
   if (!KNOWN_TYPES.has(actionType)) {
     throw new Error(`unknown action_type: ${actionType}`);
   }
-  const entry = {
+  const entry: ActionLogEntry<T> = {
     action_type: actionType,
-    metadata,
+    metadata: metadata ?? ({} as ActionMetadataMap[T]),
     created_at: new Date().toISOString(),
   };
   memoryLog.push(entry);
-  console.log("[action-log]", actionType, metadata);
+  console.log("[action-log]", actionType, entry.metadata);
   return entry;
 }
 
-export function getLog() {
+export function getLog(): ActionLogEntry[] {
   return [...memoryLog];
 }
 
-export function clearLog() {
+export function clearLog(): void {
   memoryLog = [];
 }

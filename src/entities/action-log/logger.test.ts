@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { ACTION_TYPES, clearLog, getLog, log } from "./logger.js";
+import { ACTION_TYPES, clearLog, getLog, log } from "./logger";
 
 describe("log()", () => {
   beforeEach(() => {
@@ -29,7 +29,10 @@ describe("log()", () => {
   });
 
   test("未知の action_type はエラーを投げる", () => {
-    expect(() => log("unknown_type", {})).toThrow(/unknown action_type/i);
+    expect(() =>
+      // @ts-expect-error ランタイムバリデーションをテストする
+      log("unknown_type", {}),
+    ).toThrow(/unknown action_type/i);
   });
 });
 
@@ -45,7 +48,11 @@ describe("getLog()", () => {
   test("内部配列の防御的コピーを返す（外部変更が影響しない）", () => {
     log(ACTION_TYPES.TASK_COMPLETED, { task_id: "t1" });
     const snapshot = getLog();
-    snapshot.push({ fake: "entry" });
+    snapshot.push({
+      action_type: "task_deleted",
+      metadata: { task_id: "fake" },
+      created_at: "fake",
+    });
     expect(getLog()).toHaveLength(1);
   });
 });
