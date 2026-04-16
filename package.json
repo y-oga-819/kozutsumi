@@ -1,0 +1,22 @@
+{
+  "name": "kozutsumi",
+  "version": "0.0.1",
+  "description": "個人特化AI秘書システム。タスク管理から始め、行動パターンを学習して「自分専用の秘書」を育てる。",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@vitejs/plugin-react": "^4.7.0",
+    "happy-dom": "^20.9.0",
+    "vitest": "^4.1.4"
+  }
+}
