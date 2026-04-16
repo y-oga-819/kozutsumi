@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { render } from "@testing-library/react";
-import { renderMarkdown } from "./markdown.jsx";
+import { renderMarkdown } from "./markdown";
 
 describe("renderMarkdown", () => {
   test("null/undefined は null を返す", () => {

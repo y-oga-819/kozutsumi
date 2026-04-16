@@ -1,4 +1,6 @@
-function inlineStyle(text) {
+import type { ReactNode } from "react";
+
+function inlineStyle(text: string): string {
   let result = text.replace(
     /`([^`]+)`/g,
     '<code style="background:#27272a;padding:1px 5px;border-radius:3px;font-size:0.9em;color:#a1a1aa">$1</code>',
@@ -11,10 +13,14 @@ function inlineStyle(text) {
   return result;
 }
 
-export function renderMarkdown(md) {
+type HeadingLevel = 1 | 2 | 3;
+
+export function renderMarkdown(
+  md: string | null | undefined,
+): ReactNode[] | null {
   if (!md) return null;
   const lines = md.split("\n");
-  const elements = [];
+  const elements: ReactNode[] = [];
   let i = 0;
   let key = 0;
 
@@ -28,8 +34,8 @@ export function renderMarkdown(md) {
 
     const hMatch = line.match(/^(#{1,3})\s+(.+)/);
     if (hMatch) {
-      const level = hMatch[1].length;
-      const sizes = { 1: 15, 2: 13, 3: 12 };
+      const level = hMatch[1].length as HeadingLevel;
+      const sizes: Record<HeadingLevel, number> = { 1: 15, 2: 13, 3: 12 };
       elements.push(
         <div
           key={key++}
@@ -70,7 +76,7 @@ export function renderMarkdown(md) {
 
     if (line.startsWith("```")) {
       const lang = line.slice(3).trim();
-      const codeLines = [];
+      const codeLines: string[] = [];
       i++;
       while (i < lines.length && !lines[i].startsWith("```")) {
         codeLines.push(lines[i]);
@@ -105,9 +111,10 @@ export function renderMarkdown(md) {
     }
 
     if (line.match(/^[-*]\s/)) {
-      const items = [];
-      while (i < lines.length && lines[i].match(/^(\s*)[-*]\s/)) {
+      const items: { text: string; indent: number }[] = [];
+      while (i < lines.length) {
         const m = lines[i].match(/^(\s*)[-*]\s+(.*)/);
+        if (!m) break;
         const indent = m[1].length > 0 ? 1 : 0;
         items.push({ text: m[2], indent });
         i++;
@@ -139,7 +146,7 @@ export function renderMarkdown(md) {
     }
 
     if (line.match(/^\d+\.\s/)) {
-      const items = [];
+      const items: string[] = [];
       while (i < lines.length && lines[i].match(/^\d+\.\s/)) {
         items.push(lines[i].replace(/^\d+\.\s+/, ""));
         i++;
