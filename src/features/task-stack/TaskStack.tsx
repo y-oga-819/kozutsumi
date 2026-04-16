@@ -1,9 +1,11 @@
-import { DoneList } from "./DoneList.jsx";
-import { TaskRow } from "./TaskRow.jsx";
-import { TopTaskCard } from "./TopTaskCard.jsx";
-import { useStackDnD } from "./useStackDnD.js";
+import type { Task } from "../../entities/task/types";
+import type { Event } from "../../entities/event/types";
+import { DoneList } from "./DoneList";
+import { TaskRow } from "./TaskRow";
+import { TopTaskCard } from "./TopTaskCard";
+import { useStackDnD } from "./useStackDnD";
 
-function StackHeader({ count }) {
+function StackHeader({ count }: { count: number }) {
   return (
     <div
       style={{
@@ -43,14 +45,16 @@ function DropIndicator() {
   );
 }
 
-export function TaskStack({
-  events,
-  pendingTasks,
-  doneTasks,
-  onReorder,
-  onToggleDone,
-  onOpenDetail,
-}) {
+type TaskStackProps = {
+  events: Event[];
+  pendingTasks: Task[];
+  doneTasks: Task[];
+  onReorder: (from: number, to: number) => void;
+  onToggleDone: (id: string) => void;
+  onOpenDetail: (id: string) => void;
+};
+
+export function TaskStack({ events, pendingTasks, doneTasks, onReorder, onToggleDone, onOpenDetail }: TaskStackProps) {
   const { dragIdx, overIdx, rowRefs, handlePointerDown } =
     useStackDnD(onReorder);
 
@@ -67,7 +71,7 @@ export function TaskStack({
         return (
           <div
             key={task.id}
-            ref={(el) => {
+            ref={(el: HTMLDivElement | null) => {
               rowRefs.current[idx] = el;
             }}
           >

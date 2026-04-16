@@ -1,19 +1,24 @@
-import { PROJECTS } from "../../entities/project/projects.js";
-import { Grip } from "./Grip.jsx";
+import type { Task } from "../../entities/task/types";
+import type { Event } from "../../entities/event/types";
+import type { PointerEvent as ReactPointerEvent } from "react";
+import { PROJECTS } from "../../entities/project/projects";
+import { Grip } from "./Grip";
 
-function bodyPreview(body) {
+function bodyPreview(body: string): string {
   if (!body) return "";
   return body.split("\n").find((l) => l.trim() && !l.startsWith("#")) || "";
 }
 
-export function TopTaskCard({
-  task,
-  events,
-  isBeingDragged,
-  onPointerDown,
-  onClick,
-  onToggleDone,
-}) {
+type TopTaskCardProps = {
+  task: Task;
+  events: Event[];
+  isBeingDragged: boolean;
+  onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
+  onClick: () => void;
+  onToggleDone: () => void;
+};
+
+export function TopTaskCard({ task, events, isBeingDragged, onPointerDown, onClick, onToggleDone }: TopTaskCardProps) {
   const proj = PROJECTS[task.project];
   const dep = task.dependsOn
     ? events.find((e) => e.id === task.dependsOn)

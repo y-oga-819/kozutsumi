@@ -1,11 +1,13 @@
 import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
-import { DoneList } from "./DoneList.jsx";
-import { TaskRow } from "./TaskRow.jsx";
-import { TaskStack } from "./TaskStack.jsx";
-import { TopTaskCard } from "./TopTaskCard.jsx";
+import { DoneList } from "./DoneList";
+import { TaskRow } from "./TaskRow";
+import { TaskStack } from "./TaskStack";
+import { TopTaskCard } from "./TopTaskCard";
+import type { Task } from "../../entities/task/types";
+import type { Event } from "../../entities/event/types";
 
-const baseTask = {
+const baseTask: Task = {
   id: "t1",
   project: "slo",
   title: "SLI 定義更新",
@@ -34,7 +36,7 @@ describe("TopTaskCard", () => {
   });
 
   test("dependsOn の依存イベントを解決してバッジ表示", () => {
-    const events = [{ id: "e1", time: "14:00", endTime: "15:00" }];
+    const events: Event[] = [{ id: "e1", time: "14:00", endTime: "15:00", title: "MTG", date: "2026-04-11" }];
     const { getByText } = render(
       <TopTaskCard
         task={{ ...baseTask, dependsOn: "e1" }}
@@ -75,7 +77,7 @@ describe("TopTaskCard", () => {
         onToggleDone={onToggleDone}
       />,
     );
-    const button = container.querySelector("button");
+    const button = container.querySelector("button")!;
     fireEvent.click(button);
     expect(onToggleDone).toHaveBeenCalledTimes(1);
     // stopPropagation により onClick (カード全体) は発火しない

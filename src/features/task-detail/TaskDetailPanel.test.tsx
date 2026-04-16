@@ -1,8 +1,10 @@
 import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
-import { TaskDetailPanel } from "./TaskDetailPanel.jsx";
+import type { Task } from "../../entities/task/types";
+import type { Event } from "../../entities/event/types";
+import { TaskDetailPanel, type TaskDetailPanelProps } from "./TaskDetailPanel";
 
-const baseTask = {
+const baseTask: Task = {
   id: "t1",
   project: "slo",
   title: "Test Task",
@@ -14,8 +16,8 @@ const baseTask = {
 
 const noop = () => {};
 
-function renderPanel(overrides = {}) {
-  const props = {
+function renderPanel(overrides: Partial<TaskDetailPanelProps> = {}) {
+  const props: TaskDetailPanelProps = {
     task: baseTask,
     events: [],
     onClose: noop,
@@ -80,7 +82,7 @@ describe("TaskDetailPanel", () => {
   });
 
   test("dependsOn がある場合、依存イベントの時刻バッジを表示", () => {
-    const events = [{ id: "e1", time: "14:00", endTime: "15:00", title: "MTG" }];
+    const events: Event[] = [{ id: "e1", time: "14:00", endTime: "15:00", title: "MTG", date: "2026-04-11" }];
     const { getByText } = renderPanel({
       task: { ...baseTask, dependsOn: "e1" },
       events,

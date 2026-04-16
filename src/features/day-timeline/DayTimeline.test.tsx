@@ -1,13 +1,16 @@
 import { render } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
-import { DayTimeline } from "./DayTimeline.jsx";
+import { DayTimeline } from "./DayTimeline";
 
-const events = [
+import type { Event } from "../../entities/event/types";
+
+const events: Event[] = [
   {
     id: "e1",
     title: "Meeting A",
     time: "10:00",
     endTime: "11:00",
+    date: "2026-04-11",
     project: "slo",
   },
 ];

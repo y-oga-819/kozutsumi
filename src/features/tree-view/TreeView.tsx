@@ -1,12 +1,19 @@
-import { DateGroup } from "./DateGroup.jsx";
-import { groupByDateDesc } from "./layout.js";
-import { ProjectLanes } from "./ProjectLanes.jsx";
+import type { HistoryEntry } from "../../entities/task/types";
+import type { ProjectKey } from "../../entities/project/types";
+import { DateGroup } from "./DateGroup";
+import { groupByDateDesc } from "./layout";
+import { ProjectLanes } from "./ProjectLanes";
+
+type TreeViewProps = {
+  historyData: HistoryEntry[];
+  projectOrder: readonly ProjectKey[];
+};
 
 /**
  * git log tree 風の履歴ビュー。
  * 縦軸が時間（日付）、横軸がプロジェクト（レーン）。
  */
-export function TreeView({ historyData, projectOrder }) {
+export function TreeView({ historyData, projectOrder }: TreeViewProps) {
   const dateGroups = groupByDateDesc(historyData);
 
   return (

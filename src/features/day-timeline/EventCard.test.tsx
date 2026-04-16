@@ -1,12 +1,15 @@
 import { render } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
-import { EventCard } from "./EventCard.jsx";
+import { EventCard } from "./EventCard";
 
-const baseEvent = {
+import type { Event } from "../../entities/event/types";
+
+const baseEvent: Event = {
   id: "e1",
   title: "Test Event",
   time: "10:00",
   endTime: "11:00",
+  date: "2026-04-11",
   project: "slo",
 };
 

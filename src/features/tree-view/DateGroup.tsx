@@ -1,11 +1,19 @@
-import { PROJECTS } from "../../entities/project/projects.js";
-import { formatDate } from "../../shared/lib/time.js";
-import { lanesWidthPx, nodeCenterPx } from "./layout.js";
+import type { HistoryEntry } from "../../entities/task/types";
+import type { ProjectKey } from "../../entities/project/types";
+import { PROJECTS } from "../../entities/project/projects";
+import { formatDate } from "../../shared/lib/time";
+import { lanesWidthPx, nodeCenterPx } from "./layout";
+
+type DateGroupProps = {
+  date: string;
+  items: HistoryEntry[];
+  projectOrder: readonly ProjectKey[];
+};
 
 /**
  * 1つの日付に属するタスク群を、日付見出しとノード列で描画する。
  */
-export function DateGroup({ date, items, projectOrder }) {
+export function DateGroup({ date, items, projectOrder }: DateGroupProps) {
   const lanesWidth = lanesWidthPx(projectOrder.length);
 
   return (

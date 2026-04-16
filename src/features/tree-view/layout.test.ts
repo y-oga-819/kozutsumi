@@ -6,7 +6,7 @@ import {
   laneLeftPx,
   lanesWidthPx,
   nodeCenterPx,
-} from "./layout.js";
+} from "./layout";
 
 describe("laneLeftPx / nodeCenterPx / lanesWidthPx", () => {
   test("プロジェクトインデックス 0 のレーン位置", () => {
@@ -26,11 +26,11 @@ describe("groupByDateDesc", () => {
   });
 
   test("日付でグループ化し、日付降順でソート", () => {
-    const history = [
-      { id: "h1", date: "2026-04-05", title: "t1" },
-      { id: "h2", date: "2026-04-07", title: "t2" },
-      { id: "h3", date: "2026-04-05", title: "t3" },
-      { id: "h4", date: "2026-04-06", title: "t4" },
+    const history: import("../../entities/task/types").HistoryEntry[] = [
+      { id: "h1", date: "2026-04-05", title: "t1", project: "career", done: true },
+      { id: "h2", date: "2026-04-07", title: "t2", project: "slo", done: true },
+      { id: "h3", date: "2026-04-05", title: "t3", project: "loadtest", done: true },
+      { id: "h4", date: "2026-04-06", title: "t4", project: "tasuki", done: true },
     ];
     const result = groupByDateDesc(history);
     expect(result.map(([date]) => date)).toEqual([

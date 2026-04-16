@@ -1,12 +1,27 @@
-import { timeToMin } from "../../shared/lib/time.js";
+import type { Event } from "../../entities/event/types";
+import { timeToMin } from "../../shared/lib/time";
 
-/**
- * その日の表示範囲（時間単位に丸めた DAY_START / DAY_END）を決める。
- *
- * - 9:00-18:00 を基本
- * - より早い開始 / より遅い終了 / nowMin が範囲外なら拡張
- */
-export function computeDayBounds(events, nowMin) {
+export type EventSlot = {
+  type: "event";
+  start: number;
+  end: number;
+  duration: number;
+  event: Event;
+};
+
+export type FreeSlot = {
+  type: "free";
+  start: number;
+  end: number;
+  duration: number;
+};
+
+export type Slot = EventSlot | FreeSlot;
+
+export function computeDayBounds(
+  events: readonly Event[],
+  nowMin: number,
+): { dayStart: number; dayEnd: number } {
   const latestEnd = Math.max(
     18 * 60,
     nowMin,
@@ -22,16 +37,15 @@ export function computeDayBounds(events, nowMin) {
   };
 }
 
-/**
- * events を時系列の slot 配列に変換する。
- * slot は `{ type: 'free' | 'event', start, end, duration, event? }`。
- * event 間の空白は free slot として埋められる。
- */
-export function buildSlots(events, dayStart, dayEnd) {
+export function buildSlots(
+  events: readonly Event[],
+  dayStart: number,
+  dayEnd: number,
+): Slot[] {
   const sorted = [...events].sort(
     (a, b) => timeToMin(a.time) - timeToMin(b.time),
   );
-  const slots = [];
+  const slots: Slot[] = [];
   let cursor = dayStart;
   sorted.forEach((ev) => {
     const evStart = timeToMin(ev.time);

@@ -1,4 +1,12 @@
-export function DoneList({ doneTasks, onOpenDetail, onToggleDone }) {
+import type { Task } from "../../entities/task/types";
+
+type DoneListProps = {
+  doneTasks: Task[];
+  onOpenDetail: (id: string) => void;
+  onToggleDone: (id: string) => void;
+};
+
+export function DoneList({ doneTasks, onOpenDetail, onToggleDone }: DoneListProps) {
   if (doneTasks.length === 0) return null;
   return (
     <>

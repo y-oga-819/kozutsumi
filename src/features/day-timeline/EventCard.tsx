@@ -1,7 +1,15 @@
-import { PROJECTS } from "../../entities/project/projects.js";
-import { fmtDuration, timeToMin } from "../../shared/lib/time.js";
+import type { Event } from "../../entities/event/types";
+import { PROJECTS } from "../../entities/project/projects";
+import { fmtDuration, timeToMin } from "../../shared/lib/time";
 
-export function EventCard({ event, nowMin, isNextCandidate, onClick }) {
+type EventCardProps = {
+  event: Event;
+  nowMin: number;
+  isNextCandidate: boolean;
+  onClick: () => void;
+};
+
+export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCardProps) {
   const evStart = timeToMin(event.time);
   const evEnd = timeToMin(event.endTime);
   const isPast = evEnd <= nowMin;
@@ -157,11 +165,11 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }) {
               gap: 5,
               padding: "4px 10px",
               borderRadius: 5,
-              background: event.meetUrl.includes("zoom")
+              background: event.meetUrl!.includes("zoom")
                 ? "#2D8CFF20"
                 : "#00AC4718",
-              border: `1px solid ${event.meetUrl.includes("zoom") ? "#2D8CFF30" : "#00AC4725"}`,
-              color: event.meetUrl.includes("zoom") ? "#5B9EFF" : "#34D399",
+              border: `1px solid ${event.meetUrl!.includes("zoom") ? "#2D8CFF30" : "#00AC4725"}`,
+              color: event.meetUrl!.includes("zoom") ? "#5B9EFF" : "#34D399",
               textDecoration: "none",
               fontSize: 10,
               fontFamily: "'Noto Sans JP', sans-serif",
@@ -202,7 +210,7 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }) {
                 fontFamily: "'Noto Sans JP', sans-serif",
               }}
             >
-              資料 {event.attachments.length}件
+              資料 {event.attachments!.length}件
             </span>
           )}
         </div>

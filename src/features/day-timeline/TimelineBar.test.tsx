@@ -1,17 +1,18 @@
 import { render } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
-import { TimelineBar } from "./TimelineBar.jsx";
+import type { Slot } from "./buildSlots";
+import { TimelineBar } from "./TimelineBar";
 
 describe("TimelineBar", () => {
   test("slots を描画する（crash しない）", () => {
-    const slots = [
+    const slots: Slot[] = [
       { type: "free", start: 540, end: 600, duration: 60 },
       {
         type: "event",
         start: 600,
         end: 660,
         duration: 60,
-        event: { project: "slo", title: "ev1" },
+        event: { id: "e1", title: "ev1", time: "10:00", endTime: "11:00", date: "2026-04-11", project: "slo" },
       },
       { type: "free", start: 660, end: 1080, duration: 420 },
     ];

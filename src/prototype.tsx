@@ -1,24 +1,28 @@
 import { useCallback, useState } from "react";
-import { projectOrder } from "./entities/project/projects.js";
-import { TODAY } from "./mocks/today.js";
-import { initialEvents } from "./mocks/events.js";
-import { initialTasks } from "./mocks/tasks.js";
-import { historyData } from "./mocks/history.js";
-import { ACTION_TYPES, log } from "./entities/action-log/logger.js";
-import { DayTimeline } from "./features/day-timeline/DayTimeline.jsx";
-import { TaskDetailPanel } from "./features/task-detail/TaskDetailPanel.jsx";
-import { EventDetailPanel } from "./features/event-detail/EventDetailPanel.jsx";
-import { TreeView } from "./features/tree-view/TreeView.jsx";
-import { TaskStack } from "./features/task-stack/TaskStack.jsx";
+import type { Task } from "./entities/task/types";
+import type { Event } from "./entities/event/types";
+import { projectOrder } from "./entities/project/projects";
+import { TODAY } from "./mocks/today";
+import { initialEvents } from "./mocks/events";
+import { initialTasks } from "./mocks/tasks";
+import { historyData } from "./mocks/history";
+import { ACTION_TYPES, log } from "./entities/action-log/logger";
+import { DayTimeline } from "./features/day-timeline/DayTimeline";
+import { TaskDetailPanel } from "./features/task-detail/TaskDetailPanel";
+import { EventDetailPanel } from "./features/event-detail/EventDetailPanel";
+import { TreeView } from "./features/tree-view/TreeView";
+import { TaskStack } from "./features/task-stack/TaskStack";
+
+type View = "stack" | "tree";
 
 // ─── Main ───────────────────────────────────────────────────────────
 export default function App() {
-  const [view, setView] = useState("stack");
-  const [tasks, setTasks] = useState(initialTasks);
-  const [detailId, setDetailId] = useState(null);
-  const [eventDetailId, setEventDetailId] = useState(null);
+  const [view, setView] = useState<View>("stack");
+  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [eventDetailId, setEventDetailId] = useState<string | null>(null);
 
-  const toggleDone = useCallback((id) => {
+  const toggleDone = useCallback((id: string) => {
     setTasks((ts) => {
       const target = ts.find((t) => t.id === id);
       if (target && !target.done) {
@@ -28,11 +32,11 @@ export default function App() {
     });
   }, []);
 
-  const updateBody = useCallback((id, body) => {
+  const updateBody = useCallback((id: string, body: string) => {
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, body } : t)));
   }, []);
 
-  const reorder = useCallback((fromIdx, toIdx) => {
+  const reorder = useCallback((fromIdx: number, toIdx: number) => {
     setTasks((ts) => {
       const pending = ts.filter((t) => !t.done);
       const done = ts.filter((t) => t.done);
@@ -116,7 +120,7 @@ export default function App() {
           ].map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setView(tab.key)}
+              onClick={() => setView(tab.key as View)}
               style={{
                 fontSize: 11,
                 fontFamily: "'IBM Plex Mono', monospace",
@@ -178,6 +182,18 @@ export default function App() {
 }
 
 // ─── Stack View ─────────────────────────────────────────────────────
+type StackViewProps = {
+  events: Event[];
+  pendingTasks: Task[];
+  doneTasks: Task[];
+  toggleDone: (id: string) => void;
+  reorder: (from: number, to: number) => void;
+  nowMin: number;
+  today: string;
+  onOpenDetail: (id: string) => void;
+  onOpenEvent: (id: string) => void;
+};
+
 function StackView({
   events,
   pendingTasks,
@@ -188,7 +204,7 @@ function StackView({
   today,
   onOpenDetail,
   onOpenEvent,
-}) {
+}: StackViewProps) {
   return (
     <div style={{ padding: "0 0 100px" }}>
       <DayTimeline

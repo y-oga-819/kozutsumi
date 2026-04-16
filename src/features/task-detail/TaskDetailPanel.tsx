@@ -1,14 +1,18 @@
 import { useState } from "react";
-import { PROJECTS } from "../../entities/project/projects.js";
-import { renderMarkdown } from "../../shared/lib/markdown.jsx";
+import type { Task } from "../../entities/task/types";
+import type { Event } from "../../entities/event/types";
+import { PROJECTS } from "../../entities/project/projects";
+import { renderMarkdown } from "../../shared/lib/markdown";
 
-export function TaskDetailPanel({
-  task,
-  events,
-  onClose,
-  onUpdate,
-  onToggleDone,
-}) {
+export type TaskDetailPanelProps = {
+  task: Task;
+  events: Event[];
+  onClose: () => void;
+  onUpdate: (id: string, body: string) => void;
+  onToggleDone: (id: string) => void;
+};
+
+export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone }: TaskDetailPanelProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.body || "");
   const proj = PROJECTS[task.project];

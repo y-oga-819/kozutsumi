@@ -1,27 +1,34 @@
-import { useCallback, useRef, useState } from "react";
-import { findDropTarget } from "./findDropTarget.js";
+import {
+  useCallback,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import { findDropTarget } from "./findDropTarget";
 
-/**
- * pointer ベースのタスクスタック用 DnD hook。
- *
- * @param {(from: number, to: number) => void} onReorder - 並べ替え確定時に呼ばれる
- * @returns {{
- *   dragIdx: number | null,
- *   overIdx: number | null,
- *   rowRefs: { current: (HTMLElement | null)[] },
- *   handlePointerDown: (idx: number, event: PointerEvent) => void,
- * }}
- */
-export function useStackDnD(onReorder) {
-  const [dragIdx, setDragIdx] = useState(null);
-  const [overIdx, setOverIdx] = useState(null);
-  const rowRefs = useRef([]);
-  const dragIdxRef = useRef(null);
-  const overIdxRef = useRef(null);
+export type UseStackDnDResult = {
+  dragIdx: number | null;
+  overIdx: number | null;
+  rowRefs: MutableRefObject<(HTMLDivElement | null)[]>;
+  handlePointerDown: (
+    idx: number,
+    e: ReactPointerEvent<HTMLElement>,
+  ) => void;
+};
+
+export function useStackDnD(
+  onReorder: (from: number, to: number) => void,
+): UseStackDnDResult {
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const dragIdxRef = useRef<number | null>(null);
+  const overIdxRef = useRef<number | null>(null);
   const startY = useRef(0);
   const isDragging = useRef(false);
 
-  const computeTarget = useCallback((clientY) => {
+  const computeTarget = useCallback((clientY: number): number => {
     const rects = rowRefs.current.map((el) =>
       el ? el.getBoundingClientRect() : null,
     );
@@ -29,7 +36,7 @@ export function useStackDnD(onReorder) {
   }, []);
 
   const handlePointerDown = useCallback(
-    (idx, e) => {
+    (idx: number, e: ReactPointerEvent<HTMLElement>) => {
       e.preventDefault();
       startY.current = e.clientY;
       isDragging.current = false;
@@ -38,7 +45,7 @@ export function useStackDnD(onReorder) {
       setDragIdx(idx);
       setOverIdx(null);
 
-      const onMove = (ev) => {
+      const onMove = (ev: PointerEvent) => {
         ev.preventDefault();
         const cy = ev.clientY ?? 0;
         if (!isDragging.current && Math.abs(cy - startY.current) > 5)

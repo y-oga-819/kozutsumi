@@ -1,8 +1,14 @@
-import { PROJECTS } from "../../entities/project/projects.js";
-import { fmtDuration, timeToMin } from "../../shared/lib/time.js";
-import { renderMarkdown } from "../../shared/lib/markdown.jsx";
+import type { Event } from "../../entities/event/types";
+import { PROJECTS } from "../../entities/project/projects";
+import { fmtDuration, timeToMin } from "../../shared/lib/time";
+import { renderMarkdown } from "../../shared/lib/markdown";
 
-export function EventDetailPanel({ event, onClose }) {
+type EventDetailPanelProps = {
+  event: Event;
+  onClose: () => void;
+};
+
+export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
   const proj = event.project ? PROJECTS[event.project] : null;
   const evColor = proj ? proj.color : "#52525b";
   const evStart = timeToMin(event.time);

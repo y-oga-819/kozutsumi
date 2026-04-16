@@ -1,11 +1,13 @@
 import { describe, expect, test } from "vitest";
-import { buildSlots, computeDayBounds } from "./buildSlots.js";
+import type { Event } from "../../entities/event/types";
+import { buildSlots, computeDayBounds } from "./buildSlots";
 
-const ev = (id, time, endTime, project = "slo") => ({
+const ev = (id: string, time: string, endTime: string, project = "slo"): Event => ({
   id,
   time,
   endTime,
-  project,
+  date: "2026-04-11",
+  project: project as Event["project"],
   title: `ev ${id}`,
 });
 
@@ -49,7 +51,7 @@ describe("buildSlots", () => {
     const events = [ev("e1", "10:00", "11:00")];
     const slots = buildSlots(events, 9 * 60, 18 * 60);
     expect(slots.map((s) => s.type)).toEqual(["free", "event", "free"]);
-    expect(slots[1].event.id).toBe("e1");
+    expect(slots[1].type === "event" && slots[1].event.id).toBe("e1");
   });
 
   test("dayStart と同時刻に始まるイベントは先頭に free を挿入しない", () => {
@@ -73,7 +75,7 @@ describe("buildSlots", () => {
   test("時刻順でない入力も開始時刻順にソートされる", () => {
     const events = [ev("e2", "14:00", "15:00"), ev("e1", "10:00", "11:00")];
     const slots = buildSlots(events, 9 * 60, 18 * 60);
-    const eventIds = slots.filter((s) => s.type === "event").map((s) => s.event.id);
+    const eventIds = slots.filter((s): s is import("./buildSlots").EventSlot => s.type === "event").map((s) => s.event.id);
     expect(eventIds).toEqual(["e1", "e2"]);
   });
 

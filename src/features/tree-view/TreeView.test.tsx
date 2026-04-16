@@ -1,10 +1,12 @@
 import { render } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
-import { TreeView } from "./TreeView.jsx";
+import type { HistoryEntry } from "../../entities/task/types";
+import type { ProjectKey } from "../../entities/project/types";
+import { TreeView } from "./TreeView";
 
-const projectOrder = ["career", "loadtest", "slo", "tasuki"];
+const projectOrder: ProjectKey[] = ["career", "loadtest", "slo", "tasuki"];
 
-const history = [
+const history: HistoryEntry[] = [
   { id: "h1", project: "career", title: "転職ドラフト応募完了", date: "2026-04-05", done: true },
   { id: "h2", project: "slo", title: "SLI候補の洗い出し", date: "2026-04-05", done: true },
   { id: "h3", project: "tasuki", title: "php-parser PoC完了", date: "2026-04-06", done: true },

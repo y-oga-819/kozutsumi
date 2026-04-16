@@ -1,15 +1,18 @@
 import { useMemo } from "react";
-import {
-  fmtDuration,
-  fmtMin,
-  formatDate,
-  timeToMin,
-} from "../../shared/lib/time.js";
-import { buildSlots, computeDayBounds } from "./buildSlots.js";
-import { EventCard } from "./EventCard.jsx";
-import { TimelineBar } from "./TimelineBar.jsx";
+import type { Event } from "../../entities/event/types";
+import { fmtDuration, fmtMin, formatDate, timeToMin } from "../../shared/lib/time";
+import { buildSlots, computeDayBounds } from "./buildSlots";
+import { EventCard } from "./EventCard";
+import { TimelineBar } from "./TimelineBar";
 
-export function DayTimeline({ events, nowMin, today, onOpenEvent }) {
+type DayTimelineProps = {
+  events: Event[];
+  nowMin: number;
+  today: string;
+  onOpenEvent: (id: string) => void;
+};
+
+export function DayTimeline({ events, nowMin, today, onOpenEvent }: DayTimelineProps) {
   const { dayStart, dayEnd } = computeDayBounds(events, nowMin);
   const slots = useMemo(
     () => buildSlots(events, dayStart, dayEnd),

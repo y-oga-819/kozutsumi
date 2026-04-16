@@ -1,19 +1,21 @@
 import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
-import { EventDetailPanel } from "./EventDetailPanel.jsx";
+import type { Event } from "../../entities/event/types";
+import { EventDetailPanel } from "./EventDetailPanel";
 
-const baseEvent = {
+const baseEvent: Event = {
   id: "e1",
   title: "SLO レビュー",
   time: "10:00",
   endTime: "11:00",
+  date: "2026-04-11",
   project: "slo",
   description: "## アジェンダ\n\n本文",
 };
 
 const noop = () => {};
 
-function renderPanel(overrides = {}) {
+function renderPanel(overrides: Partial<{ event: Event; onClose: () => void }> = {}) {
   const props = { event: baseEvent, onClose: noop, ...overrides };
   return render(<EventDetailPanel {...props} />);
 }
@@ -77,7 +79,7 @@ describe("EventDetailPanel", () => {
     const onClose = vi.fn();
     const { container } = renderPanel({ onClose });
     // Backdrop は fixed の最初の子 div
-    const backdrop = container.querySelector('[style*="position: absolute"]');
+    const backdrop = container.querySelector('[style*="position: absolute"]')!;
     fireEvent.click(backdrop);
     expect(onClose).toHaveBeenCalled();
   });

@@ -11,6 +11,6 @@ export type Event = {
   project?: ProjectKey;
   meetUrl?: string;
   attachments?: string[];
-  description: string;
+  description?: string;
   source?: EventSource;
 };

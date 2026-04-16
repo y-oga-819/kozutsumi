@@ -1,13 +1,17 @@
-import { PROJECTS } from "../../entities/project/projects.js";
-import { Grip } from "./Grip.jsx";
+import type { Task } from "../../entities/task/types";
+import type { PointerEvent as ReactPointerEvent } from "react";
+import { PROJECTS } from "../../entities/project/projects";
+import { Grip } from "./Grip";
 
-export function TaskRow({
-  task,
-  isBeingDragged,
-  onPointerDown,
-  onClick,
-  onToggleDone,
-}) {
+type TaskRowProps = {
+  task: Task;
+  isBeingDragged: boolean;
+  onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
+  onClick: () => void;
+  onToggleDone: () => void;
+};
+
+export function TaskRow({ task, isBeingDragged, onPointerDown, onClick, onToggleDone }: TaskRowProps) {
   const proj = PROJECTS[task.project];
 
   return (

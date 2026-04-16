@@ -1,18 +1,27 @@
-import { PROJECTS } from "../../entities/project/projects.js";
-import { fmtDuration } from "../../shared/lib/time.js";
+import type { EventSlot as EventSlotType, Slot } from "./buildSlots";
+import { PROJECTS } from "../../entities/project/projects";
+import { fmtDuration } from "../../shared/lib/time";
 
-function computeTimeLabels(dayStart, dayEnd) {
+function computeTimeLabels(dayStart: number, dayEnd: number): number[] {
   const startH = dayStart / 60;
   const endH = dayEnd / 60;
   const span = endH - startH;
   const step = span <= 6 ? 1 : span <= 12 ? 3 : 4;
-  const labels = [];
+  const labels: number[] = [];
   for (let h = startH; h <= endH; h += step) labels.push(h);
   if (labels[labels.length - 1] !== endH) labels.push(endH);
   return labels;
 }
 
-function EventSlot({ slot, widthPct, isPast, isCurrent, nowPct, label }) {
+type SlotDisplayProps = {
+  widthPct: number;
+  isPast: boolean;
+  isCurrent: boolean;
+  nowPct: number;
+  label: string;
+};
+
+function EventSlot({ slot, widthPct, isPast, isCurrent, nowPct, label }: SlotDisplayProps & { slot: EventSlotType }) {
   const evColor = slot.event.project
     ? PROJECTS[slot.event.project].color
     : "#52525b";
@@ -59,7 +68,7 @@ function EventSlot({ slot, widthPct, isPast, isCurrent, nowPct, label }) {
   );
 }
 
-function FreeSlot({ widthPct, isPast, isCurrent, nowPct, label }) {
+function FreeSlot({ widthPct, isPast, isCurrent, nowPct, label }: SlotDisplayProps) {
   return (
     <div
       style={{
@@ -104,7 +113,14 @@ function FreeSlot({ widthPct, isPast, isCurrent, nowPct, label }) {
   );
 }
 
-export function TimelineBar({ slots, nowMin, dayStart, dayEnd }) {
+type TimelineBarProps = {
+  slots: Slot[];
+  nowMin: number;
+  dayStart: number;
+  dayEnd: number;
+};
+
+export function TimelineBar({ slots, nowMin, dayStart, dayEnd }: TimelineBarProps) {
   return (
     <>
       <div

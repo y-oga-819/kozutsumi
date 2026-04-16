@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { findDropTarget } from "./findDropTarget.js";
+import { findDropTarget } from "./findDropTarget";
 
 const rects = [
   { top: 0, height: 50 }, // 中心 25
