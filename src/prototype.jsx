@@ -6,6 +6,7 @@ import { initialTasks } from "./mocks/tasks.js";
 import { historyData } from "./mocks/history.js";
 import { formatDate, timeToMin, fmtDuration, fmtMin } from "./shared/lib/time.js";
 import { renderMarkdown } from "./shared/lib/markdown.jsx";
+import { ACTION_TYPES, log } from "./entities/action-log/logger.js";
 
 // ─── Detail Panel ───────────────────────────────────────────────────
 function DetailPanel({ task, events, onClose, onUpdate, onToggleDone }) {
@@ -550,9 +551,13 @@ export default function App() {
   const [eventDetailId, setEventDetailId] = useState(null);
 
   const toggleDone = useCallback((id) => {
-    setTasks((ts) =>
-      ts.map((t) => (t.id === id ? { ...t, done: !t.done } : t)),
-    );
+    setTasks((ts) => {
+      const target = ts.find((t) => t.id === id);
+      if (target && !target.done) {
+        log(ACTION_TYPES.TASK_COMPLETED, { task_id: id });
+      }
+      return ts.map((t) => (t.id === id ? { ...t, done: !t.done } : t));
+    });
   }, []);
 
   const updateBody = useCallback((id, body) => {
@@ -566,6 +571,11 @@ export default function App() {
       const next = [...pending];
       const [item] = next.splice(fromIdx, 1);
       next.splice(toIdx, 0, item);
+      log(ACTION_TYPES.TASK_REORDERED, {
+        task_id: item.id,
+        from_position: fromIdx,
+        to_position: toIdx,
+      });
       return [...next, ...done];
     });
   }, []);
