@@ -27,39 +27,23 @@ function EventSlot({ slot, widthPct, isPast, isCurrent, nowPct, label }: SlotDis
     : "#52525b";
   return (
     <div
+      className="relative flex min-w-[3px] items-center justify-center overflow-hidden"
       style={{
         width: `${widthPct}%`,
-        minWidth: 3,
         background: isPast ? `${evColor}25` : `${evColor}50`,
-        position: "relative",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
       }}
     >
       {isCurrent && (
         <div
-          style={{
-            position: "absolute",
-            left: `${nowPct}%`,
-            top: 0,
-            bottom: 0,
-            width: 2,
-            background: "#22c55e",
-            zIndex: 2,
-          }}
+          className="absolute top-0 bottom-0 z-[2] w-0.5 bg-accent-green"
+          style={{ left: `${nowPct}%` }}
         />
       )}
       {widthPct > 4 && (
         <span
-          style={{
-            fontSize: 7,
-            color: isPast ? "#52525b" : "#e4e4e7",
-            fontVariantNumeric: "tabular-nums",
-            whiteSpace: "nowrap",
-            opacity: 0.8,
-          }}
+          className={`whitespace-nowrap text-[7px] tabular-nums opacity-80 ${
+            isPast ? "text-fg-weak" : "text-fg-emphasized"
+          }`}
         >
           {label}
         </span>
@@ -71,40 +55,30 @@ function EventSlot({ slot, widthPct, isPast, isCurrent, nowPct, label }: SlotDis
 function FreeSlot({ widthPct, isPast, isCurrent, nowPct, label }: SlotDisplayProps) {
   return (
     <div
-      style={{
-        width: `${widthPct}%`,
-        minWidth: 3,
-        background: isPast ? "#111113" : isCurrent ? "#1a2e1a" : "#131316",
-        position: "relative",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-        border: isCurrent ? "1px solid #22c55e30" : "none",
-        borderRadius: isCurrent ? 3 : 0,
-      }}
+      className={`relative flex min-w-[3px] items-center justify-center overflow-hidden ${
+        isPast
+          ? "bg-bg-past"
+          : isCurrent
+            ? "rounded-[3px] border border-[#22c55e30] bg-bg-current"
+            : "bg-bg-slot"
+      }`}
+      style={{ width: `${widthPct}%` }}
     >
       {isCurrent && (
         <div
-          style={{
-            position: "absolute",
-            left: `${nowPct}%`,
-            top: 0,
-            bottom: 0,
-            width: 2,
-            background: "#22c55e",
-            zIndex: 2,
-          }}
+          className="absolute top-0 bottom-0 z-[2] w-0.5 bg-accent-green"
+          style={{ left: `${nowPct}%` }}
         />
       )}
       {widthPct > 4 && (
         <span
-          style={{
-            fontSize: 7,
-            color: isPast ? "#27272a" : isCurrent ? "#22c55e" : "#3f3f46",
-            fontVariantNumeric: "tabular-nums",
-            whiteSpace: "nowrap",
-          }}
+          className={`whitespace-nowrap text-[7px] tabular-nums ${
+            isPast
+              ? "text-bg-divider"
+              : isCurrent
+                ? "text-accent-green"
+                : "text-fg-faint"
+          }`}
         >
           {label}
         </span>
@@ -123,16 +97,7 @@ type TimelineBarProps = {
 export function TimelineBar({ slots, nowMin, dayStart, dayEnd }: TimelineBarProps) {
   return (
     <>
-      <div
-        style={{
-          display: "flex",
-          gap: 2,
-          height: 28,
-          borderRadius: 5,
-          overflow: "hidden",
-          background: "#18181b",
-        }}
-      >
+      <div className="flex h-7 gap-0.5 overflow-hidden rounded-[5px] bg-bg-elevated">
         {slots.map((slot, i) => {
           const widthPct = (slot.duration / (dayEnd - dayStart)) * 100;
           const isPast = slot.end <= nowMin;
@@ -150,22 +115,9 @@ export function TimelineBar({ slots, nowMin, dayStart, dayEnd }: TimelineBarProp
         })}
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          padding: "3px 2px 0",
-        }}
-      >
+      <div className="flex justify-between px-0.5 pt-[3px]">
         {computeTimeLabels(dayStart, dayEnd).map((h) => (
-          <span
-            key={h}
-            style={{
-              fontSize: 8,
-              color: "#3f3f46",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
+          <span key={h} className="text-[8px] tabular-nums text-fg-faint">
             {h}:00
           </span>
         ))}

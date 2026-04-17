@@ -5,7 +5,7 @@ export function Grip() {
       height="14"
       viewBox="0 0 14 14"
       fill="none"
-      style={{ display: "block" }}
+      className="block"
     >
       <circle cx="5" cy="3" r="1.2" fill="#3f3f46" />
       <circle cx="9" cy="3" r="1.2" fill="#3f3f46" />

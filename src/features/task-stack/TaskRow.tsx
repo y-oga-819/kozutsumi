@@ -17,77 +17,36 @@ export function TaskRow({ task, isBeingDragged, onPointerDown, onClick, onToggle
   return (
     <div
       onClick={onClick}
-      style={{
-        margin: "0 16px",
-        padding: "8px 10px",
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        borderBottom: "1px solid #18181b",
-        opacity: isBeingDragged ? 0.3 : 1,
-        cursor: "pointer",
-        transition: "opacity 0.15s",
-      }}
+      className={`mx-4 flex cursor-pointer items-center gap-2 border-b border-bg-elevated px-2.5 py-2 transition-opacity duration-150 ${
+        isBeingDragged ? "opacity-30" : "opacity-100"
+      }`}
     >
       <div
         onPointerDown={(e) => {
           e.stopPropagation();
           onPointerDown(e);
         }}
-        style={{
-          cursor: "grab",
-          touchAction: "none",
-          padding: "2px",
-          flexShrink: 0,
-        }}
+        className="shrink-0 cursor-grab touch-none p-0.5"
       >
         <Grip />
       </div>
       <div
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: proj.color,
-          opacity: 0.7,
-          flexShrink: 0,
-        }}
+        className="h-1.5 w-1.5 shrink-0 rounded-full opacity-70"
+        style={{ background: proj.color }}
       />
-      <span
-        style={{
-          fontFamily: "'Noto Sans JP', sans-serif",
-          fontSize: 12,
-          color: "#a1a1aa",
-          flex: 1,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
+      <span className="flex-1 truncate font-jp text-[12px] text-fg-muted">
         {task.title}
       </span>
       {task.dependsOn && (
-        <span style={{ fontSize: 8, color: "#71717a" }}>⏱</span>
+        <span className="text-[8px] text-fg-subtle">⏱</span>
       )}
-      <span style={{ fontSize: 9, color: "#3f3f46" }}>{task.size}</span>
+      <span className="text-[9px] text-fg-faint">{task.size}</span>
       <button
         onClick={(e) => {
           e.stopPropagation();
           onToggleDone();
         }}
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 5,
-          border: "1px solid #27272a",
-          background: "transparent",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#52525b",
-          flexShrink: 0,
-        }}
+        className="flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[5px] border border-bg-divider bg-transparent text-fg-weak"
       >
         <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
           <polyline

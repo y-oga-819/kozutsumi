@@ -18,25 +18,10 @@ export function DateGroup({ date, items, projectOrder }: DateGroupProps) {
 
   return (
     <div>
-      <div
-        style={{
-          padding: "10px 16px 2px",
-          display: "flex",
-          alignItems: "center",
-        }}
-      >
+      <div className="flex items-center px-4 pb-0.5 pt-2.5">
         <div style={{ width: lanesWidth }} />
-        <span style={{ fontSize: 10, color: "#52525b" }}>
-          {formatDate(date)}
-        </span>
-        <div
-          style={{
-            flex: 1,
-            height: 1,
-            background: "#18181b",
-            marginLeft: 8,
-          }}
-        />
+        <span className="text-[10px] text-fg-weak">{formatDate(date)}</span>
+        <div className="ml-2 h-px flex-1 bg-bg-elevated" />
       </div>
       {items.map((task) => {
         const pi = projectOrder.indexOf(task.project);
@@ -44,36 +29,17 @@ export function DateGroup({ date, items, projectOrder }: DateGroupProps) {
         return (
           <div
             key={task.id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              minHeight: 30,
-              padding: "2px 16px",
-              position: "relative",
-            }}
+            className="relative flex min-h-[30px] items-center px-4 py-0.5"
           >
             <div
+              className="absolute top-1/2 z-[3] h-2 w-2 -translate-y-1/2 rounded-full bg-bg-primary"
               style={{
-                position: "absolute",
                 left: nodeLeft - 4,
-                top: "50%",
-                transform: "translateY(-50%)",
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: "#0a0a0b",
                 border: `2px solid ${PROJECTS[task.project].color}`,
-                zIndex: 3,
               }}
             />
-            <div style={{ width: lanesWidth, flexShrink: 0 }} />
-            <span
-              style={{
-                fontFamily: "'Noto Sans JP', sans-serif",
-                fontSize: 11,
-                color: "#71717a",
-              }}
-            >
+            <div className="shrink-0" style={{ width: lanesWidth }} />
+            <span className="font-jp text-[11px] text-fg-subtle">
               {task.title}
             </span>
           </div>

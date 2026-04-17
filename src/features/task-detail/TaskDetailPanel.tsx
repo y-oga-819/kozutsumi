@@ -26,165 +26,69 @@ export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone 
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 200,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
+    <div className="fixed inset-0 z-[200] flex flex-col">
       <div
         onClick={onClose}
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "rgba(0,0,0,0.6)",
-          backdropFilter: "blur(4px)",
-          WebkitBackdropFilter: "blur(4px)",
-        }}
+        className="absolute inset-0 bg-black/60 backdrop-blur-[4px]"
       />
 
       <div
+        className="relative mt-auto flex max-h-[85vh] animate-panel-slide-up flex-col rounded-t-2xl bg-bg-surface"
         style={{
-          position: "relative",
-          marginTop: "auto",
-          background: "#111113",
           borderTop: `2px solid ${proj.color}40`,
-          borderRadius: "16px 16px 0 0",
-          maxHeight: "85vh",
-          display: "flex",
-          flexDirection: "column",
-          animation: "panelSlideUp 0.25s ease",
         }}
       >
-        <style>{`
-          @keyframes panelSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-        `}</style>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            padding: "10px 0 4px",
-          }}
-        >
-          <div
-            style={{
-              width: 32,
-              height: 3,
-              borderRadius: 2,
-              background: "#27272a",
-            }}
-          />
+        <div className="flex justify-center px-0 pb-1 pt-2.5">
+          <div className="h-[3px] w-8 rounded-[2px] bg-bg-divider" />
         </div>
 
-        <div style={{ padding: "8px 20px 12px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 8,
-            }}
-          >
+        <div className="px-5 pb-3 pt-2">
+          <div className="mb-2 flex items-center gap-2">
             <div
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: proj.color,
-              }}
+              className="h-2 w-2 rounded-full"
+              style={{ background: proj.color }}
             />
-            <span
-              style={{
-                fontSize: 10,
-                color: "#71717a",
-                fontFamily: "'Noto Sans JP', sans-serif",
-              }}
-            >
+            <span className="font-jp text-[10px] text-fg-subtle">
               {proj.name}
             </span>
-            <span style={{ fontSize: 9, color: "#3f3f46" }}>{task.size}</span>
+            <span className="text-[9px] text-fg-faint">{task.size}</span>
             {dep && (
-              <span
-                style={{
-                  fontSize: 9,
-                  color: "#E85D04",
-                  background: "#E85D0415",
-                  padding: "1px 6px",
-                  borderRadius: 3,
-                  fontFamily: "'Noto Sans JP', sans-serif",
-                }}
-              >
+              <span className="rounded-[3px] bg-[#E85D0415] px-1.5 py-px font-jp text-[9px] text-accent-amber">
                 ← {dep.time}までに
               </span>
             )}
-            <div style={{ flex: 1 }} />
+            <div className="flex-1" />
             <button
               onClick={() => {
                 onToggleDone(task.id);
                 onClose();
               }}
+              className="cursor-pointer rounded-[4px] px-2.5 py-[3px] font-jp text-[10px]"
               style={{
-                fontSize: 10,
-                fontFamily: "'Noto Sans JP', sans-serif",
-                padding: "3px 10px",
-                borderRadius: 4,
-                border: "none",
                 background: task.done ? "#27272a" : proj.color,
                 color: task.done ? "#8B949E" : "#fff",
-                cursor: "pointer",
               }}
             >
               {task.done ? "未完了に戻す" : "完了にする"}
             </button>
           </div>
-          <h2
-            style={{
-              fontFamily: "'Noto Sans JP', sans-serif",
-              fontSize: 16,
-              fontWeight: 700,
-              color: "#fafafa",
-              lineHeight: 1.4,
-              margin: 0,
-            }}
-          >
+          <h2 className="m-0 font-jp text-[16px] font-bold leading-[1.4] text-fg-strong">
             {task.title}
           </h2>
         </div>
 
-        <div style={{ height: 1, background: "#1c1c1e", margin: "0 20px" }} />
+        <div className="mx-5 h-px bg-bg-border" />
 
-        <div style={{ flex: 1, overflow: "auto", padding: "12px 20px 24px" }}>
+        <div className="flex-1 overflow-auto px-5 pb-6 pt-3">
           {!editing ? (
             <>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  marginBottom: 8,
-                }}
-              >
+              <div className="mb-2 flex justify-end">
                 <button
                   onClick={() => {
                     setDraft(task.body || "");
                     setEditing(true);
                   }}
-                  style={{
-                    fontSize: 10,
-                    fontFamily: "'IBM Plex Mono', monospace",
-                    padding: "3px 10px",
-                    borderRadius: 4,
-                    border: "1px solid #27272a",
-                    background: "transparent",
-                    color: "#71717a",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
+                  className="flex cursor-pointer items-center gap-1 rounded-[4px] border border-bg-divider bg-transparent px-2.5 py-[3px] text-[10px] text-fg-subtle"
                 >
                   <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
                     <path
@@ -200,16 +104,7 @@ export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone 
               {task.body ? (
                 <div>{renderMarkdown(task.body)}</div>
               ) : (
-                <div
-                  style={{
-                    color: "#3f3f46",
-                    fontSize: 12,
-                    fontStyle: "italic",
-                    fontFamily: "'Noto Sans JP', sans-serif",
-                    padding: "20px 0",
-                    textAlign: "center",
-                  }}
-                >
+                <div className="py-5 text-center font-jp text-[12px] italic text-fg-faint">
                   詳細を追加...
                 </div>
               )}
@@ -220,20 +115,7 @@ export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone 
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 autoFocus
-                style={{
-                  width: "100%",
-                  minHeight: 200,
-                  background: "#18181b",
-                  color: "#d4d4d8",
-                  border: "1px solid #27272a",
-                  borderRadius: 8,
-                  padding: 12,
-                  fontSize: 12,
-                  lineHeight: 1.6,
-                  fontFamily: "'IBM Plex Mono', monospace",
-                  resize: "vertical",
-                  outline: "none",
-                }}
+                className="min-h-[200px] w-full resize-y rounded-lg border border-bg-divider bg-bg-elevated p-3 font-mono text-[12px] leading-[1.6] text-fg-default outline-none"
                 placeholder="Markdownで詳細を入力..."
                 onFocus={(e) => {
                   e.target.style.borderColor = proj.color + "60";
@@ -242,42 +124,17 @@ export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone 
                   e.target.style.borderColor = "#27272a";
                 }}
               />
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  marginTop: 10,
-                  justifyContent: "flex-end",
-                }}
-              >
+              <div className="mt-2.5 flex justify-end gap-2">
                 <button
                   onClick={() => setEditing(false)}
-                  style={{
-                    fontSize: 10,
-                    fontFamily: "'Noto Sans JP', sans-serif",
-                    padding: "4px 14px",
-                    borderRadius: 4,
-                    border: "1px solid #27272a",
-                    background: "transparent",
-                    color: "#71717a",
-                    cursor: "pointer",
-                  }}
+                  className="cursor-pointer rounded-[4px] border border-bg-divider bg-transparent px-3.5 py-1 font-jp text-[10px] text-fg-subtle"
                 >
                   キャンセル
                 </button>
                 <button
                   onClick={handleSave}
-                  style={{
-                    fontSize: 10,
-                    fontFamily: "'Noto Sans JP', sans-serif",
-                    padding: "4px 14px",
-                    borderRadius: 4,
-                    border: "none",
-                    background: proj.color,
-                    color: "#fff",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                  }}
+                  className="cursor-pointer rounded-[4px] px-3.5 py-1 font-jp text-[10px] font-semibold text-fg-invert"
+                  style={{ background: proj.color }}
                 >
                   保存
                 </button>

@@ -15,6 +15,12 @@ function inlineStyle(text: string): string {
 
 type HeadingLevel = 1 | 2 | 3;
 
+const headingSizeClass: Record<HeadingLevel, string> = {
+  1: "text-[15px]",
+  2: "text-[13px]",
+  3: "text-[12px]",
+};
+
 export function renderMarkdown(
   md: string | null | undefined,
 ): ReactNode[] | null {
@@ -35,18 +41,11 @@ export function renderMarkdown(
     const hMatch = line.match(/^(#{1,3})\s+(.+)/);
     if (hMatch) {
       const level = hMatch[1].length as HeadingLevel;
-      const sizes: Record<HeadingLevel, number> = { 1: 15, 2: 13, 3: 12 };
+      const topMarginClass = elements.length ? "mt-3.5" : "mt-0";
       elements.push(
         <div
           key={key++}
-          style={{
-            fontSize: sizes[level],
-            fontWeight: 600,
-            color: "#e4e4e7",
-            marginTop: elements.length ? 14 : 0,
-            marginBottom: 6,
-            fontFamily: "'Noto Sans JP', sans-serif",
-          }}
+          className={`mb-1.5 font-jp font-semibold text-fg-emphasized ${topMarginClass} ${headingSizeClass[level]}`}
           dangerouslySetInnerHTML={{ __html: inlineStyle(hMatch[2]) }}
         />,
       );
@@ -58,15 +57,7 @@ export function renderMarkdown(
       elements.push(
         <div
           key={key++}
-          style={{
-            borderLeft: "2px solid #3f3f46",
-            paddingLeft: 10,
-            margin: "6px 0",
-            color: "#71717a",
-            fontSize: 12,
-            fontStyle: "italic",
-            fontFamily: "'Noto Sans JP', sans-serif",
-          }}
+          className="my-1.5 border-l-2 border-fg-faint pl-2.5 font-jp text-[12px] italic text-fg-subtle"
           dangerouslySetInnerHTML={{ __html: inlineStyle(line.slice(2)) }}
         />,
       );
@@ -86,23 +77,10 @@ export function renderMarkdown(
       elements.push(
         <pre
           key={key++}
-          style={{
-            background: "#18181b",
-            border: "1px solid #27272a",
-            borderRadius: 6,
-            padding: "10px 12px",
-            margin: "6px 0",
-            fontSize: 11,
-            color: "#a1a1aa",
-            overflow: "auto",
-            lineHeight: 1.5,
-            whiteSpace: "pre",
-          }}
+          className="my-1.5 overflow-auto whitespace-pre rounded-md border border-bg-divider bg-bg-elevated px-3 py-2.5 text-[11px] leading-[1.5] text-fg-muted"
         >
           {lang && (
-            <div style={{ fontSize: 9, color: "#52525b", marginBottom: 4 }}>
-              {lang}
-            </div>
+            <div className="mb-1 text-[9px] text-fg-weak">{lang}</div>
           )}
           {codeLines.join("\n")}
         </pre>,
@@ -120,21 +98,15 @@ export function renderMarkdown(
         i++;
       }
       elements.push(
-        <div key={key++} style={{ margin: "4px 0" }}>
+        <div key={key++} className="my-1">
           {items.map((it, j) => (
             <div
               key={j}
-              style={{
-                display: "flex",
-                gap: 6,
-                marginLeft: it.indent * 16,
-                padding: "2px 0",
-                fontSize: 12,
-                color: "#a1a1aa",
-                fontFamily: "'Noto Sans JP', sans-serif",
-              }}
+              className={`flex gap-1.5 py-0.5 font-jp text-[12px] text-fg-muted ${
+                it.indent ? "ml-4" : "ml-0"
+              }`}
             >
-              <span style={{ color: "#52525b", flexShrink: 0 }}>•</span>
+              <span className="shrink-0 text-fg-weak">•</span>
               <span
                 dangerouslySetInnerHTML={{ __html: inlineStyle(it.text) }}
               />
@@ -152,27 +124,13 @@ export function renderMarkdown(
         i++;
       }
       elements.push(
-        <div key={key++} style={{ margin: "4px 0" }}>
+        <div key={key++} className="my-1">
           {items.map((it, j) => (
             <div
               key={j}
-              style={{
-                display: "flex",
-                gap: 6,
-                padding: "2px 0",
-                fontSize: 12,
-                color: "#a1a1aa",
-                fontFamily: "'Noto Sans JP', sans-serif",
-              }}
+              className="flex gap-1.5 py-0.5 font-jp text-[12px] text-fg-muted"
             >
-              <span
-                style={{
-                  color: "#52525b",
-                  flexShrink: 0,
-                  minWidth: 16,
-                  textAlign: "right",
-                }}
-              >
+              <span className="min-w-[16px] shrink-0 text-right text-fg-weak">
                 {j + 1}.
               </span>
               <span dangerouslySetInnerHTML={{ __html: inlineStyle(it) }} />
@@ -186,13 +144,7 @@ export function renderMarkdown(
     elements.push(
       <p
         key={key++}
-        style={{
-          fontSize: 12,
-          color: "#a1a1aa",
-          lineHeight: 1.7,
-          margin: "4px 0",
-          fontFamily: "'Noto Sans JP', sans-serif",
-        }}
+        className="my-1 font-jp text-[12px] leading-[1.7] text-fg-muted"
         dangerouslySetInnerHTML={{ __html: inlineStyle(line) }}
       />,
     );
