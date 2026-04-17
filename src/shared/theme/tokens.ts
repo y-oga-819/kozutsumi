@@ -1,5 +1,5 @@
-import { PROJECTS } from "@/entities/project/projects";
-import type { ProjectKey } from "@/entities/project/types";
+import { PROJECTS } from "../../entities/project/projects";
+import type { ProjectKey } from "../../entities/project/types";
 
 export const BG_COLORS = {
   primary: "#0a0a0b",
