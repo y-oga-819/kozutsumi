@@ -5,12 +5,17 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "license": "MIT",
   "dependencies": {
+    "next": "^16.2.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },
@@ -20,7 +25,12 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.5.0",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.4",
     "happy-dom": "^20.9.0",
+    "postcss": "^8.5.10",
+    "tailwindcss": "^3.4.19",
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
   }
