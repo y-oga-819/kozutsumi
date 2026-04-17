@@ -70,64 +70,26 @@ export function AppShell({ initialView }: AppShellProps) {
   ];
 
   return (
-    <div
-      style={{
-        position: "relative",
-        userSelect: "none",
-        WebkitUserSelect: "none",
-      }}
-    >
+    <div className="relative select-none">
       {/* Header */}
-      <div
-        style={{
-          padding: "16px 20px 12px",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          borderBottom: "1px solid #18181b",
-          position: "sticky",
-          top: 0,
-          background: "#0a0a0b",
-          zIndex: 50,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "'Noto Sans JP', sans-serif",
-            fontWeight: 700,
-            fontSize: 16,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          <span style={{ color: "#58A6FF" }}>kozu</span>
-          <span style={{ color: "#3f3f46" }}>tsumi</span>
+      <div className="sticky top-0 z-50 flex items-center gap-3 border-b border-bg-elevated bg-bg-primary px-5 pb-3 pt-4">
+        <div className="font-jp text-[16px] font-bold -tracking-[0.02em]">
+          <span className="text-accent-blue">kozu</span>
+          <span className="text-fg-faint">tsumi</span>
         </div>
-        <div style={{ flex: 1 }} />
-        <div
-          style={{
-            display: "flex",
-            background: "#18181b",
-            borderRadius: 6,
-            padding: 2,
-          }}
-        >
+        <div className="flex-1" />
+        <div className="flex rounded-md bg-bg-elevated p-0.5">
           {tabs.map((tab) => {
             const active = view === tab.key;
             return (
               <Link
                 key={tab.key}
                 href={tab.href}
-                style={{
-                  fontSize: 11,
-                  fontFamily: "'IBM Plex Mono', monospace",
-                  padding: "4px 14px",
-                  borderRadius: 4,
-                  cursor: "pointer",
-                  background: active ? "#27272a" : "transparent",
-                  color: active ? "#e4e4e7" : "#52525b",
-                  fontWeight: 500,
-                  textDecoration: "none",
-                }}
+                className={`cursor-pointer rounded-[4px] px-3.5 py-1 text-[11px] font-medium no-underline ${
+                  active
+                    ? "bg-bg-divider text-fg-emphasized"
+                    : "bg-transparent text-fg-weak"
+                }`}
               >
                 {tab.label}
               </Link>
@@ -202,7 +164,7 @@ function StackView({
   onOpenEvent,
 }: StackViewProps) {
   return (
-    <div style={{ padding: "0 0 100px" }}>
+    <div className="pb-[100px]">
       <DayTimeline
         events={events}
         nowMin={nowMin}
