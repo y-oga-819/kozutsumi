@@ -7,42 +7,18 @@ import { useStackDnD } from "./useStackDnD";
 
 function StackHeader({ count }: { count: number }) {
   return (
-    <div
-      style={{
-        padding: "4px 20px 8px",
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-      }}
-    >
-      <span
-        style={{
-          fontSize: 9,
-          fontWeight: 600,
-          letterSpacing: "0.1em",
-          color: "#52525b",
-          textTransform: "uppercase",
-        }}
-      >
+    <div className="flex items-center gap-2 px-5 pb-2 pt-1">
+      <span className="text-[9px] font-semibold uppercase tracking-[0.1em] text-fg-weak">
         task stack
       </span>
-      <div style={{ flex: 1, height: 1, background: "#1c1c1e" }} />
-      <span style={{ fontSize: 9, color: "#3f3f46" }}>{count}</span>
+      <div className="h-px flex-1 bg-bg-border" />
+      <span className="text-[9px] text-fg-faint">{count}</span>
     </div>
   );
 }
 
 function DropIndicator() {
-  return (
-    <div
-      style={{
-        height: 2,
-        margin: "0 16px",
-        background: "#58A6FF",
-        borderRadius: 1,
-      }}
-    />
-  );
+  return <div className="mx-4 h-0.5 rounded-[1px] bg-accent-blue" />;
 }
 
 type TaskStackProps = {

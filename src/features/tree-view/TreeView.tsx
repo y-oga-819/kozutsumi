@@ -17,9 +17,9 @@ export function TreeView({ historyData, projectOrder }: TreeViewProps) {
   const dateGroups = groupByDateDesc(historyData);
 
   return (
-    <div style={{ position: "relative", paddingBottom: 40 }}>
+    <div className="relative pb-10">
       <ProjectLanes projectOrder={projectOrder} />
-      <div style={{ position: "relative", zIndex: 2 }}>
+      <div className="relative z-[2]">
         {dateGroups.map(([date, items]) => (
           <DateGroup
             key={date}

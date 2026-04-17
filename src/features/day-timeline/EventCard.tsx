@@ -19,51 +19,31 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
   const hasAttachments = event.attachments && event.attachments.length > 0;
   const hasMeet = !!event.meetUrl;
   const meetLabel = event.meetUrl?.includes("zoom") ? "Zoom" : "Meet";
+  const isZoom = !!event.meetUrl?.includes("zoom");
 
   return (
     <div
       onClick={onClick}
+      className={`cursor-pointer rounded-md bg-bg-muted transition-[background] duration-100 hover:bg-bg-hover ${
+        isNext ? "px-3 pb-2.5 pt-2" : "px-3 py-2"
+      } ${isPast ? "opacity-40" : "opacity-100"}`}
       style={{
-        padding: isNext ? "8px 12px 10px" : "8px 12px",
-        background: "#141416",
-        borderRadius: 6,
         borderLeft: `3px solid ${isPast ? evColor + "40" : evColor}`,
-        opacity: isPast ? 0.4 : 1,
-        cursor: "pointer",
-        transition: "background 0.1s",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = "#1a1a1d";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = "#141416";
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span
-          style={{
-            fontSize: 10,
-            color: "#52525b",
-            fontVariantNumeric: "tabular-nums",
-            flexShrink: 0,
-          }}
-        >
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 text-[10px] tabular-nums text-fg-weak">
           {event.time}–{event.endTime}
         </span>
-        <span style={{ fontSize: 9, color: "#3f3f46", flexShrink: 0 }}>
+        <span className="shrink-0 text-[9px] text-fg-faint">
           ({fmtDuration(evEnd - evStart)})
         </span>
         <span
-          style={{
-            fontFamily: "'Noto Sans JP', sans-serif",
-            fontSize: 11,
-            color: isNow ? "#e4e4e7" : "#a1a1aa",
-            fontWeight: isNow ? 500 : 400,
-            flex: 1,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
+          className={`flex-1 truncate font-jp text-[11px] ${
+            isNow
+              ? "font-medium text-fg-emphasized"
+              : "font-normal text-fg-muted"
+          }`}
         >
           {event.title}
         </span>
@@ -73,7 +53,7 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
             height="12"
             viewBox="0 0 16 16"
             fill="none"
-            style={{ flexShrink: 0, opacity: 0.5 }}
+            className="shrink-0 opacity-50"
           >
             <path
               d="M9 2H4V14H12V5L9 2Z"
@@ -95,7 +75,7 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
             height="12"
             viewBox="0 0 16 16"
             fill="none"
-            style={{ flexShrink: 0, opacity: 0.5 }}
+            className="shrink-0 opacity-50"
           >
             <rect
               x="1"
@@ -115,73 +95,29 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
           </svg>
         )}
         {isNow && (
-          <span
-            style={{
-              fontSize: 8,
-              color: "#22c55e",
-              background: "#22c55e18",
-              padding: "1px 5px",
-              borderRadius: 3,
-              flexShrink: 0,
-            }}
-          >
+          <span className="shrink-0 rounded-[3px] bg-[#22c55e18] px-[5px] py-px text-[8px] text-accent-green">
             NOW
           </span>
         )}
         {isNext && (
-          <span
-            style={{
-              fontSize: 8,
-              fontWeight: 500,
-              color: "#58A6FF",
-              background: "#58A6FF15",
-              padding: "1px 5px",
-              borderRadius: 3,
-              flexShrink: 0,
-            }}
-          >
+          <span className="shrink-0 rounded-[3px] bg-[#58A6FF15] px-[5px] py-px text-[8px] font-medium text-accent-blue">
             NEXT
           </span>
         )}
       </div>
 
       {isNext && hasMeet && (
-        <div
-          style={{
-            marginTop: 6,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
+        <div className="mt-1.5 flex items-center gap-2">
           <a
             href={event.meetUrl}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              padding: "4px 10px",
-              borderRadius: 5,
-              background: event.meetUrl!.includes("zoom")
-                ? "#2D8CFF20"
-                : "#00AC4718",
-              border: `1px solid ${event.meetUrl!.includes("zoom") ? "#2D8CFF30" : "#00AC4725"}`,
-              color: event.meetUrl!.includes("zoom") ? "#5B9EFF" : "#34D399",
-              textDecoration: "none",
-              fontSize: 10,
-              fontFamily: "'Noto Sans JP', sans-serif",
-              fontWeight: 500,
-              transition: "filter 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.filter = "brightness(1.2)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.filter = "none";
-            }}
+            className={`inline-flex items-center gap-[5px] rounded-[5px] px-2.5 py-1 font-jp text-[10px] font-medium no-underline transition-[filter] duration-150 hover:brightness-125 ${
+              isZoom
+                ? "border border-[#2D8CFF30] bg-[#2D8CFF20] text-accent-zoomFg"
+                : "border border-[#00AC4725] bg-[#00AC4718] text-accent-meetFg"
+            }`}
           >
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
               <rect
@@ -203,13 +139,7 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
             {meetLabel}に参加
           </a>
           {hasAttachments && (
-            <span
-              style={{
-                fontSize: 9,
-                color: "#52525b",
-                fontFamily: "'Noto Sans JP', sans-serif",
-              }}
-            >
+            <span className="font-jp text-[9px] text-fg-weak">
               資料 {event.attachments!.length}件
             </span>
           )}

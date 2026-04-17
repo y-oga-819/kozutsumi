@@ -14,6 +14,7 @@ export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
   const evStart = timeToMin(event.time);
   const evEnd = timeToMin(event.endTime);
   const duration = evEnd - evStart;
+  const isZoom = !!event.meetUrl?.includes("zoom");
   const meetLabel = event.meetUrl?.includes("zoom")
     ? "Zoom"
     : event.meetUrl?.includes("meet.google")
@@ -21,132 +22,54 @@ export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
       : "会議リンク";
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 200,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
+    <div className="fixed inset-0 z-[200] flex flex-col">
       <div
         onClick={onClose}
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "rgba(0,0,0,0.6)",
-          backdropFilter: "blur(4px)",
-          WebkitBackdropFilter: "blur(4px)",
-        }}
+        className="absolute inset-0 bg-black/60 backdrop-blur-[4px]"
       />
       <div
+        className="relative mt-auto flex max-h-[85vh] animate-panel-slide-up flex-col rounded-t-2xl bg-bg-surface"
         style={{
-          position: "relative",
-          marginTop: "auto",
-          background: "#111113",
           borderTop: `2px solid ${evColor}40`,
-          borderRadius: "16px 16px 0 0",
-          maxHeight: "85vh",
-          display: "flex",
-          flexDirection: "column",
-          animation: "panelSlideUp 0.25s ease",
         }}
       >
-        <style>{`@keyframes panelSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            padding: "10px 0 4px",
-          }}
-        >
-          <div
-            style={{
-              width: 32,
-              height: 3,
-              borderRadius: 2,
-              background: "#27272a",
-            }}
-          />
+        <div className="flex justify-center px-0 pb-1 pt-2.5">
+          <div className="h-[3px] w-8 rounded-[2px] bg-bg-divider" />
         </div>
 
-        <div style={{ padding: "8px 20px 12px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 8,
-            }}
-          >
+        <div className="px-5 pb-3 pt-2">
+          <div className="mb-2 flex items-center gap-2">
             {proj && (
               <div
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: evColor,
-                }}
+                className="h-2 w-2 rounded-full"
+                style={{ background: evColor }}
               />
             )}
             {proj && (
-              <span
-                style={{
-                  fontSize: 10,
-                  color: "#71717a",
-                  fontFamily: "'Noto Sans JP', sans-serif",
-                }}
-              >
+              <span className="font-jp text-[10px] text-fg-subtle">
                 {proj.name}
               </span>
             )}
-            <span
-              style={{
-                fontSize: 10,
-                color: "#52525b",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
+            <span className="text-[10px] tabular-nums text-fg-weak">
               {event.time}–{event.endTime} ({fmtDuration(duration)})
             </span>
           </div>
-          <h2
-            style={{
-              fontFamily: "'Noto Sans JP', sans-serif",
-              fontSize: 16,
-              fontWeight: 700,
-              color: "#fafafa",
-              lineHeight: 1.4,
-              margin: 0,
-            }}
-          >
+          <h2 className="m-0 font-jp text-[16px] font-bold leading-[1.4] text-fg-strong">
             {event.title}
           </h2>
         </div>
 
         {event.meetUrl && (
-          <div style={{ padding: "0 20px 8px" }}>
+          <div className="px-5 pb-2">
             <a
               href={event.meetUrl}
               target="_blank"
               rel="noopener noreferrer"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "6px 12px",
-                borderRadius: 6,
-                background: event.meetUrl.includes("zoom")
-                  ? "#2D8CFF20"
-                  : "#00AC4720",
-                border: `1px solid ${event.meetUrl.includes("zoom") ? "#2D8CFF30" : "#00AC4730"}`,
-                color: event.meetUrl.includes("zoom") ? "#5B9EFF" : "#34D399",
-                textDecoration: "none",
-                fontSize: 11,
-                fontFamily: "'Noto Sans JP', sans-serif",
-              }}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-jp text-[11px] no-underline ${
+                isZoom
+                  ? "border border-[#2D8CFF30] bg-[#2D8CFF20] text-accent-zoomFg"
+                  : "border border-[#00AC4730] bg-[#00AC4720] text-accent-meetFg"
+              }`}
             >
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                 <path
@@ -176,33 +99,15 @@ export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
         )}
 
         {event.attachments && event.attachments.length > 0 && (
-          <div style={{ padding: "0 20px 8px" }}>
-            <div
-              style={{
-                fontSize: 9,
-                color: "#52525b",
-                marginBottom: 4,
-                fontWeight: 600,
-                letterSpacing: "0.05em",
-              }}
-            >
+          <div className="px-5 pb-2">
+            <div className="mb-1 text-[9px] font-semibold tracking-[0.05em] text-fg-weak">
               添付資料
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div className="flex flex-col gap-1">
               {event.attachments.map((att, i) => (
                 <div
                   key={i}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "5px 10px",
-                    background: "#18181b",
-                    borderRadius: 5,
-                    fontSize: 11,
-                    color: "#a1a1aa",
-                    fontFamily: "'Noto Sans JP', sans-serif",
-                  }}
+                  className="flex items-center gap-1.5 rounded-[5px] bg-bg-elevated px-2.5 py-[5px] font-jp text-[11px] text-fg-muted"
                 >
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                     <path
@@ -225,22 +130,13 @@ export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
           </div>
         )}
 
-        <div style={{ height: 1, background: "#1c1c1e", margin: "0 20px" }} />
+        <div className="mx-5 h-px bg-bg-border" />
 
-        <div style={{ flex: 1, overflow: "auto", padding: "12px 20px 24px" }}>
+        <div className="flex-1 overflow-auto px-5 pb-6 pt-3">
           {event.description ? (
             <div>{renderMarkdown(event.description)}</div>
           ) : (
-            <div
-              style={{
-                color: "#3f3f46",
-                fontSize: 12,
-                fontStyle: "italic",
-                fontFamily: "'Noto Sans JP', sans-serif",
-                padding: "20px 0",
-                textAlign: "center",
-              }}
-            >
+            <div className="py-5 text-center font-jp text-[12px] italic text-fg-faint">
               詳細なし
             </div>
           )}

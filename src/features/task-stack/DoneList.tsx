@@ -10,43 +10,18 @@ export function DoneList({ doneTasks, onOpenDetail, onToggleDone }: DoneListProp
   if (doneTasks.length === 0) return null;
   return (
     <>
-      <div
-        style={{
-          padding: "20px 20px 8px",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 9,
-            fontWeight: 600,
-            letterSpacing: "0.1em",
-            color: "#3f3f46",
-            textTransform: "uppercase",
-          }}
-        >
+      <div className="flex items-center gap-2 px-5 pb-2 pt-5">
+        <span className="text-[9px] font-semibold uppercase tracking-[0.1em] text-fg-faint">
           done
         </span>
-        <div style={{ flex: 1, height: 1, background: "#1c1c1e" }} />
-        <span style={{ fontSize: 9, color: "#3f3f46" }}>
-          {doneTasks.length}
-        </span>
+        <div className="h-px flex-1 bg-bg-border" />
+        <span className="text-[9px] text-fg-faint">{doneTasks.length}</span>
       </div>
       {doneTasks.map((task) => (
         <div
           key={task.id}
           onClick={() => onOpenDetail(task.id)}
-          style={{
-            margin: "0 16px",
-            padding: "6px 14px",
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            opacity: 0.3,
-            cursor: "pointer",
-          }}
+          className="mx-4 flex cursor-pointer items-center gap-2.5 px-3.5 py-1.5 opacity-30"
         >
           <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
             <polyline
@@ -57,32 +32,16 @@ export function DoneList({ doneTasks, onOpenDetail, onToggleDone }: DoneListProp
               strokeLinejoin="round"
             />
           </svg>
-          <span
-            style={{
-              fontFamily: "'Noto Sans JP', sans-serif",
-              fontSize: 11,
-              color: "#52525b",
-              textDecoration: "line-through",
-            }}
-          >
+          <span className="font-jp text-[11px] text-fg-weak line-through">
             {task.title}
           </span>
-          <div style={{ flex: 1 }} />
+          <div className="flex-1" />
           <button
             onClick={(e) => {
               e.stopPropagation();
               onToggleDone(task.id);
             }}
-            style={{
-              fontSize: 9,
-              fontFamily: "'Noto Sans JP', sans-serif",
-              padding: "2px 6px",
-              borderRadius: 3,
-              border: "1px solid #27272a",
-              background: "transparent",
-              color: "#3f3f46",
-              cursor: "pointer",
-            }}
+            className="cursor-pointer rounded-[3px] border border-bg-divider bg-transparent px-1.5 py-0.5 font-jp text-[9px] text-fg-faint"
           >
             戻す
           </button>

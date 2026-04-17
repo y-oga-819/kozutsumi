@@ -28,109 +28,47 @@ export function TopTaskCard({ task, events, isBeingDragged, onPointerDown, onCli
   return (
     <div
       onClick={onClick}
+      className={`relative mx-4 mb-1 cursor-pointer overflow-hidden rounded-[10px] bg-bg-elevated py-3.5 pl-[18px] pr-3.5 transition-opacity duration-150 ${
+        isBeingDragged ? "opacity-40" : "opacity-100"
+      }`}
       style={{
-        margin: "0 16px 4px",
-        padding: "14px 14px 14px 18px",
-        background: "#18181b",
-        borderRadius: 10,
         border: `1px solid ${proj.color}40`,
-        position: "relative",
-        overflow: "hidden",
-        opacity: isBeingDragged ? 0.4 : 1,
-        cursor: "pointer",
-        transition: "opacity 0.15s",
       }}
     >
       <div
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: 3,
-          background: proj.color,
-        }}
+        className="absolute left-0 top-0 bottom-0 w-[3px]"
+        style={{ background: proj.color }}
       />
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+      <div className="flex items-start gap-2.5">
         <div
           onPointerDown={(e) => {
             e.stopPropagation();
             onPointerDown(e);
           }}
-          style={{
-            cursor: "grab",
-            touchAction: "none",
-            padding: "4px 2px",
-            marginTop: 6,
-            flexShrink: 0,
-          }}
+          className="mt-1.5 shrink-0 cursor-grab touch-none px-0.5 py-1"
         >
           <Grip />
         </div>
-        <div style={{ flex: 1 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 4,
-            }}
-          >
+        <div className="flex-1">
+          <div className="mb-1 flex items-center gap-2">
             <div
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: proj.color,
-              }}
+              className="h-2 w-2 rounded-full"
+              style={{ background: proj.color }}
             />
-            <span
-              style={{
-                fontSize: 9,
-                color: "#71717a",
-                fontFamily: "'Noto Sans JP', sans-serif",
-              }}
-            >
+            <span className="font-jp text-[9px] text-fg-subtle">
               {proj.name}
             </span>
             {dep && (
-              <span
-                style={{
-                  fontSize: 8,
-                  color: "#E85D04",
-                  background: "#E85D0415",
-                  padding: "1px 6px",
-                  borderRadius: 3,
-                  fontFamily: "'Noto Sans JP', sans-serif",
-                }}
-              >
+              <span className="rounded-[3px] bg-[#E85D0415] px-1.5 py-px font-jp text-[8px] text-accent-amber">
                 ← {dep.time}までに
               </span>
             )}
           </div>
-          <div
-            style={{
-              fontFamily: "'Noto Sans JP', sans-serif",
-              fontSize: 15,
-              fontWeight: 600,
-              color: "#fafafa",
-              lineHeight: 1.4,
-            }}
-          >
+          <div className="font-jp text-[15px] font-semibold leading-[1.4] text-fg-strong">
             {task.title}
           </div>
           {preview && (
-            <div
-              style={{
-                fontSize: 10,
-                color: "#52525b",
-                marginTop: 4,
-                fontFamily: "'Noto Sans JP', sans-serif",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
+            <div className="mt-1 truncate font-jp text-[10px] text-fg-weak">
               {preview}
             </div>
           )}
@@ -140,17 +78,9 @@ export function TopTaskCard({ task, events, isBeingDragged, onPointerDown, onCli
             e.stopPropagation();
             onToggleDone();
           }}
+          className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-transparent"
           style={{
-            width: 36,
-            height: 36,
-            borderRadius: 8,
             border: `1.5px solid ${proj.color}60`,
-            background: "transparent",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
             color: proj.color,
           }}
         >

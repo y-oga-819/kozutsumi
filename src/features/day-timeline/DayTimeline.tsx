@@ -34,50 +34,22 @@ export function DayTimeline({ events, nowMin, today, onOpenEvent }: DayTimelineP
   );
 
   return (
-    <div style={{ padding: "14px 16px 4px" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: 8,
-          marginBottom: 10,
-        }}
-      >
-        <div
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: "#22c55e",
-            animation: "pulse 2s ease infinite",
-            flexShrink: 0,
-          }}
-        />
-        <span
-          style={{
-            fontFamily: "'Noto Sans JP', sans-serif",
-            fontSize: 11,
-            color: "#71717a",
-          }}
-        >
+    <div className="px-4 pb-1 pt-3.5">
+      <div className="mb-2.5 flex items-baseline gap-2">
+        <div className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent-green" />
+        <span className="font-jp text-[11px] text-fg-subtle">
           {formatDate(today)}
         </span>
-        <span
-          style={{
-            fontSize: 11,
-            color: "#e4e4e7",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
+        <span className="text-[11px] tabular-nums text-fg-emphasized">
           {fmtMin(nowMin)}
         </span>
         {currentSlot?.type === "free" && (
-          <span style={{ fontSize: 10, color: "#22c55e" }}>
+          <span className="text-[10px] text-accent-green">
             空き {fmtDuration(minutesUntilNext)}
           </span>
         )}
         {currentSlot?.type === "event" && (
-          <span style={{ fontSize: 10, color: "#E85D04" }}>
+          <span className="text-[10px] text-accent-amber">
             {currentSlot.event.title}中
           </span>
         )}
@@ -90,14 +62,7 @@ export function DayTimeline({ events, nowMin, today, onOpenEvent }: DayTimelineP
         dayEnd={dayEnd}
       />
 
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 4,
-          marginTop: 8,
-        }}
-      >
+      <div className="mt-2 flex flex-col gap-1">
         {sortedEvents.map((ev, i) => (
           <EventCard
             key={ev.id}

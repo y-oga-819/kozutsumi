@@ -78,8 +78,8 @@ describe("EventDetailPanel", () => {
   test("backdrop クリックで onClose が呼ばれる", () => {
     const onClose = vi.fn();
     const { container } = renderPanel({ onClose });
-    // Backdrop は fixed の最初の子 div
-    const backdrop = container.querySelector('[style*="position: absolute"]')!;
+    // Backdrop は fixed コンテナの最初の子 div
+    const backdrop = container.firstElementChild!.firstElementChild!;
     fireEvent.click(backdrop);
     expect(onClose).toHaveBeenCalled();
   });
