@@ -37,9 +37,12 @@ import { AddPanel } from "@/features/add-forms/AddPanel";
 import { DayTimeline } from "@/features/day-timeline/DayTimeline";
 import { EventDetailPanel } from "@/features/event-detail/EventDetailPanel";
 import { TaskDetailPanel } from "@/features/task-detail/TaskDetailPanel";
-import { TaskStack } from "@/features/task-stack/TaskStack";
+import { PauseReasonModal } from "@/features/task-stack/PauseReasonModal";
+import { TaskStack, type TopTimerBinding } from "@/features/task-stack/TaskStack";
+import { useTaskTimer } from "@/features/task-stack/useTaskTimer";
 import { TreeView } from "@/features/tree-view/TreeView";
 import { UserMenu } from "@/features/user-menu/UserMenu";
+import type { PauseReason } from "@/entities/task/time-entries";
 import { historyData } from "@/mocks/history";
 import { clearAllUserData, seedSampleDataToSupabase } from "@/mocks/seed";
 import {
@@ -317,6 +320,38 @@ export function AppShell({ initialView, user }: AppShellProps) {
   const doneTasks = useMemo(() => tasks.filter((t) => isDone(t)), [tasks]);
   const detailTask = detailId ? tasks.find((t) => t.id === detailId) : null;
 
+  // タスクスタックのトップタスク = タイマー対象。
+  // pendingTasks は stack_order 昇順なので [0] がトップ。
+  const topTask = pendingTasks[0] ?? null;
+  const timer = useTaskTimer(topTask);
+  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+
+  const topTimer = useMemo<TopTimerBinding>(
+    () => ({
+      elapsedSeconds: timer.elapsedSeconds,
+      pauseReason: timer.pauseReason,
+      onStart: () => {
+        void timer.start();
+      },
+      onPauseRequest: () => setPauseModalOpen(true),
+      onResume: () => {
+        void timer.resume();
+      },
+      onComplete: () => {
+        void timer.complete();
+      },
+    }),
+    [timer],
+  );
+
+  const handlePauseSelect = useCallback(
+    (reason: PauseReason) => {
+      setPauseModalOpen(false);
+      void timer.pause(reason);
+    },
+    [timer],
+  );
+
   // Tree View は Phase 1 PoC では現行 mock history をそのまま描画する。
   // 将来: tasks where status='done' から生成する (docs/specs/phase1.md Tree View)
   const projectOrderForTree = useMemo(() => {
@@ -373,6 +408,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
             events={events}
             pendingTasks={pendingTasks}
             doneTasks={doneTasks}
+            topTimer={topTimer}
             toggleDone={toggleDone}
             reorder={reorder}
             nowMin={nowMin}
@@ -427,6 +463,13 @@ export function AppShell({ initialView, user }: AppShellProps) {
             onCreateProject={async (input) => {
               await createProjectMutation.mutateAsync(input);
             }}
+          />
+        ) : null}
+
+        {pauseModalOpen ? (
+          <PauseReasonModal
+            onSelect={handlePauseSelect}
+            onClose={() => setPauseModalOpen(false)}
           />
         ) : null}
 
@@ -485,6 +528,7 @@ type StackViewProps = {
   events: Event[];
   pendingTasks: Task[];
   doneTasks: Task[];
+  topTimer: TopTimerBinding;
   toggleDone: (id: string) => void;
   reorder: (from: number, to: number) => void;
   nowMin: number;
@@ -497,6 +541,7 @@ function StackView({
   events,
   pendingTasks,
   doneTasks,
+  topTimer,
   toggleDone,
   reorder,
   nowMin,
@@ -516,6 +561,7 @@ function StackView({
         events={events}
         pendingTasks={pendingTasks}
         doneTasks={doneTasks}
+        topTimer={topTimer}
         onReorder={reorder}
         onToggleDone={toggleDone}
         onOpenDetail={onOpenDetail}
