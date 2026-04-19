@@ -68,3 +68,21 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  supabase:
+    name: Supabase migrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start Supabase local stack
+        run: supabase start
+      - name: Lint SQL
+        run: supabase db lint
+      - name: Reset DB (re-apply all migrations from scratch)
+        run: supabase db reset --no-seed
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop --no-backup || true
