@@ -1,3 +1,6 @@
+import { createClient } from "@/shared/supabase/client";
+import type { Json } from "@/shared/types/database";
+
 import type {
   ActionLogEntry,
   ActionMetadataMap,
@@ -7,10 +10,14 @@ import type {
 /**
  * action-log logger
  *
- * Phase 3-4 で差別化の核となる行動ログのひな形。
- * 現時点ではメモリ配列 + console 出力のみ。Phase 1 本実装で Supabase 連携に差し替える。
+ * kozutsumi の差別化の核である行動ログを Supabase に永続化する。
+ * docs/specs/phase1.md Step 4 / docs/design/vision.md 参照。
  *
- * 参照: docs/specs/phase1.md Step 4 (action_logs)
+ * 設計原則:
+ * - fire-and-forget: log() は呼び出し元を絶対に await させない
+ *   (DnD や完了操作のレイテンシは UX 直結)
+ * - ログ欠損 < UI 停止: insert 失敗は console.error に留める
+ * - getLog()/clearLog() は開発・テスト時のデバッグ用
  */
 
 export const ACTION_TYPES = Object.freeze({
@@ -31,6 +38,56 @@ const KNOWN_TYPES = new Set<ActionType>(Object.values(ACTION_TYPES));
 
 let memoryLog: ActionLogEntry[] = [];
 
+type SupabaseClientLike = ReturnType<typeof createClient>;
+let cachedClient: SupabaseClientLike | null = null;
+
+function getClient(): SupabaseClientLike | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  if (!cachedClient) {
+    try {
+      cachedClient = createClient();
+    } catch (err) {
+      console.error("[action-log] failed to init supabase client", err);
+      return null;
+    }
+  }
+  return cachedClient;
+}
+
+function extractTaskId(metadata: Record<string, unknown>): string | null {
+  const v = metadata["task_id"];
+  return typeof v === "string" ? v : null;
+}
+
+async function persist<T extends ActionType>(
+  entry: ActionLogEntry<T>,
+): Promise<void> {
+  const supabase = getClient();
+  if (!supabase) return;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    // 未ログイン時は RLS に引っかかるので送らない
+    return;
+  }
+
+  const { error } = await supabase.from("action_logs").insert({
+    user_id: user.id,
+    action_type: entry.action_type,
+    task_id: extractTaskId(
+      entry.metadata as unknown as Record<string, unknown>,
+    ),
+    metadata: entry.metadata as unknown as Json,
+  });
+  if (error) {
+    console.error("[action-log] insert failed", error);
+  }
+}
+
 export function log<T extends ActionType>(
   actionType: T,
   metadata?: ActionMetadataMap[T],
@@ -45,6 +102,12 @@ export function log<T extends ActionType>(
   };
   memoryLog.push(entry);
   console.log("[action-log]", actionType, entry.metadata);
+
+  // fire-and-forget: ここで await しないのが肝
+  void persist(entry).catch((err) => {
+    console.error("[action-log] persist error", err);
+  });
+
   return entry;
 }
 
@@ -54,4 +117,9 @@ export function getLog(): ActionLogEntry[] {
 
 export function clearLog(): void {
   memoryLog = [];
+}
+
+/** test 専用: cached client をリセット */
+export function __resetLoggerClientForTest(): void {
+  cachedClient = null;
 }

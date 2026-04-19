@@ -12,6 +12,7 @@ import { EventDetailPanel } from "@/features/event-detail/EventDetailPanel";
 import { TaskDetailPanel } from "@/features/task-detail/TaskDetailPanel";
 import { TaskStack } from "@/features/task-stack/TaskStack";
 import { TreeView } from "@/features/tree-view/TreeView";
+import { UserMenu } from "@/features/user-menu/UserMenu";
 import { initialEvents } from "@/mocks/events";
 import { historyData } from "@/mocks/history";
 import { initialTasks } from "@/mocks/tasks";
@@ -21,9 +22,13 @@ type View = "stack" | "tree";
 
 type AppShellProps = {
   initialView: View;
+  user: {
+    email: string | null;
+    avatarUrl: string | null;
+  };
 };
 
-export function AppShell({ initialView }: AppShellProps) {
+export function AppShell({ initialView, user }: AppShellProps) {
   const view = initialView;
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -96,6 +101,7 @@ export function AppShell({ initialView }: AppShellProps) {
             );
           })}
         </div>
+        <UserMenu email={user.email} avatarUrl={user.avatarUrl} />
       </div>
 
       {view === "stack" ? (
