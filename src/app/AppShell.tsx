@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ACTION_TYPES, log } from "@/entities/action-log/logger";
 import type { Event } from "@/entities/event/types";
@@ -13,10 +13,15 @@ import { TaskDetailPanel } from "@/features/task-detail/TaskDetailPanel";
 import { TaskStack } from "@/features/task-stack/TaskStack";
 import { TreeView } from "@/features/tree-view/TreeView";
 import { UserMenu } from "@/features/user-menu/UserMenu";
-import { initialEvents } from "@/mocks/events";
+import { buildInitialEvents } from "@/mocks/events";
 import { historyData } from "@/mocks/history";
-import { initialTasks } from "@/mocks/tasks";
-import { TODAY } from "@/mocks/today";
+import { buildInitialTasks } from "@/mocks/tasks";
+import {
+  readSampleDataMode,
+  writeSampleDataMode,
+} from "@/shared/lib/sample-data";
+import { isDone } from "@/shared/lib/task";
+import { nowMinutesOfDay, todayIso } from "@/shared/lib/time";
 
 type View = "stack" | "tree";
 
@@ -30,17 +35,42 @@ type AppShellProps = {
 
 export function AppShell({ initialView, user }: AppShellProps) {
   const view = initialView;
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [tasks, setTasks] = useState<Task[]>(() => buildInitialTasks());
+  const [events, setEvents] = useState<Event[]>(() => buildInitialEvents());
   const [detailId, setDetailId] = useState<string | null>(null);
   const [eventDetailId, setEventDetailId] = useState<string | null>(null);
+  const [nowMin, setNowMin] = useState<number>(9 * 60);
+  const today = useMemo(() => todayIso(), []);
+
+  // クライアント初期化: マウント後に localStorage(外部ストア) と現在時刻を同期する。
+  // SSR では window が無いため、この 3 つの setState はハイドレート後の 1 回だけ発火する。
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (readSampleDataMode() === "cleared") {
+      setTasks([]);
+      setEvents([]);
+    }
+    setNowMin(nowMinutesOfDay());
+    /* eslint-enable react-hooks/set-state-in-effect */
+    const id = window.setInterval(() => setNowMin(nowMinutesOfDay()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const toggleDone = useCallback((id: string) => {
     setTasks((ts) => {
       const target = ts.find((t) => t.id === id);
-      if (target && !target.done) {
+      if (target && !isDone(target)) {
         log(ACTION_TYPES.TASK_COMPLETED, { task_id: id });
       }
-      return ts.map((t) => (t.id === id ? { ...t, done: !t.done } : t));
+      return ts.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              status: isDone(t) ? "idle" : "done",
+              completedAt: isDone(t) ? null : new Date().toISOString(),
+            }
+          : t,
+      );
     });
   }, []);
 
@@ -50,8 +80,8 @@ export function AppShell({ initialView, user }: AppShellProps) {
 
   const reorder = useCallback((fromIdx: number, toIdx: number) => {
     setTasks((ts) => {
-      const pending = ts.filter((t) => !t.done);
-      const done = ts.filter((t) => t.done);
+      const pending = ts.filter((t) => !isDone(t));
+      const done = ts.filter((t) => isDone(t));
       const next = [...pending];
       const [item] = next.splice(fromIdx, 1);
       next.splice(toIdx, 0, item);
@@ -64,9 +94,22 @@ export function AppShell({ initialView, user }: AppShellProps) {
     });
   }, []);
 
-  const pendingTasks = tasks.filter((t) => !t.done);
-  const doneTasks = tasks.filter((t) => t.done);
-  const nowMin = 9 * 60 + 15;
+  const resetSample = useCallback(() => {
+    setTasks(buildInitialTasks());
+    setEvents(buildInitialEvents());
+    writeSampleDataMode("default");
+  }, []);
+
+  const clearAll = useCallback(() => {
+    setTasks([]);
+    setEvents([]);
+    setDetailId(null);
+    setEventDetailId(null);
+    writeSampleDataMode("cleared");
+  }, []);
+
+  const pendingTasks = tasks.filter((t) => !isDone(t));
+  const doneTasks = tasks.filter((t) => isDone(t));
   const detailTask = detailId ? tasks.find((t) => t.id === detailId) : null;
 
   const tabs: { key: View; label: string; href: string }[] = [
@@ -101,18 +144,23 @@ export function AppShell({ initialView, user }: AppShellProps) {
             );
           })}
         </div>
-        <UserMenu email={user.email} avatarUrl={user.avatarUrl} />
+        <UserMenu
+          email={user.email}
+          avatarUrl={user.avatarUrl}
+          onResetSample={resetSample}
+          onClearAll={clearAll}
+        />
       </div>
 
       {view === "stack" ? (
         <StackView
-          events={initialEvents}
+          events={events}
           pendingTasks={pendingTasks}
           doneTasks={doneTasks}
           toggleDone={toggleDone}
           reorder={reorder}
           nowMin={nowMin}
-          today={TODAY}
+          today={today}
           onOpenDetail={setDetailId}
           onOpenEvent={setEventDetailId}
         />
@@ -124,7 +172,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
       {detailTask && (
         <TaskDetailPanel
           task={detailTask}
-          events={initialEvents}
+          events={events}
           onClose={() => setDetailId(null)}
           onUpdate={updateBody}
           onToggleDone={toggleDone}
@@ -134,7 +182,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
       {/* Event detail overlay */}
       {eventDetailId &&
         (() => {
-          const ev = initialEvents.find((e) => e.id === eventDetailId);
+          const ev = events.find((e) => e.id === eventDetailId);
           return ev ? (
             <EventDetailPanel
               event={ev}

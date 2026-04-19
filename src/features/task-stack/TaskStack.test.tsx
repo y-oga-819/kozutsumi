@@ -9,12 +9,31 @@ import type { Event } from "../../entities/event/types";
 
 const baseTask: Task = {
   id: "t1",
-  project: "slo",
+  projectId: "slo",
   title: "SLI 定義更新",
-  size: "M",
-  done: false,
-  dependsOn: null,
   body: "## やること\n\n要件整理",
+  estimatedMinutes: 45,
+  status: "idle",
+  stackOrder: 0,
+  dependsOnEventId: null,
+  isInterruption: false,
+  parentTaskId: null,
+  createdAt: "2026-04-11T00:00:00",
+  completedAt: null,
+};
+
+const baseEvent: Event = {
+  id: "e1",
+  title: "MTG",
+  startTime: "2026-04-11T14:00:00",
+  endTime: "2026-04-11T15:00:00",
+  projectId: "slo",
+  meetUrl: null,
+  hasAttachments: false,
+  description: "",
+  source: "manual",
+  externalId: null,
+  createdAt: "2026-04-11T00:00:00",
 };
 
 const noop = () => {};
@@ -35,11 +54,11 @@ describe("TopTaskCard", () => {
     expect(getByText("SLO推進")).toBeTruthy();
   });
 
-  test("dependsOn の依存イベントを解決してバッジ表示", () => {
-    const events: Event[] = [{ id: "e1", time: "14:00", endTime: "15:00", title: "MTG", date: "2026-04-11" }];
+  test("dependsOnEventId の依存イベントを解決してバッジ表示", () => {
+    const events: Event[] = [baseEvent];
     const { getByText } = render(
       <TopTaskCard
-        task={{ ...baseTask, dependsOn: "e1" }}
+        task={{ ...baseTask, dependsOnEventId: "e1" }}
         events={events}
         isBeingDragged={false}
         onPointerDown={noop}
@@ -86,7 +105,7 @@ describe("TopTaskCard", () => {
 });
 
 describe("TaskRow", () => {
-  test("タイトルとサイズを表示", () => {
+  test("タイトルと見積もり時間を表示", () => {
     const { getByText } = render(
       <TaskRow
         task={baseTask}
@@ -97,13 +116,14 @@ describe("TaskRow", () => {
       />,
     );
     expect(getByText("SLI 定義更新")).toBeTruthy();
-    expect(getByText("M")).toBeTruthy();
+    // estimatedMinutes=45 → fmtDuration → "45m"
+    expect(getByText("45m")).toBeTruthy();
   });
 
-  test("dependsOn があれば ⏱ アイコンを表示", () => {
+  test("dependsOnEventId があれば ⏱ アイコンを表示", () => {
     const { getByText } = render(
       <TaskRow
-        task={{ ...baseTask, dependsOn: "e1" }}
+        task={{ ...baseTask, dependsOnEventId: "e1" }}
         isBeingDragged={false}
         onPointerDown={noop}
         onClick={noop}
@@ -123,7 +143,7 @@ describe("DoneList", () => {
   });
 
   test("done タスクのタイトルと「戻す」ボタンを表示", () => {
-    const doneTasks = [{ ...baseTask, done: true }];
+    const doneTasks: Task[] = [{ ...baseTask, status: "done" }];
     const { getByText } = render(
       <DoneList
         doneTasks={doneTasks}
@@ -140,7 +160,7 @@ describe("DoneList", () => {
     const onToggleDone = vi.fn();
     const { getByText } = render(
       <DoneList
-        doneTasks={[{ ...baseTask, done: true }]}
+        doneTasks={[{ ...baseTask, status: "done" }]}
         onOpenDetail={noop}
         onToggleDone={onToggleDone}
       />,
@@ -151,7 +171,7 @@ describe("DoneList", () => {
 });
 
 describe("TaskStack", () => {
-  const pending = [
+  const pending: Task[] = [
     { ...baseTask, id: "t1", title: "Top task" },
     { ...baseTask, id: "t2", title: "Second task" },
     { ...baseTask, id: "t3", title: "Third task" },
@@ -175,7 +195,9 @@ describe("TaskStack", () => {
   });
 
   test("done が混在すると DoneList も表示される", () => {
-    const doneTasks = [{ ...baseTask, id: "t9", title: "Completed", done: true }];
+    const doneTasks: Task[] = [
+      { ...baseTask, id: "t9", title: "Completed", status: "done" },
+    ];
     const { getByText } = render(
       <TaskStack
         events={[]}

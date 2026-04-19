@@ -1,5 +1,5 @@
 import type { Event } from "../../entities/event/types";
-import { timeToMin } from "../../shared/lib/time";
+import { minutesOfDay } from "../../shared/lib/time";
 
 export type EventSlot = {
   type: "event";
@@ -25,11 +25,11 @@ export function computeDayBounds(
   const latestEnd = Math.max(
     18 * 60,
     nowMin,
-    ...events.map((e) => timeToMin(e.endTime)),
+    ...events.map((e) => minutesOfDay(e.endTime)),
   );
   const earliestStart = Math.min(
     9 * 60,
-    ...events.map((e) => timeToMin(e.time)),
+    ...events.map((e) => minutesOfDay(e.startTime)),
   );
   return {
     dayStart: Math.floor(earliestStart / 60) * 60,
@@ -43,13 +43,13 @@ export function buildSlots(
   dayEnd: number,
 ): Slot[] {
   const sorted = [...events].sort(
-    (a, b) => timeToMin(a.time) - timeToMin(b.time),
+    (a, b) => minutesOfDay(a.startTime) - minutesOfDay(b.startTime),
   );
   const slots: Slot[] = [];
   let cursor = dayStart;
   sorted.forEach((ev) => {
-    const evStart = timeToMin(ev.time);
-    const evEnd = timeToMin(ev.endTime);
+    const evStart = minutesOfDay(ev.startTime);
+    const evEnd = minutesOfDay(ev.endTime);
     if (evStart > cursor) {
       slots.push({
         type: "free",

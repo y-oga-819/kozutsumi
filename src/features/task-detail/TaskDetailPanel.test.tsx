@@ -6,12 +6,17 @@ import { TaskDetailPanel, type TaskDetailPanelProps } from "./TaskDetailPanel";
 
 const baseTask: Task = {
   id: "t1",
-  project: "slo",
+  projectId: "slo",
   title: "Test Task",
-  size: "M",
-  done: false,
-  dependsOn: null,
   body: "## Test body\n\n本文",
+  estimatedMinutes: 45,
+  status: "idle",
+  stackOrder: 0,
+  dependsOnEventId: null,
+  isInterruption: false,
+  parentTaskId: null,
+  createdAt: "2026-04-11T00:00:00",
+  completedAt: null,
 };
 
 const noop = () => {};
@@ -41,7 +46,9 @@ describe("TaskDetailPanel", () => {
   });
 
   test("完了済みは「未完了に戻す」ボタン", () => {
-    const { getByText } = renderPanel({ task: { ...baseTask, done: true } });
+    const { getByText } = renderPanel({
+      task: { ...baseTask, status: "done" },
+    });
     expect(getByText("未完了に戻す")).toBeTruthy();
   });
 
@@ -81,10 +88,24 @@ describe("TaskDetailPanel", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  test("dependsOn がある場合、依存イベントの時刻バッジを表示", () => {
-    const events: Event[] = [{ id: "e1", time: "14:00", endTime: "15:00", title: "MTG", date: "2026-04-11" }];
+  test("dependsOnEventId がある場合、依存イベントの時刻バッジを表示", () => {
+    const events: Event[] = [
+      {
+        id: "e1",
+        title: "MTG",
+        startTime: "2026-04-11T14:00:00",
+        endTime: "2026-04-11T15:00:00",
+        projectId: "slo",
+        meetUrl: null,
+        hasAttachments: false,
+        description: "",
+        source: "manual",
+        externalId: null,
+        createdAt: "2026-04-11T00:00:00",
+      },
+    ];
     const { getByText } = renderPanel({
-      task: { ...baseTask, dependsOn: "e1" },
+      task: { ...baseTask, dependsOnEventId: "e1" },
       events,
     });
     expect(getByText("← 14:00までに")).toBeTruthy();
@@ -93,5 +114,12 @@ describe("TaskDetailPanel", () => {
   test("body が空なら「詳細を追加...」プレースホルダー", () => {
     const { getByText } = renderPanel({ task: { ...baseTask, body: "" } });
     expect(getByText("詳細を追加...")).toBeTruthy();
+  });
+
+  test("estimatedMinutes を fmtDuration で表示", () => {
+    const { getByText } = renderPanel({
+      task: { ...baseTask, estimatedMinutes: 90 },
+    });
+    expect(getByText("1h30m")).toBeTruthy();
   });
 });

@@ -24,7 +24,7 @@ export function DateGroup({ date, items, projectOrder }: DateGroupProps) {
         <div className="ml-2 h-px flex-1 bg-bg-elevated" />
       </div>
       {items.map((task) => {
-        const pi = projectOrder.indexOf(task.project);
+        const pi = projectOrder.indexOf(task.projectId);
         const nodeLeft = nodeCenterPx(pi);
         return (
           <div
@@ -35,7 +35,7 @@ export function DateGroup({ date, items, projectOrder }: DateGroupProps) {
               className="absolute top-1/2 z-[3] h-2 w-2 -translate-y-1/2 rounded-full bg-bg-primary"
               style={{
                 left: nodeLeft - 4,
-                border: `2px solid ${PROJECTS[task.project].color}`,
+                border: `2px solid ${PROJECTS[task.projectId].color}`,
               }}
             />
             <div className="shrink-0" style={{ width: lanesWidth }} />

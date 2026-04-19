@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { Task } from "../../entities/task/types";
 import type { Event } from "../../entities/event/types";
 import { PROJECTS } from "../../entities/project/projects";
+import { isDone } from "../../shared/lib/task";
+import { fmtDuration, formatClock } from "../../shared/lib/time";
 import { renderMarkdown } from "../../shared/lib/markdown";
 
 export type TaskDetailPanelProps = {
@@ -15,10 +17,11 @@ export type TaskDetailPanelProps = {
 export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone }: TaskDetailPanelProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.body || "");
-  const proj = PROJECTS[task.project];
-  const dep = task.dependsOn
-    ? events.find((e) => e.id === task.dependsOn)
+  const proj = PROJECTS[task.projectId];
+  const dep = task.dependsOnEventId
+    ? events.find((e) => e.id === task.dependsOnEventId)
     : null;
+  const done = isDone(task);
 
   const handleSave = () => {
     onUpdate(task.id, draft);
@@ -51,10 +54,14 @@ export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone 
             <span className="font-jp text-[10px] text-fg-subtle">
               {proj.name}
             </span>
-            <span className="text-[9px] text-fg-faint">{task.size}</span>
+            {task.estimatedMinutes !== null && (
+              <span className="text-[9px] tabular-nums text-fg-faint">
+                {fmtDuration(task.estimatedMinutes)}
+              </span>
+            )}
             {dep && (
               <span className="rounded-[3px] bg-[#E85D0415] px-1.5 py-px font-jp text-[9px] text-accent-amber">
-                ← {dep.time}までに
+                ← {formatClock(dep.startTime)}までに
               </span>
             )}
             <div className="flex-1" />
@@ -65,11 +72,11 @@ export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone 
               }}
               className="cursor-pointer rounded-[4px] px-2.5 py-[3px] font-jp text-[10px]"
               style={{
-                background: task.done ? "#27272a" : proj.color,
-                color: task.done ? "#8B949E" : "#fff",
+                background: done ? "#27272a" : proj.color,
+                color: done ? "#8B949E" : "#fff",
               }}
             >
-              {task.done ? "未完了に戻す" : "完了にする"}
+              {done ? "未完了に戻す" : "完了にする"}
             </button>
           </div>
           <h2 className="m-0 font-jp text-[16px] font-bold leading-[1.4] text-fg-strong">

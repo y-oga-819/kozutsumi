@@ -10,6 +10,33 @@ export function timeToMin(t: string): number {
   return h * 60 + m;
 }
 
+/** ISO 8601 文字列からローカル時刻の 0:00 からの経過分数を取り出す。 */
+export function minutesOfDay(iso: string): number {
+  const d = new Date(iso);
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+/** ISO 8601 文字列をローカル時刻の "HH:MM" 表記に整形する。 */
+export function formatClock(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** ローカル時刻の今日を "YYYY-MM-DD" で返す。 */
+export function todayIso(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** ローカル時刻の現在分数 (0:00 からの経過分数)。 */
+export function nowMinutesOfDay(): number {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+}
+
 export function fmtDuration(m: number): string {
   if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);

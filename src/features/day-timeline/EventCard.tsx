@@ -1,6 +1,10 @@
 import type { Event } from "../../entities/event/types";
 import { PROJECTS } from "../../entities/project/projects";
-import { fmtDuration, timeToMin } from "../../shared/lib/time";
+import {
+  fmtDuration,
+  formatClock,
+  minutesOfDay,
+} from "../../shared/lib/time";
 
 type EventCardProps = {
   event: Event;
@@ -10,13 +14,13 @@ type EventCardProps = {
 };
 
 export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCardProps) {
-  const evStart = timeToMin(event.time);
-  const evEnd = timeToMin(event.endTime);
+  const evStart = minutesOfDay(event.startTime);
+  const evEnd = minutesOfDay(event.endTime);
   const isPast = evEnd <= nowMin;
   const isNow = evStart <= nowMin && evEnd > nowMin;
   const isNext = isNextCandidate && !isNow;
-  const evColor = event.project ? PROJECTS[event.project].color : "#52525b";
-  const hasAttachments = event.attachments && event.attachments.length > 0;
+  const evColor = event.projectId ? PROJECTS[event.projectId].color : "#52525b";
+  const hasAttachments = event.hasAttachments;
   const hasMeet = !!event.meetUrl;
   const meetLabel = event.meetUrl?.includes("zoom") ? "Zoom" : "Meet";
   const isZoom = !!event.meetUrl?.includes("zoom");
@@ -33,7 +37,7 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
     >
       <div className="flex items-center gap-2">
         <span className="shrink-0 text-[10px] tabular-nums text-fg-weak">
-          {event.time}–{event.endTime}
+          {formatClock(event.startTime)}–{formatClock(event.endTime)}
         </span>
         <span className="shrink-0 text-[9px] text-fg-faint">
           ({fmtDuration(evEnd - evStart)})
@@ -109,7 +113,7 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
       {isNext && hasMeet && (
         <div className="mt-1.5 flex items-center gap-2">
           <a
-            href={event.meetUrl}
+            href={event.meetUrl ?? undefined}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
@@ -139,9 +143,7 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
             {meetLabel}に参加
           </a>
           {hasAttachments && (
-            <span className="font-jp text-[9px] text-fg-weak">
-              資料 {event.attachments!.length}件
-            </span>
+            <span className="font-jp text-[9px] text-fg-weak">資料あり</span>
           )}
         </div>
       )}

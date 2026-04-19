@@ -22,8 +22,8 @@ type SlotDisplayProps = {
 };
 
 function EventSlot({ slot, widthPct, isPast, isCurrent, nowPct, label }: SlotDisplayProps & { slot: EventSlotType }) {
-  const evColor = slot.event.project
-    ? PROJECTS[slot.event.project].color
+  const evColor = slot.event.projectId
+    ? PROJECTS[slot.event.projectId].color
     : "#52525b";
   return (
     <div
