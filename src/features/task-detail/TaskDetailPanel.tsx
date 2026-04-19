@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Task } from "../../entities/task/types";
 import type { Event } from "../../entities/event/types";
-import { PROJECTS } from "../../entities/project/projects";
+import { getProject } from "../../entities/project/projects";
+import { useProjects } from "../../entities/project/ProjectsContext";
 import { isDone } from "../../shared/lib/task";
 import { fmtDuration, formatClock } from "../../shared/lib/time";
 import { renderMarkdown } from "../../shared/lib/markdown";
@@ -12,12 +13,14 @@ export type TaskDetailPanelProps = {
   onClose: () => void;
   onUpdate: (id: string, body: string) => void;
   onToggleDone: (id: string) => void;
+  onDelete?: (id: string) => void;
 };
 
-export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone }: TaskDetailPanelProps) {
+export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone, onDelete }: TaskDetailPanelProps) {
+  const { projectsById } = useProjects();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.body || "");
-  const proj = PROJECTS[task.projectId];
+  const proj = getProject(projectsById, task.projectId);
   const dep = task.dependsOnEventId
     ? events.find((e) => e.id === task.dependsOnEventId)
     : null;
@@ -89,7 +92,20 @@ export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone 
         <div className="flex-1 overflow-auto px-5 pb-6 pt-3">
           {!editing ? (
             <>
-              <div className="mb-2 flex justify-end">
+              <div className="mb-2 flex justify-end gap-2">
+                {onDelete ? (
+                  <button
+                    onClick={() => {
+                      if (window.confirm("このタスクを削除しますか?")) {
+                        onDelete(task.id);
+                        onClose();
+                      }
+                    }}
+                    className="flex cursor-pointer items-center gap-1 rounded-[4px] border border-bg-divider bg-transparent px-2.5 py-[3px] text-[10px] text-accent-red"
+                  >
+                    削除
+                  </button>
+                ) : null}
                 <button
                   onClick={() => {
                     setDraft(task.body || "");

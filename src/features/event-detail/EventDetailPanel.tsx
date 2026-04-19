@@ -1,5 +1,6 @@
 import type { Event } from "../../entities/event/types";
-import { PROJECTS } from "../../entities/project/projects";
+import { getProject } from "../../entities/project/projects";
+import { useProjects } from "../../entities/project/ProjectsContext";
 import {
   fmtDuration,
   formatClock,
@@ -13,7 +14,8 @@ type EventDetailPanelProps = {
 };
 
 export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
-  const proj = event.projectId ? PROJECTS[event.projectId] : null;
+  const { projectsById } = useProjects();
+  const proj = event.projectId ? getProject(projectsById, event.projectId) : null;
   const evColor = proj ? proj.color : "#52525b";
   const evStart = minutesOfDay(event.startTime);
   const evEnd = minutesOfDay(event.endTime);

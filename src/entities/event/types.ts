@@ -1,5 +1,3 @@
-import type { ProjectKey } from "../project/types";
-
 export type EventSource = "manual" | "google_calendar";
 
 /**
@@ -11,7 +9,7 @@ export type Event = {
   title: string;
   startTime: string;
   endTime: string;
-  projectId: ProjectKey | null;
+  projectId: string | null;
   meetUrl: string | null;
   hasAttachments: boolean;
   description: string;

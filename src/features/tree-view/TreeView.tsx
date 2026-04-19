@@ -1,12 +1,11 @@
 import type { HistoryEntry } from "../../entities/task/types";
-import type { ProjectKey } from "../../entities/project/types";
 import { DateGroup } from "./DateGroup";
 import { groupByDateDesc } from "./layout";
 import { ProjectLanes } from "./ProjectLanes";
 
 type TreeViewProps = {
   historyData: HistoryEntry[];
-  projectOrder: readonly ProjectKey[];
+  projectOrder: readonly string[];
 };
 
 /**

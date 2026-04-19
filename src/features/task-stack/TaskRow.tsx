@@ -1,6 +1,7 @@
 import type { Task } from "../../entities/task/types";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { PROJECTS } from "../../entities/project/projects";
+import { getProject } from "../../entities/project/projects";
+import { useProjects } from "../../entities/project/ProjectsContext";
 import { fmtDuration } from "../../shared/lib/time";
 import { Grip } from "./Grip";
 
@@ -13,7 +14,8 @@ type TaskRowProps = {
 };
 
 export function TaskRow({ task, isBeingDragged, onPointerDown, onClick, onToggleDone }: TaskRowProps) {
-  const proj = PROJECTS[task.projectId];
+  const { projectsById } = useProjects();
+  const proj = getProject(projectsById, task.projectId);
 
   return (
     <div

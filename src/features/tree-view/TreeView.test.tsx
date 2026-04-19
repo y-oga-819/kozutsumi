@@ -1,10 +1,18 @@
 import { render } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 import type { HistoryEntry } from "../../entities/task/types";
-import type { ProjectKey } from "../../entities/project/types";
+import type { Project } from "../../entities/project/types";
+import { ProjectsProvider } from "../../entities/project/ProjectsContext";
 import { TreeView } from "./TreeView";
 
-const projectOrder: ProjectKey[] = ["career", "loadtest", "slo", "tasuki"];
+const projects: Project[] = [
+  { id: "career", name: "転職活動", color: "#E85D04", isPrimary: false, createdAt: "" },
+  { id: "loadtest", name: "負荷試験", color: "#0096C7", isPrimary: false, createdAt: "" },
+  { id: "slo", name: "SLO推進", color: "#2D9F45", isPrimary: true, createdAt: "" },
+  { id: "tasuki", name: "Tasuki", color: "#9B5DE5", isPrimary: false, createdAt: "" },
+];
+
+const projectOrder: readonly string[] = projects.map((p) => p.id);
 
 const history: HistoryEntry[] = [
   { id: "h1", projectId: "career", title: "転職ドラフト応募完了", date: "2026-04-05" },
@@ -12,16 +20,20 @@ const history: HistoryEntry[] = [
   { id: "h3", projectId: "tasuki", title: "php-parser PoC完了", date: "2026-04-06" },
 ];
 
+function renderWithProjects(ui: React.ReactElement) {
+  return render(<ProjectsProvider projects={projects}>{ui}</ProjectsProvider>);
+}
+
 describe("TreeView", () => {
   test("空 historyData でも crash しない", () => {
-    const { container } = render(
+    const { container } = renderWithProjects(
       <TreeView historyData={[]} projectOrder={projectOrder} />,
     );
     expect(container.firstChild).toBeTruthy();
   });
 
   test("プロジェクトレジェンド（名前）を表示する", () => {
-    const { getByText } = render(
+    const { getByText } = renderWithProjects(
       <TreeView historyData={history} projectOrder={projectOrder} />,
     );
     expect(getByText("転職活動")).toBeTruthy();
@@ -30,7 +42,7 @@ describe("TreeView", () => {
   });
 
   test("各タスクタイトルを表示する", () => {
-    const { getByText } = render(
+    const { getByText } = renderWithProjects(
       <TreeView historyData={history} projectOrder={projectOrder} />,
     );
     expect(getByText("転職ドラフト応募完了")).toBeTruthy();
@@ -39,7 +51,7 @@ describe("TreeView", () => {
   });
 
   test("日付見出し（formatDate）を表示する", () => {
-    const { getByText } = render(
+    const { getByText } = renderWithProjects(
       <TreeView historyData={history} projectOrder={projectOrder} />,
     );
     // 2026-04-05 は日曜、2026-04-06 は月曜
@@ -48,7 +60,7 @@ describe("TreeView", () => {
   });
 
   test("日付は降順で並ぶ", () => {
-    const { container } = render(
+    const { container } = renderWithProjects(
       <TreeView historyData={history} projectOrder={projectOrder} />,
     );
     const text = container.textContent;

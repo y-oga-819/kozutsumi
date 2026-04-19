@@ -1,5 +1,6 @@
 import type { Event } from "../../entities/event/types";
-import { PROJECTS } from "../../entities/project/projects";
+import { getProject } from "../../entities/project/projects";
+import { useProjects } from "../../entities/project/ProjectsContext";
 import {
   fmtDuration,
   formatClock,
@@ -14,12 +15,15 @@ type EventCardProps = {
 };
 
 export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCardProps) {
+  const { projectsById } = useProjects();
   const evStart = minutesOfDay(event.startTime);
   const evEnd = minutesOfDay(event.endTime);
   const isPast = evEnd <= nowMin;
   const isNow = evStart <= nowMin && evEnd > nowMin;
   const isNext = isNextCandidate && !isNow;
-  const evColor = event.projectId ? PROJECTS[event.projectId].color : "#52525b";
+  const evColor = event.projectId
+    ? getProject(projectsById, event.projectId).color
+    : "#52525b";
   const hasAttachments = event.hasAttachments;
   const hasMeet = !!event.meetUrl;
   const meetLabel = event.meetUrl?.includes("zoom") ? "Zoom" : "Meet";

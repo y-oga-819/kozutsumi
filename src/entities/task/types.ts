@@ -1,14 +1,13 @@
-import type { ProjectKey } from "../project/types";
-
 export type TaskStatus = "idle" | "active" | "paused" | "done";
 
 /**
  * DB スキーマ (supabase/migrations/..._initial_schema.sql の tasks) と 1:1 対応。
- * PoC では projectId に ProjectKey(slug) を入れ、本番では UUID を入れる。
+ * projectId は projects.id を参照する UUID (初回 seed では slug 由来の UUID)。
+ * DB 上は project_id が nullable だが、UI では常に割り当てさせる運用なので string を前提とする。
  */
 export type Task = {
   id: string;
-  projectId: ProjectKey;
+  projectId: string;
   title: string;
   body: string;
   estimatedMinutes: number | null;
@@ -27,7 +26,7 @@ export type Task = {
  */
 export type HistoryEntry = {
   id: string;
-  projectId: ProjectKey;
+  projectId: string;
   title: string;
   date: string;
 };
