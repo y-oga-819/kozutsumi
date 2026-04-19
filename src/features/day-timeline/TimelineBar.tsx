@@ -1,5 +1,6 @@
 import type { EventSlot as EventSlotType, Slot } from "./buildSlots";
-import { PROJECTS } from "../../entities/project/projects";
+import { getProject } from "../../entities/project/projects";
+import { useProjects } from "../../entities/project/ProjectsContext";
 import { fmtDuration } from "../../shared/lib/time";
 
 function computeTimeLabels(dayStart: number, dayEnd: number): number[] {
@@ -22,8 +23,9 @@ type SlotDisplayProps = {
 };
 
 function EventSlot({ slot, widthPct, isPast, isCurrent, nowPct, label }: SlotDisplayProps & { slot: EventSlotType }) {
+  const { projectsById } = useProjects();
   const evColor = slot.event.projectId
-    ? PROJECTS[slot.event.projectId].color
+    ? getProject(projectsById, slot.event.projectId).color
     : "#52525b";
   return (
     <div

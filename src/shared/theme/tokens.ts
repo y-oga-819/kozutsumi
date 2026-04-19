@@ -1,5 +1,4 @@
-import { PROJECTS } from "../../entities/project/projects";
-import type { ProjectKey } from "../../entities/project/types";
+import { PROJECT_SEEDS } from "../../entities/project/projects";
 
 export const BG_COLORS = {
   primary: "#0a0a0b",
@@ -37,6 +36,11 @@ export const ACCENT_COLORS = {
   meetBg: "#00AC47",
 } as const;
 
-export const PROJECT_COLORS: Record<ProjectKey, string> = Object.fromEntries(
-  Object.entries(PROJECTS).map(([key, value]) => [key, value.color]),
-) as Record<ProjectKey, string>;
+/**
+ * Tailwind の color palette 用。
+ * ユーザーが追加したプロジェクトは対象外 (動的 class 生成は Tailwind と相性が悪いため)。
+ * 既定シード 4 色のみ Tailwind 経由で参照可能にする。
+ */
+export const PROJECT_COLORS: Record<string, string> = Object.fromEntries(
+  PROJECT_SEEDS.map((seed) => [seed.slug, seed.color]),
+);

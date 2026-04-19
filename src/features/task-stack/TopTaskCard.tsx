@@ -1,7 +1,8 @@
 import type { Task } from "../../entities/task/types";
 import type { Event } from "../../entities/event/types";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { PROJECTS } from "../../entities/project/projects";
+import { getProject } from "../../entities/project/projects";
+import { useProjects } from "../../entities/project/ProjectsContext";
 import { formatClock } from "../../shared/lib/time";
 import { Grip } from "./Grip";
 
@@ -20,7 +21,8 @@ type TopTaskCardProps = {
 };
 
 export function TopTaskCard({ task, events, isBeingDragged, onPointerDown, onClick, onToggleDone }: TopTaskCardProps) {
-  const proj = PROJECTS[task.projectId];
+  const { projectsById } = useProjects();
+  const proj = getProject(projectsById, task.projectId);
   const dep = task.dependsOnEventId
     ? events.find((e) => e.id === task.dependsOnEventId)
     : null;

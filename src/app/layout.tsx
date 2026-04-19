@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Noto_Sans_JP } from "next/font/google";
 
+import { QueryProvider } from "@/shared/query/QueryProvider";
+
 import "./globals.css";
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -31,7 +33,7 @@ export default function RootLayout({
   return (
     <html lang="ja" className={`${ibmPlexMono.variable} ${notoSansJp.variable}`}>
       <body className="mx-auto min-h-screen max-w-[480px] bg-bg-primary font-mono text-fg-default">
-        {children}
+        <QueryProvider>{children}</QueryProvider>
       </body>
     </html>
   );

@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render as rtlRender } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { DoneList } from "./DoneList";
 import { TaskRow } from "./TaskRow";
@@ -6,6 +6,14 @@ import { TaskStack } from "./TaskStack";
 import { TopTaskCard } from "./TopTaskCard";
 import type { Task } from "../../entities/task/types";
 import type { Event } from "../../entities/event/types";
+import type { Project } from "../../entities/project/types";
+import { ProjectsProvider } from "../../entities/project/ProjectsContext";
+
+const projects: Project[] = [
+  { id: "slo", name: "SLO推進", color: "#2D9F45", isPrimary: true, createdAt: "" },
+];
+const render = (ui: React.ReactElement) =>
+  rtlRender(<ProjectsProvider projects={projects}>{ui}</ProjectsProvider>);
 
 const baseTask: Task = {
   id: "t1",

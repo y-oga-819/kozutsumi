@@ -1,19 +1,20 @@
 import type { HistoryEntry } from "../../entities/task/types";
-import type { ProjectKey } from "../../entities/project/types";
-import { PROJECTS } from "../../entities/project/projects";
+import { getProject } from "../../entities/project/projects";
+import { useProjects } from "../../entities/project/ProjectsContext";
 import { formatDate } from "../../shared/lib/time";
 import { lanesWidthPx, nodeCenterPx } from "./layout";
 
 type DateGroupProps = {
   date: string;
   items: HistoryEntry[];
-  projectOrder: readonly ProjectKey[];
+  projectOrder: readonly string[];
 };
 
 /**
  * 1つの日付に属するタスク群を、日付見出しとノード列で描画する。
  */
 export function DateGroup({ date, items, projectOrder }: DateGroupProps) {
+  const { projectsById } = useProjects();
   const lanesWidth = lanesWidthPx(projectOrder.length);
 
   return (
@@ -35,7 +36,7 @@ export function DateGroup({ date, items, projectOrder }: DateGroupProps) {
               className="absolute top-1/2 z-[3] h-2 w-2 -translate-y-1/2 rounded-full bg-bg-primary"
               style={{
                 left: nodeLeft - 4,
-                border: `2px solid ${PROJECTS[task.projectId].color}`,
+                border: `2px solid ${getProject(projectsById, task.projectId).color}`,
               }}
             />
             <div className="shrink-0" style={{ width: lanesWidth }} />
