@@ -1,5 +1,6 @@
-import type { Task } from "../../entities/task/types";
 import type { Event } from "../../entities/event/types";
+import type { PauseReason } from "../../entities/task/time-entries";
+import type { Task } from "../../entities/task/types";
 import { DoneList } from "./DoneList";
 import { TaskRow } from "./TaskRow";
 import { TopTaskCard } from "./TopTaskCard";
@@ -21,16 +22,34 @@ function DropIndicator() {
   return <div className="mx-4 h-0.5 rounded-[1px] bg-accent-blue" />;
 }
 
+export type TopTimerBinding = {
+  elapsedSeconds: number;
+  pauseReason: PauseReason | null;
+  onStart: () => void;
+  onPauseRequest: () => void;
+  onResume: () => void;
+  onComplete: () => void;
+};
+
 type TaskStackProps = {
   events: Event[];
   pendingTasks: Task[];
   doneTasks: Task[];
+  topTimer: TopTimerBinding;
   onReorder: (from: number, to: number) => void;
   onToggleDone: (id: string) => void;
   onOpenDetail: (id: string) => void;
 };
 
-export function TaskStack({ events, pendingTasks, doneTasks, onReorder, onToggleDone, onOpenDetail }: TaskStackProps) {
+export function TaskStack({
+  events,
+  pendingTasks,
+  doneTasks,
+  topTimer,
+  onReorder,
+  onToggleDone,
+  onOpenDetail,
+}: TaskStackProps) {
   const { dragIdx, overIdx, rowRefs, handlePointerDown } =
     useStackDnD(onReorder);
 
@@ -57,9 +76,14 @@ export function TaskStack({ events, pendingTasks, doneTasks, onReorder, onToggle
                 task={task}
                 events={events}
                 isBeingDragged={isBeingDragged}
+                elapsedSeconds={topTimer.elapsedSeconds}
+                pauseReason={topTimer.pauseReason}
                 onPointerDown={(e) => handlePointerDown(idx, e)}
                 onClick={() => onOpenDetail(task.id)}
-                onToggleDone={() => onToggleDone(task.id)}
+                onStart={topTimer.onStart}
+                onPauseRequest={topTimer.onPauseRequest}
+                onResume={topTimer.onResume}
+                onComplete={topTimer.onComplete}
               />
             ) : (
               <TaskRow

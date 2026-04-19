@@ -2,7 +2,7 @@ import { fireEvent, render as rtlRender } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { DoneList } from "./DoneList";
 import { TaskRow } from "./TaskRow";
-import { TaskStack } from "./TaskStack";
+import { TaskStack, type TopTimerBinding } from "./TaskStack";
 import { TopTaskCard } from "./TopTaskCard";
 import type { Task } from "../../entities/task/types";
 import type { Event } from "../../entities/event/types";
@@ -46,69 +46,99 @@ const baseEvent: Event = {
 
 const noop = () => {};
 
+const idleTimer: TopTimerBinding = {
+  elapsedSeconds: 0,
+  pauseReason: null,
+  onStart: noop,
+  onPauseRequest: noop,
+  onResume: noop,
+  onComplete: noop,
+};
+
+const topProps = {
+  events: [] as Event[],
+  isBeingDragged: false,
+  elapsedSeconds: 0,
+  pauseReason: null,
+  onPointerDown: noop,
+  onClick: noop,
+  onStart: noop,
+  onPauseRequest: noop,
+  onResume: noop,
+  onComplete: noop,
+};
+
 describe("TopTaskCard", () => {
   test("タイトルとプロジェクト名を表示", () => {
-    const { getByText } = render(
-      <TopTaskCard
-        task={baseTask}
-        events={[]}
-        isBeingDragged={false}
-        onPointerDown={noop}
-        onClick={noop}
-        onToggleDone={noop}
-      />,
-    );
+    const { getByText } = render(<TopTaskCard {...topProps} task={baseTask} />);
     expect(getByText("SLI 定義更新")).toBeTruthy();
     expect(getByText("SLO推進")).toBeTruthy();
   });
 
   test("dependsOnEventId の依存イベントを解決してバッジ表示", () => {
-    const events: Event[] = [baseEvent];
     const { getByText } = render(
       <TopTaskCard
+        {...topProps}
         task={{ ...baseTask, dependsOnEventId: "e1" }}
-        events={events}
-        isBeingDragged={false}
-        onPointerDown={noop}
-        onClick={noop}
-        onToggleDone={noop}
+        events={[baseEvent]}
       />,
     );
     expect(getByText("← 14:00までに")).toBeTruthy();
   });
 
   test("body の先頭非見出し行をプレビュー表示", () => {
-    const { getByText } = render(
-      <TopTaskCard
-        task={baseTask}
-        events={[]}
-        isBeingDragged={false}
-        onPointerDown={noop}
-        onClick={noop}
-        onToggleDone={noop}
-      />,
-    );
+    const { getByText } = render(<TopTaskCard {...topProps} task={baseTask} />);
     expect(getByText("要件整理")).toBeTruthy();
   });
 
-  test("完了ボタンで onToggleDone、body/Grip クリックは伝播しない", () => {
+  test("idle タスクは『開始』ボタンを表示し onStart を呼ぶ", () => {
+    const onStart = vi.fn();
     const onClick = vi.fn();
-    const onToggleDone = vi.fn();
-    const { container } = render(
+    const { getByLabelText } = render(
       <TopTaskCard
+        {...topProps}
         task={baseTask}
-        events={[]}
-        isBeingDragged={false}
-        onPointerDown={noop}
+        onStart={onStart}
         onClick={onClick}
-        onToggleDone={onToggleDone}
       />,
     );
-    const button = container.querySelector("button")!;
-    fireEvent.click(button);
-    expect(onToggleDone).toHaveBeenCalledTimes(1);
-    // stopPropagation により onClick (カード全体) は発火しない
+    fireEvent.click(getByLabelText("開始"));
+    expect(onStart).toHaveBeenCalledTimes(1);
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  test("active タスクは中断/完了ボタンと経過時間を表示する", () => {
+    const onPauseRequest = vi.fn();
+    const onComplete = vi.fn();
+    const { getByLabelText, getByText } = render(
+      <TopTaskCard
+        {...topProps}
+        task={{ ...baseTask, status: "active" }}
+        elapsedSeconds={125}
+        onPauseRequest={onPauseRequest}
+        onComplete={onComplete}
+      />,
+    );
+    expect(getByText("● 02:05")).toBeTruthy();
+    fireEvent.click(getByLabelText("中断"));
+    expect(onPauseRequest).toHaveBeenCalledTimes(1);
+    fireEvent.click(getByLabelText("完了"));
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  test("paused タスクは『再開』ボタンと中断理由バッジを表示する", () => {
+    const onResume = vi.fn();
+    const { getByLabelText, getByText } = render(
+      <TopTaskCard
+        {...topProps}
+        task={{ ...baseTask, status: "paused" }}
+        pauseReason="meeting"
+        onResume={onResume}
+      />,
+    );
+    expect(getByText("中断: MTG")).toBeTruthy();
+    fireEvent.click(getByLabelText("再開"));
+    expect(onResume).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -191,6 +221,7 @@ describe("TaskStack", () => {
         events={[]}
         pendingTasks={pending}
         doneTasks={[]}
+        topTimer={idleTimer}
         onReorder={noop}
         onToggleDone={noop}
         onOpenDetail={noop}
@@ -211,6 +242,7 @@ describe("TaskStack", () => {
         events={[]}
         pendingTasks={pending}
         doneTasks={doneTasks}
+        topTimer={idleTimer}
         onReorder={noop}
         onToggleDone={noop}
         onOpenDetail={noop}
@@ -227,6 +259,7 @@ describe("TaskStack", () => {
         events={[]}
         pendingTasks={pending}
         doneTasks={[]}
+        topTimer={idleTimer}
         onReorder={noop}
         onToggleDone={noop}
         onOpenDetail={onOpenDetail}
