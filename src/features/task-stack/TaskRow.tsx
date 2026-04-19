@@ -1,6 +1,7 @@
 import type { Task } from "../../entities/task/types";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { PROJECTS } from "../../entities/project/projects";
+import { fmtDuration } from "../../shared/lib/time";
 import { Grip } from "./Grip";
 
 type TaskRowProps = {
@@ -12,7 +13,7 @@ type TaskRowProps = {
 };
 
 export function TaskRow({ task, isBeingDragged, onPointerDown, onClick, onToggleDone }: TaskRowProps) {
-  const proj = PROJECTS[task.project];
+  const proj = PROJECTS[task.projectId];
 
   return (
     <div
@@ -37,10 +38,14 @@ export function TaskRow({ task, isBeingDragged, onPointerDown, onClick, onToggle
       <span className="flex-1 truncate font-jp text-[12px] text-fg-muted">
         {task.title}
       </span>
-      {task.dependsOn && (
+      {task.dependsOnEventId && (
         <span className="text-[8px] text-fg-subtle">⏱</span>
       )}
-      <span className="text-[9px] text-fg-faint">{task.size}</span>
+      {task.estimatedMinutes !== null && (
+        <span className="text-[9px] tabular-nums text-fg-faint">
+          {fmtDuration(task.estimatedMinutes)}
+        </span>
+      )}
       <button
         onClick={(e) => {
           e.stopPropagation();

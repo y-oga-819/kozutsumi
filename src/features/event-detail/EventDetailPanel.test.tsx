@@ -6,11 +6,15 @@ import { EventDetailPanel } from "./EventDetailPanel";
 const baseEvent: Event = {
   id: "e1",
   title: "SLO レビュー",
-  time: "10:00",
-  endTime: "11:00",
-  date: "2026-04-11",
-  project: "slo",
+  startTime: "2026-04-11T10:00:00",
+  endTime: "2026-04-11T11:00:00",
+  projectId: "slo",
+  meetUrl: null,
+  hasAttachments: false,
   description: "## アジェンダ\n\n本文",
+  source: "manual",
+  externalId: null,
+  createdAt: "2026-04-11T00:00:00",
 };
 
 const noop = () => {};
@@ -28,9 +32,9 @@ describe("EventDetailPanel", () => {
     expect(getByText(/10:00–11:00/)).toBeTruthy();
   });
 
-  test("project なしの event ではプロジェクトバッジを非表示", () => {
+  test("projectId なしの event ではプロジェクトバッジを非表示", () => {
     const { queryByText } = renderPanel({
-      event: { ...baseEvent, project: undefined },
+      event: { ...baseEvent, projectId: null },
     });
     expect(queryByText("SLO推進")).toBeNull();
   });
@@ -54,13 +58,16 @@ describe("EventDetailPanel", () => {
     expect(queryByText(/に参加$/)).toBeNull();
   });
 
-  test("attachments があればファイル名を表示", () => {
+  test("hasAttachments=true なら「添付資料あり」を表示", () => {
     const { getByText } = renderPanel({
-      event: { ...baseEvent, attachments: ["仕様書.pdf", "議事録.docx"] },
+      event: { ...baseEvent, hasAttachments: true },
     });
-    expect(getByText("仕様書.pdf")).toBeTruthy();
-    expect(getByText("議事録.docx")).toBeTruthy();
-    expect(getByText("添付資料")).toBeTruthy();
+    expect(getByText("添付資料あり")).toBeTruthy();
+  });
+
+  test("hasAttachments=false なら添付バッジを表示しない", () => {
+    const { queryByText } = renderPanel();
+    expect(queryByText("添付資料あり")).toBeNull();
   });
 
   test("description が空なら「詳細なし」", () => {

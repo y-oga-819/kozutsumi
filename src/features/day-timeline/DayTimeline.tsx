@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import type { Event } from "../../entities/event/types";
-import { fmtDuration, fmtMin, formatDate, timeToMin } from "../../shared/lib/time";
+import {
+  fmtDuration,
+  fmtMin,
+  formatDate,
+  minutesOfDay,
+} from "../../shared/lib/time";
 import { buildSlots, computeDayBounds } from "./buildSlots";
 import { EventCard } from "./EventCard";
 import { TimelineBar } from "./TimelineBar";
@@ -20,17 +25,21 @@ export function DayTimeline({ events, nowMin, today, onOpenEvent }: DayTimelineP
   );
   const sortedEvents = useMemo(
     () =>
-      [...events].sort((a, b) => timeToMin(a.time) - timeToMin(b.time)),
+      [...events].sort(
+        (a, b) => minutesOfDay(a.startTime) - minutesOfDay(b.startTime),
+      ),
     [events],
   );
 
   const currentSlot = slots.find((s) => s.start <= nowMin && s.end > nowMin);
-  const nextEvent = sortedEvents.find((e) => timeToMin(e.time) > nowMin);
+  const nextEvent = sortedEvents.find(
+    (e) => minutesOfDay(e.startTime) > nowMin,
+  );
   const minutesUntilNext = nextEvent
-    ? timeToMin(nextEvent.time) - nowMin
+    ? minutesOfDay(nextEvent.startTime) - nowMin
     : dayEnd - nowMin;
   const firstFutureIdx = sortedEvents.findIndex(
-    (e) => timeToMin(e.time) > nowMin,
+    (e) => minutesOfDay(e.startTime) > nowMin,
   );
 
   return (

@@ -2,6 +2,7 @@ import type { Task } from "../../entities/task/types";
 import type { Event } from "../../entities/event/types";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { PROJECTS } from "../../entities/project/projects";
+import { formatClock } from "../../shared/lib/time";
 import { Grip } from "./Grip";
 
 function bodyPreview(body: string): string {
@@ -19,9 +20,9 @@ type TopTaskCardProps = {
 };
 
 export function TopTaskCard({ task, events, isBeingDragged, onPointerDown, onClick, onToggleDone }: TopTaskCardProps) {
-  const proj = PROJECTS[task.project];
-  const dep = task.dependsOn
-    ? events.find((e) => e.id === task.dependsOn)
+  const proj = PROJECTS[task.projectId];
+  const dep = task.dependsOnEventId
+    ? events.find((e) => e.id === task.dependsOnEventId)
     : null;
   const preview = bodyPreview(task.body);
 
@@ -60,7 +61,7 @@ export function TopTaskCard({ task, events, isBeingDragged, onPointerDown, onCli
             </span>
             {dep && (
               <span className="rounded-[3px] bg-[#E85D0415] px-1.5 py-px font-jp text-[8px] text-accent-amber">
-                ← {dep.time}までに
+                ← {formatClock(dep.startTime)}までに
               </span>
             )}
           </div>

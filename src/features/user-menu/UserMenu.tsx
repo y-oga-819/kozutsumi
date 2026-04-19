@@ -8,12 +8,14 @@ import { createClient } from "@/shared/supabase/client";
 type UserMenuProps = {
   email: string | null;
   avatarUrl: string | null;
+  onResetSample?: () => void;
+  onClearAll?: () => void;
 };
 
 /**
- * ヘッダー右端のアバター。タップでログアウトメニューを開く。
+ * ヘッダー右端のアバター。タップでログアウト／サンプル操作メニューを開く。
  */
-export function UserMenu({ email, avatarUrl }: UserMenuProps) {
+export function UserMenu({ email, avatarUrl, onResetSample, onClearAll }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const router = useRouter();
@@ -66,6 +68,30 @@ export function UserMenu({ email, avatarUrl }: UserMenuProps) {
             <div className="truncate px-2 py-1 text-[11px] text-fg-muted">
               {email}
             </div>
+          ) : null}
+          {onResetSample ? (
+            <button
+              type="button"
+              onClick={() => {
+                onResetSample();
+                setOpen(false);
+              }}
+              className="mt-1 w-full rounded px-2 py-1.5 text-left text-[12px] text-fg-emphasized transition-colors hover:bg-bg-divider"
+            >
+              サンプルを再投入
+            </button>
+          ) : null}
+          {onClearAll ? (
+            <button
+              type="button"
+              onClick={() => {
+                onClearAll();
+                setOpen(false);
+              }}
+              className="w-full rounded px-2 py-1.5 text-left text-[12px] text-fg-emphasized transition-colors hover:bg-bg-divider"
+            >
+              サンプルを全削除
+            </button>
           ) : null}
           <button
             type="button"

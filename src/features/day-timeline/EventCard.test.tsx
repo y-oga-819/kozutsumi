@@ -7,10 +7,15 @@ import type { Event } from "../../entities/event/types";
 const baseEvent: Event = {
   id: "e1",
   title: "Test Event",
-  time: "10:00",
-  endTime: "11:00",
-  date: "2026-04-11",
-  project: "slo",
+  startTime: "2026-04-11T10:00:00",
+  endTime: "2026-04-11T11:00:00",
+  projectId: "slo",
+  meetUrl: null,
+  hasAttachments: false,
+  description: "",
+  source: "manual",
+  externalId: null,
+  createdAt: "2026-04-11T00:00:00",
 };
 
 describe("EventCard", () => {

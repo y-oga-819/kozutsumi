@@ -2,13 +2,23 @@ import { describe, expect, test } from "vitest";
 import type { Event } from "../../entities/event/types";
 import { buildSlots, computeDayBounds } from "./buildSlots";
 
-const ev = (id: string, time: string, endTime: string, project = "slo"): Event => ({
+const ev = (
+  id: string,
+  start: string,
+  end: string,
+  projectId: Event["projectId"] = "slo",
+): Event => ({
   id,
-  time,
-  endTime,
-  date: "2026-04-11",
-  project: project as Event["project"],
   title: `ev ${id}`,
+  startTime: `2026-04-11T${start}:00`,
+  endTime: `2026-04-11T${end}:00`,
+  projectId,
+  meetUrl: null,
+  hasAttachments: false,
+  description: "",
+  source: "manual",
+  externalId: null,
+  createdAt: "2026-04-11T00:00:00",
 });
 
 describe("computeDayBounds", () => {

@@ -1,6 +1,10 @@
 import type { Event } from "../../entities/event/types";
 import { PROJECTS } from "../../entities/project/projects";
-import { fmtDuration, timeToMin } from "../../shared/lib/time";
+import {
+  fmtDuration,
+  formatClock,
+  minutesOfDay,
+} from "../../shared/lib/time";
 import { renderMarkdown } from "../../shared/lib/markdown";
 
 type EventDetailPanelProps = {
@@ -9,10 +13,10 @@ type EventDetailPanelProps = {
 };
 
 export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
-  const proj = event.project ? PROJECTS[event.project] : null;
+  const proj = event.projectId ? PROJECTS[event.projectId] : null;
   const evColor = proj ? proj.color : "#52525b";
-  const evStart = timeToMin(event.time);
-  const evEnd = timeToMin(event.endTime);
+  const evStart = minutesOfDay(event.startTime);
+  const evEnd = minutesOfDay(event.endTime);
   const duration = evEnd - evStart;
   const isZoom = !!event.meetUrl?.includes("zoom");
   const meetLabel = event.meetUrl?.includes("zoom")
@@ -51,7 +55,7 @@ export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
               </span>
             )}
             <span className="text-[10px] tabular-nums text-fg-weak">
-              {event.time}–{event.endTime} ({fmtDuration(duration)})
+              {formatClock(event.startTime)}–{formatClock(event.endTime)} ({fmtDuration(duration)})
             </span>
           </div>
           <h2 className="m-0 font-jp text-[16px] font-bold leading-[1.4] text-fg-strong">
@@ -98,34 +102,24 @@ export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
           </div>
         )}
 
-        {event.attachments && event.attachments.length > 0 && (
+        {event.hasAttachments && (
           <div className="px-5 pb-2">
-            <div className="mb-1 text-[9px] font-semibold tracking-[0.05em] text-fg-weak">
-              添付資料
-            </div>
-            <div className="flex flex-col gap-1">
-              {event.attachments.map((att, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-1.5 rounded-[5px] bg-bg-elevated px-2.5 py-[5px] font-jp text-[11px] text-fg-muted"
-                >
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                    <path
-                      d="M9 2H4V14H12V5L9 2Z"
-                      stroke="#52525b"
-                      strokeWidth="1.2"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M9 2V5H12"
-                      stroke="#52525b"
-                      strokeWidth="1.2"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  {att}
-                </div>
-              ))}
+            <div className="flex items-center gap-1.5 rounded-[5px] bg-bg-elevated px-2.5 py-[5px] font-jp text-[11px] text-fg-muted">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path
+                  d="M9 2H4V14H12V5L9 2Z"
+                  stroke="#52525b"
+                  strokeWidth="1.2"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M9 2V5H12"
+                  stroke="#52525b"
+                  strokeWidth="1.2"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              添付資料あり
             </div>
           </div>
         )}
