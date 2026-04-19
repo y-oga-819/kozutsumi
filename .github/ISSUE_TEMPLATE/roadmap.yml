@@ -1,0 +1,105 @@
+name: Roadmap タスク
+description: vision / roadmap に紐づく機能開発（Phase 1〜4 の本体）
+title: "[Pn-x] "
+labels: ["type:roadmap"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **AI 向けの注記**: このフォームは AI が優先度判断と着手計画に使うための構造化入力です。
+        見出し（`### 〇〇`）は編集しないでください。
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Phase
+      description: docs/roadmap.md のどの Phase に属するか
+      options:
+        - Phase 1
+        - Phase 2
+        - Phase 3
+        - Phase 4
+        - Future / 未定
+    validations:
+      required: true
+
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 目的
+      description: |
+        vision.md のどの差別化要素に効くか、なぜ今これをやるのか。
+        1〜3 行で。
+      placeholder: |
+        kozutsumi の差別化である「行動パターン分析」に必要な ○○ を整備する。
+        Phase 3 の学習データ源になる。
+    validations:
+      required: true
+
+  - type: textarea
+    id: depends_on
+    attributes:
+      label: 前提・依存
+      description: |
+        依存する issue / PR / 前提条件。
+        `Depends on: #23, #24` / `Blocks: #27` の形式で書く。無ければ `なし`。
+      placeholder: |
+        - Parent: #22
+        - Depends on: #23
+        - Blocks: #27
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: やること
+      description: 実装する内容の箇条書き。
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 完了条件
+      description: |
+        このissueが「閉じていい」と判断できるチェックリスト。
+        必ず `- [ ]` のチェックボックス形式で書く。
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: 非スコープ
+      description: やらないこと、別 issue に分けること。スコープクリープ防止。
+      placeholder: |
+        - ○○（Phase 2 で対応）
+        - ○○（別 issue に切り出す）
+
+  - type: textarea
+    id: kpi
+    attributes:
+      label: KPI / 検証仮説との関係
+      description: |
+        docs/roadmap.md の Phase 検証仮説 / KPI のどれに効くか。
+        無関係なら `なし` と書く。
+      placeholder: |
+        Phase 1 KPI「見積もり時間と実作業時間の記録が自然にできるか」を直接検証する。
+
+  - type: dropdown
+    id: effort
+    attributes:
+      label: 見積もり規模
+      description: 実装にかかる肌感。AI の計画立案で使う。
+      options:
+        - S (半日以内)
+        - M (1〜3日)
+        - L (1週間以上)
+        - 不明
+      default: 3
+    validations:
+      required: true
