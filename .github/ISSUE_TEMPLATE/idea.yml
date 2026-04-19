@@ -1,0 +1,64 @@
+name: Idea / Backlog
+description: 開発中に出た「後でやろう」の置き場。精査前のもの歓迎。
+title: "[idea] "
+labels: ["type:idea"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ロードマップに載っていないが「今じゃないけど後でやりたい」を溜めておく場所。
+        育ってきたら roadmap タスクに昇格、不要なら close する。
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: カテゴリ
+      description: AI が整理に使う軸。
+      options:
+        - devex (CI / lint / tooling / 依存更新)
+        - refactor (コード整理・負債返済)
+        - feature-idea (機能の思いつき)
+        - bug (不具合)
+        - docs (ドキュメント改善)
+        - その他
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: |
+        なぜこれを残しておきたいか。どの作業中に気づいたか。
+        1〜3 行で。後から自分（または AI）が読んで思い出せる程度に。
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: やること
+      description: 具体案があれば。無ければ `検討` でも可。
+      placeholder: |
+        - ○○ を導入する
+        - ○○ を検討する
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: 補足 / 参考
+      description: リンク、関連 issue、迷っている論点など。
+
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: 緊急度（主観でOK）
+      description: AI が優先度判断のヒントに使う。
+      options:
+        - 低 (いつかやれればいい)
+        - 中 (近いうちにやりたい)
+        - 高 (次の手空きで着手)
+      default: 0
+    validations:
+      required: true

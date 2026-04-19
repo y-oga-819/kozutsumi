@@ -6,7 +6,7 @@
 
 手動でイベントとタスクを入力し、イベント駆動スタックの体験を検証。
 
-実装指示は [specs/phase1.md](./specs/phase1.md) 参照。
+実装は GitHub Issue で管理（Milestone `Phase1：コアUI` 配下、Epic は #22）。設計判断は [docs/adr/](./adr/) を参照。
 
 検証仮説と成功基準:
 - スタックのトップから1個ずつ消化が7日間継続できるか
