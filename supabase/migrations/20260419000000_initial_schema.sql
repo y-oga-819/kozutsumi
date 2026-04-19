@@ -1,7 +1,7 @@
 -- kozutsumi Phase 1 initial schema
 --
 -- Scope: projects / tasks / events / task_time_entries / action_logs
--- References: docs/specs/phase1.md Step 1
+-- References: docs/design/architecture.md §2 / docs/adr/0001-action-logs-from-phase1.md
 --
 -- 設計判断:
 -- * Phase 1 では action_logs / task_time_entries も先に掘っておく

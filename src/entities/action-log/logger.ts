@@ -11,7 +11,7 @@ import type {
  * action-log logger
  *
  * kozutsumi の差別化の核である行動ログを Supabase に永続化する。
- * docs/specs/phase1.md Step 4 / docs/design/vision.md 参照。
+ * docs/adr/0001-action-logs-from-phase1.md / docs/design/vision.md 参照。
  *
  * 設計原則:
  * - fire-and-forget: log() は呼び出し元を絶対に await させない
