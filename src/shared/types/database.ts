@@ -45,6 +45,7 @@ export type Database = {
           is_primary?: boolean;
           created_at?: string;
         };
+        Relationships: [];
       };
       tasks: {
         Row: {
@@ -92,6 +93,7 @@ export type Database = {
           created_at?: string;
           completed_at?: string | null;
         };
+        Relationships: [];
       };
       events: {
         Row: {
@@ -136,6 +138,7 @@ export type Database = {
           external_id?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       task_time_entries: {
         Row: {
@@ -162,6 +165,7 @@ export type Database = {
           pause_reason?: Database["public"]["Enums"]["pause_reason"] | null;
           duration_seconds?: number | null;
         };
+        Relationships: [];
       };
       action_logs: {
         Row: {
@@ -188,6 +192,7 @@ export type Database = {
           metadata?: Json;
           created_at?: string;
         };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
