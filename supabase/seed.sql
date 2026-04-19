@@ -1,0 +1,11 @@
+-- kozutsumi seed data (local development only)
+--
+-- `supabase db reset` 時に自動実行される。
+-- 本番 / dev 環境には流さないこと。
+--
+-- 実データ投入は P1-3 (tasks/events/projects CRUD 差し替え) で
+-- アプリ側の「サンプル投入」フローに寄せる予定。ここでは空のまま。
+
+-- 例: 認証済みユーザーを手で入れる場合は supabase/studio から行う。
+-- RLS 下で seed するなら service_role key で挿入するか、
+-- テストユーザーを作った後に app 経由で投入する。
