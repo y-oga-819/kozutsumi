@@ -10,3 +10,12 @@
   background: #27272a;
   border-radius: 2px;
 }
+
+/* iOS Safari は font-size < 16px の入力要素にフォーカスすると自動で拡大するため、iOS のみ 16px に上書きする */
+@supports (-webkit-touch-callout: none) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
