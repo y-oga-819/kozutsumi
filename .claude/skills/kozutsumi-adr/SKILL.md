@@ -111,27 +111,7 @@ ls docs/adr/ | grep -E '^[0-9]+-' | sort | tail -3
 
 ---
 
-## 6. 既存 ADR 一覧（クイックリファレンス）
-
-| 番号 | タイトル | Status |
-|---|---|---|
-| 0000 | template | — |
-| 0001 | action_logs テーブルは Phase 1 から運用開始する | Accepted |
-| 0002 | Google OAuth の calendar.readonly scope を Phase 1 で先行付与する | Accepted |
-| 0003 | イベント駆動スタックをコア体験の中心に据える | Accepted |
-| 0004 | task time-entry state machine | Accepted |
-| 0005 | Google Calendar 同期は Next.js Route Handler で実行する | Accepted |
-| 0006 | 同期方式は full sync → syncToken 段階採用、webhook 不採用 | Accepted |
-| 0007 | 同期トリガーは手動ボタン + 起動時遅延実行 | Accepted |
-| 0008 | 同期対象は primary カレンダーのみ | Accepted |
-| 0009 | Google provider token の refresh は自前実装 | Accepted |
-| 0010 | google_calendar イベントは Google 側属性 read-only | Accepted |
-
-この情報は古くなる可能性があるので、実作業前に `ls docs/adr/` で最新を取得すること。
-
----
-
-## 7. 関連する skill
+## 6. 関連する skill
 
 - **`kozutsumi-issues`** — issue / Milestone / PR の運用。Phase 計画は本 skill と連携する
   （Phase 計画フローでは先に本 skill で ADR を起票し、確定後に `kozutsumi-issues` で Milestone と issue を起票する）

@@ -148,19 +148,6 @@ spec は flow なので、実装単位の issue と code に分解する。
 
 ---
 
-## 8. 現在の状態（クイックリファレンス）
-
-- **進行中 Milestone**: `Phase2：Googleカレンダー連携` (#3)
-- **Milestone 一覧**:
-  - #2 `Phase1：コアUI` — 完了 (close 済)
-  - #3 `Phase2：Googleカレンダー連携` — 進行中
-  - #4 `Phase3：AIサジェスト+見積もり補正`
-  - #5 `Phase4：2段階提案+行動分析`
-
-この情報は古くなる可能性があるので、実作業前に `list_issues` で最新を取得すること。
-
----
-
-## 9. 関連する skill
+## 8. 関連する skill
 
 - **`kozutsumi-adr`** — ADR / 設計判断の運用。Phase 計画では先に invoke して ADR を確定させる。
