@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 
-import type { CreateEventInput } from "@/entities/event/api";
+import type { CreateEventInput } from "@/entities/event/gateway";
 import type { Event } from "@/entities/event/types";
-import type { CreateProjectInput } from "@/entities/project/api";
+import type { CreateProjectInput } from "@/entities/project/gateway";
 import type { Project } from "@/entities/project/types";
-import type { CreateTaskInput } from "@/entities/task/api";
+import type { CreateTaskInput } from "@/entities/task/gateway";
 
 import { EventForm } from "./EventForm";
 import { ProjectForm } from "./ProjectForm";

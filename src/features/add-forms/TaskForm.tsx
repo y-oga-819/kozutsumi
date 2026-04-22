@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import type { CreateTaskInput } from "@/entities/task/api";
+import type { CreateTaskInput } from "@/entities/task/gateway";
 import type { Event } from "@/entities/event/types";
 import type { Project } from "@/entities/project/types";
 import { formatClock } from "@/shared/lib/time";

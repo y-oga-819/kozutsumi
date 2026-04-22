@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import type { CreateEventInput } from "@/entities/event/api";
+import type { CreateEventInput } from "@/entities/event/gateway";
 import type { Project } from "@/entities/project/types";
 import { todayIso } from "@/shared/lib/time";
 
