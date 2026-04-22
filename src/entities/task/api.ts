@@ -8,7 +8,10 @@ import type {
   TablesUpdate,
 } from "@/shared/types/database";
 
+import type { CreateTaskInput, UpdateTaskInput } from "./gateway";
 import type { Task } from "./types";
+
+export type { CreateTaskInput, UpdateTaskInput } from "./gateway";
 
 type Sb = SupabaseClient<Database>;
 
@@ -52,17 +55,6 @@ export async function listTasks(supabase: Sb): Promise<Task[]> {
   return (data ?? []).map(fromRow);
 }
 
-export type CreateTaskInput = {
-  projectId: string;
-  title: string;
-  body?: string;
-  estimatedMinutes?: number | null;
-  stackOrder?: number | null;
-  dependsOnEventId?: string | null;
-  isInterruption?: boolean;
-  parentTaskId?: string | null;
-};
-
 export async function createTask(
   supabase: Sb,
   input: CreateTaskInput,
@@ -87,18 +79,6 @@ export async function createTask(
   if (error) throw error;
   return fromRow(data);
 }
-
-export type UpdateTaskInput = {
-  projectId?: string;
-  title?: string;
-  body?: string;
-  estimatedMinutes?: number | null;
-  status?: Task["status"];
-  stackOrder?: number | null;
-  dependsOnEventId?: string | null;
-  isInterruption?: boolean;
-  completedAt?: string | null;
-};
 
 export async function updateTask(
   supabase: Sb,

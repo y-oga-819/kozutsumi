@@ -7,7 +7,10 @@ import type {
   TablesUpdate,
 } from "@/shared/types/database";
 
+import type { CreateEventInput, UpdateEventInput } from "./gateway";
 import type { Event } from "./types";
+
+export type { CreateEventInput, UpdateEventInput } from "./gateway";
 
 type Sb = SupabaseClient<Database>;
 
@@ -44,18 +47,6 @@ export async function listEvents(supabase: Sb): Promise<Event[]> {
   return (data ?? []).map(fromRow);
 }
 
-export type CreateEventInput = {
-  title: string;
-  startTime: string;
-  endTime: string;
-  projectId?: string | null;
-  meetUrl?: string | null;
-  hasAttachments?: boolean;
-  description?: string;
-  source?: Event["source"];
-  externalId?: string | null;
-};
-
 export async function createEvent(
   supabase: Sb,
   input: CreateEventInput,
@@ -81,16 +72,6 @@ export async function createEvent(
   if (error) throw error;
   return fromRow(data);
 }
-
-export type UpdateEventInput = {
-  title?: string;
-  startTime?: string;
-  endTime?: string;
-  projectId?: string | null;
-  meetUrl?: string | null;
-  hasAttachments?: boolean;
-  description?: string;
-};
 
 export async function updateEvent(
   supabase: Sb,

@@ -2,7 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database, Tables, TablesInsert, TablesUpdate } from "@/shared/types/database";
 
+import type { CreateProjectInput, UpdateProjectInput } from "./gateway";
 import type { Project } from "./types";
+
+export type { CreateProjectInput, UpdateProjectInput } from "./gateway";
 
 type Sb = SupabaseClient<Database>;
 
@@ -33,12 +36,6 @@ export async function listProjects(supabase: Sb): Promise<Project[]> {
   return (data ?? []).map(fromRow);
 }
 
-export type CreateProjectInput = {
-  name: string;
-  color: string;
-  isPrimary?: boolean;
-};
-
 export async function createProject(
   supabase: Sb,
   input: CreateProjectInput,
@@ -58,12 +55,6 @@ export async function createProject(
   if (error) throw error;
   return fromRow(data);
 }
-
-export type UpdateProjectInput = {
-  name?: string;
-  color?: string;
-  isPrimary?: boolean;
-};
 
 export async function updateProject(
   supabase: Sb,
