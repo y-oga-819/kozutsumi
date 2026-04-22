@@ -1,13 +1,13 @@
-# ADR 0006: google_calendar イベントは Google 側属性を read-only、kozutsumi 拡張だけ編集可
+# ADR 0010: google_calendar イベントは Google 側属性を read-only、kozutsumi 拡張だけ編集可
 
 - **Status**: Accepted
 - **Date**: 2026-04-22
-- **Related**: [ADR 0005](./0005-google-calendar-sync-architecture.md) / `docs/design/architecture.md` §2.5
+- **Related**: [ADR 0006](./0006-google-calendar-sync-mode-staged-adoption.md) / `docs/design/architecture.md` §2.5
 
 ## Context
 
-[ADR 0005](./0005-google-calendar-sync-architecture.md) で、`google_calendar` ソースのイベントは
-定期的に Google 側から full sync / 差分 sync で upsert される。
+[ADR 0006](./0006-google-calendar-sync-mode-staged-adoption.md) で、`google_calendar` ソースのイベントは
+Google 側から full sync で upsert され、将来 syncToken 差分同期に移行する設計とした。
 
 一方、kozutsumi の `events` テーブルには Google Calendar には存在しない拡張属性がある:
 

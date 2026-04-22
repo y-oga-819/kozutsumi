@@ -1,8 +1,16 @@
+<!--
+書き終えたらセルフチェック（運用ルールは `.claude/skills/kozutsumi-adr/SKILL.md`）:
+- [ ] この ADR 1 枚を Deprecated にした時、他の判断はクリーンに残るか
+- [ ] 判断以外（パラメータ・閾値・実装詳細）が混ざっていないか
+- [ ] 依存する他の ADR を Related に書いたか
+- [ ] Status / Date を埋めたか
+-->
+
 # ADR NNNN: タイトル
 
 - **Status**: Proposed / Accepted / Deprecated / Superseded by [ADR-XXXX](./XXXX-...)
 - **Date**: YYYY-MM-DD
-- **Related**: `docs/design/vision.md` / Issue #nnn / PR #nnn（該当があれば）
+- **Related**: `docs/design/vision.md` / Issue #nnn / PR #nnn / [ADR-XXXX](./XXXX-...)（該当があれば）
 
 ## Context
 
