@@ -1,16 +1,17 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-
-import { createEvent } from "@/entities/event/api";
+import type { EventGateway } from "@/entities/event/gateway";
+import type { ProjectGateway } from "@/entities/project/gateway";
 import { PROJECT_SEEDS } from "@/entities/project/projects";
-import { createProject } from "@/entities/project/api";
-import { createTask, updateTask } from "@/entities/task/api";
-import type { Database } from "@/shared/types/database";
+import type { TaskGateway } from "@/entities/task/gateway";
 import { todayIso } from "@/shared/lib/time";
 
-type Sb = SupabaseClient<Database>;
+export type SeedGateways = {
+  projectGateway: ProjectGateway;
+  eventGateway: EventGateway;
+  taskGateway: TaskGateway;
+};
 
 /**
- * サンプルデータを Supabase に一括投入する。
+ * サンプルデータを一括投入する。
  *
  * 1. projects を先に insert して (slug -> projects.id) のマップを作る
  * 2. events を insert (slug -> events.id のマップを作る)
@@ -18,11 +19,15 @@ type Sb = SupabaseClient<Database>;
  *
  * 冪等性は呼び出し元 (reset/seed 判定) で担保する。
  */
-export async function seedSampleDataToSupabase(supabase: Sb): Promise<void> {
+export async function seedSampleData({
+  projectGateway,
+  eventGateway,
+  taskGateway,
+}: SeedGateways): Promise<void> {
   // 1. projects
   const projectSlugToId = new Map<string, string>();
   for (const seed of PROJECT_SEEDS) {
-    const p = await createProject(supabase, {
+    const p = await projectGateway.create({
       name: seed.name,
       color: seed.color,
       isPrimary: seed.isPrimary,
@@ -103,7 +108,7 @@ export async function seedSampleDataToSupabase(supabase: Sb): Promise<void> {
     const projectId = seed.projectSlug
       ? (projectSlugToId.get(seed.projectSlug) ?? null)
       : null;
-    const e = await createEvent(supabase, {
+    const e = await eventGateway.create({
       title: seed.title,
       startTime: seed.startTime,
       endTime: seed.endTime,
@@ -183,7 +188,7 @@ export async function seedSampleDataToSupabase(supabase: Sb): Promise<void> {
   for (const seed of taskSeeds) {
     const projectId = projectSlugToId.get(seed.projectSlug);
     if (!projectId) continue;
-    const created = await createTask(supabase, {
+    const created = await taskGateway.create({
       projectId,
       title: seed.title,
       body: seed.body,
@@ -193,7 +198,7 @@ export async function seedSampleDataToSupabase(supabase: Sb): Promise<void> {
     if (seed.dependsOnEventSlug) {
       const eventId = eventSlugToId.get(seed.dependsOnEventSlug);
       if (eventId) {
-        await updateTask(supabase, created.id, { dependsOnEventId: eventId });
+        await taskGateway.update(created.id, { dependsOnEventId: eventId });
       }
     }
   }
@@ -203,15 +208,14 @@ export async function seedSampleDataToSupabase(supabase: Sb): Promise<void> {
  * 現ユーザーの tasks / events / projects を全削除する。
  * tasks → events の順で消す (tasks.depends_on_event_id の FK を考慮)。
  * projects は ON DELETE SET NULL なので最後に消して OK。
+ * task_time_entries は tasks(id) ON DELETE CASCADE により tasks 削除で自動破棄される。
  */
-export async function clearAllUserData(supabase: Sb): Promise<void> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("not authenticated");
-  const uid = user.id;
-  // RLS が効いているので user_id 絞り込みは念押しだが明示しておく
-  await supabase.from("tasks").delete().eq("user_id", uid);
-  await supabase.from("events").delete().eq("user_id", uid);
-  await supabase.from("projects").delete().eq("user_id", uid);
+export async function clearAllUserData({
+  taskGateway,
+  eventGateway,
+  projectGateway,
+}: SeedGateways): Promise<void> {
+  await taskGateway.deleteAllForCurrentUser();
+  await eventGateway.deleteAllForCurrentUser();
+  await projectGateway.deleteAllForCurrentUser();
 }

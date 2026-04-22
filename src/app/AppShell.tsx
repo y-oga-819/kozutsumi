@@ -29,7 +29,7 @@ import { TreeView } from "@/features/tree-view/TreeView";
 import { UserMenu } from "@/features/user-menu/UserMenu";
 import type { PauseReason } from "@/entities/task/time-entries";
 import { historyData } from "@/mocks/history";
-import { clearAllUserData, seedSampleDataToSupabase } from "@/mocks/seed";
+import { clearAllUserData, seedSampleData } from "@/mocks/seed";
 import {
   useEventGateway,
   useProjectGateway,
@@ -41,7 +41,6 @@ import {
 } from "@/shared/lib/sample-data";
 import { isDone } from "@/shared/lib/task";
 import { nowMinutesOfDay, todayIso } from "@/shared/lib/time";
-import { createClient } from "@/shared/supabase/client";
 
 type View = "stack" | "tree";
 
@@ -65,12 +64,14 @@ const keys = {
 
 export function AppShell({ initialView, user }: AppShellProps) {
   const view = initialView;
-  // seed / clearAll は Phase 4 で Gateway 化するため、当面 createClient を残す。
-  const supabase = useMemo(() => createClient(), []);
   const taskGateway = useTaskGateway();
   const projectGateway = useProjectGateway();
   const eventGateway = useEventGateway();
   const queryClient = useQueryClient();
+  const seedGateways = useMemo(
+    () => ({ projectGateway, eventGateway, taskGateway }),
+    [projectGateway, eventGateway, taskGateway],
+  );
 
   const projectsQuery = useQuery({
     queryKey: keys.projects,
@@ -118,7 +119,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
     if (readSampleDataMode() === "cleared") return;
     if (projects.length > 0 || tasks.length > 0 || events.length > 0) return;
     seedingRef.current = true;
-    seedSampleDataToSupabase(supabase)
+    seedSampleData(seedGateways)
       .then(() => {
         writeSampleDataMode("default");
         return invalidateAll(queryClient);
@@ -135,7 +136,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
     projects.length,
     tasks.length,
     events.length,
-    supabase,
+    seedGateways,
     queryClient,
   ]);
 
@@ -286,18 +287,18 @@ export function AppShell({ initialView, user }: AppShellProps) {
 
   const resetSample = useCallback(async () => {
     try {
-      await clearAllUserData(supabase);
-      await seedSampleDataToSupabase(supabase);
+      await clearAllUserData(seedGateways);
+      await seedSampleData(seedGateways);
       writeSampleDataMode("default");
       await invalidateAll(queryClient);
     } catch (err) {
       console.error("[reset-sample] failed", err);
     }
-  }, [supabase, queryClient]);
+  }, [seedGateways, queryClient]);
 
   const clearAll = useCallback(async () => {
     try {
-      await clearAllUserData(supabase);
+      await clearAllUserData(seedGateways);
       writeSampleDataMode("cleared");
       setDetailId(null);
       setEventDetailId(null);
@@ -305,7 +306,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
     } catch (err) {
       console.error("[clear-all] failed", err);
     }
-  }, [supabase, queryClient]);
+  }, [seedGateways, queryClient]);
 
   const pendingTasks = useMemo(
     () => tasks.filter((t) => !isDone(t)),

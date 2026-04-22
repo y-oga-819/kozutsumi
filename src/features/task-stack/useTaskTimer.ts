@@ -4,18 +4,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ACTION_TYPES, log } from "@/entities/action-log/logger";
-import { updateTask as apiUpdateTask } from "@/entities/task/api";
 import {
-  closeTimeEntry,
-  getOpenTimeEntry,
-  listTimeEntries,
   type PauseReason,
-  startTimeEntry,
   sumDurationSeconds,
   type TimeEntry,
 } from "@/entities/task/time-entries";
 import type { Task } from "@/entities/task/types";
-import { createClient } from "@/shared/supabase/client";
+import {
+  useTaskGateway,
+  useTaskTimeEntryGateway,
+} from "@/shared/gateway/GatewayContext";
 
 export const TASKS_QUERY_KEY = ["tasks"] as const;
 
@@ -48,14 +46,15 @@ type TaskTimerApi = {
  * duration_seconds の合計を elapsedSeconds として返す。
  */
 export function useTaskTimer(task: Task | null): TaskTimerApi {
-  const supabase = useMemo(() => createClient(), []);
+  const taskGateway = useTaskGateway();
+  const taskTimeEntryGateway = useTaskTimeEntryGateway();
   const queryClient = useQueryClient();
   const taskId = task?.id ?? null;
 
   const entriesQuery = useQuery({
     queryKey: taskId ? timeEntriesKey(taskId) : ["time-entries", "none"],
     queryFn: () =>
-      taskId ? listTimeEntries(supabase, taskId) : Promise.resolve([]),
+      taskId ? taskTimeEntryGateway.list(taskId) : Promise.resolve([]),
     enabled: taskId !== null,
   });
 
@@ -102,53 +101,55 @@ export function useTaskTimer(task: Task | null): TaskTimerApi {
   const start = useCallback(async () => {
     if (!task) return;
     // 別タブなどで残存している open entry を voluntary で閉じる (後勝ち)
-    const existingOpen = await getOpenTimeEntry(supabase, task.id);
+    const existingOpen = await taskTimeEntryGateway.getOpen(task.id);
     if (existingOpen) {
-      await closeTimeEntry(supabase, existingOpen, "voluntary");
+      await taskTimeEntryGateway.close(existingOpen, "voluntary");
     }
-    await startTimeEntry(supabase, task.id);
-    await apiUpdateTask(supabase, task.id, { status: "active" });
+    await taskTimeEntryGateway.start(task.id);
+    await taskGateway.update(task.id, { status: "active" });
     log(ACTION_TYPES.TASK_STARTED, { task_id: task.id });
     await invalidate();
-  }, [supabase, task, invalidate]);
+  }, [task, taskGateway, taskTimeEntryGateway, invalidate]);
 
   const pause = useCallback(
     async (reason: PauseReason) => {
       if (!task) return;
-      const open = openEntry ?? (await getOpenTimeEntry(supabase, task.id));
+      const open =
+        openEntry ?? (await taskTimeEntryGateway.getOpen(task.id));
       if (open) {
-        await closeTimeEntry(supabase, open, reason);
+        await taskTimeEntryGateway.close(open, reason);
       }
-      await apiUpdateTask(supabase, task.id, { status: "paused" });
+      await taskGateway.update(task.id, { status: "paused" });
       log(ACTION_TYPES.TASK_PAUSED, {
         task_id: task.id,
         pause_reason: reason,
       });
       await invalidate();
     },
-    [supabase, task, openEntry, invalidate],
+    [task, openEntry, taskGateway, taskTimeEntryGateway, invalidate],
   );
 
   const resume = useCallback(async () => {
     if (!task) return;
-    await startTimeEntry(supabase, task.id);
-    await apiUpdateTask(supabase, task.id, { status: "active" });
+    await taskTimeEntryGateway.start(task.id);
+    await taskGateway.update(task.id, { status: "active" });
     log(ACTION_TYPES.TASK_RESUMED, { task_id: task.id });
     await invalidate();
-  }, [supabase, task, invalidate]);
+  }, [task, taskGateway, taskTimeEntryGateway, invalidate]);
 
   const complete = useCallback(async () => {
     if (!task) return;
-    const open = openEntry ?? (await getOpenTimeEntry(supabase, task.id));
+    const open =
+      openEntry ?? (await taskTimeEntryGateway.getOpen(task.id));
     if (open) {
       // 完了時の close は pause ではないので pause_reason = null
-      await closeTimeEntry(supabase, open, null);
+      await taskTimeEntryGateway.close(open, null);
     }
     // 合計実績を最新 entries から計算する (複数 entry の合計)
-    const finalEntries = await listTimeEntries(supabase, task.id);
+    const finalEntries = await taskTimeEntryGateway.list(task.id);
     const totalSeconds = sumDurationSeconds(finalEntries);
     const actualMinutes = Math.round(totalSeconds / 60);
-    await apiUpdateTask(supabase, task.id, {
+    await taskGateway.update(task.id, {
       status: "done",
       completedAt: new Date().toISOString(),
     });
@@ -158,7 +159,7 @@ export function useTaskTimer(task: Task | null): TaskTimerApi {
       actual_minutes: actualMinutes,
     });
     await invalidate();
-  }, [supabase, task, openEntry, invalidate]);
+  }, [task, openEntry, taskGateway, taskTimeEntryGateway, invalidate]);
 
   return {
     isActive,
