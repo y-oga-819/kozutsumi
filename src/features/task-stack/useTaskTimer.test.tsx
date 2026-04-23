@@ -1,31 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-// supabase / api / logger を hook より前にモックする。
-// vi.mock は hoist されるので、module-scope の const は vi.hoisted で用意する。
+// logger はモジュールレベル singleton で Gateway 経由で差し替えできないため、
+// 従来どおり vi.mock で差し替える（本スコープ外、#47 デモモード着手時に再評価）。
 const mocks = vi.hoisted(() => ({
-  startTimeEntry: vi.fn(),
-  closeTimeEntry: vi.fn(),
-  getOpenTimeEntry: vi.fn(),
-  listTimeEntries: vi.fn(),
-  updateTask: vi.fn(),
   log: vi.fn(),
-}));
-
-vi.mock("@/entities/task/time-entries", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/entities/task/time-entries")
-  >("@/entities/task/time-entries");
-  return {
-    ...actual,
-    startTimeEntry: mocks.startTimeEntry,
-    closeTimeEntry: mocks.closeTimeEntry,
-    getOpenTimeEntry: mocks.getOpenTimeEntry,
-    listTimeEntries: mocks.listTimeEntries,
-  };
-});
-
-vi.mock("@/entities/task/api", () => ({
-  updateTask: mocks.updateTask,
 }));
 
 vi.mock("@/entities/action-log/logger", () => ({
@@ -45,24 +23,14 @@ vi.mock("@/entities/action-log/logger", () => ({
   log: mocks.log,
 }));
 
-vi.mock("@/shared/supabase/client", () => ({
-  createClient: () => ({}),
-}));
+const { log: logMock } = mocks;
 
-const {
-  startTimeEntry: startTimeEntryMock,
-  closeTimeEntry: closeTimeEntryMock,
-  getOpenTimeEntry: getOpenTimeEntryMock,
-  listTimeEntries: listTimeEntriesMock,
-  updateTask: updateTaskMock,
-  log: logMock,
-} = mocks;
-
-// hook を import (上記モックが効いた後で読み込む)
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 
+import type { TaskGateway } from "@/entities/task/gateway";
+import type { TaskTimeEntryGateway } from "@/entities/task/time-entry-gateway";
 import type { Task } from "@/entities/task/types";
+import { withGateways } from "@/shared/gateway/test-helpers";
 
 import { formatElapsed, useTaskTimer } from "./useTaskTimer";
 
@@ -81,49 +49,61 @@ const baseTask: Task = {
   completedAt: null,
 };
 
-function wrap() {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
-  });
-  const Wrapper = ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
-  );
-  return { client, Wrapper };
-}
+type TimerMocks = {
+  update: ReturnType<typeof vi.fn>;
+  list: ReturnType<typeof vi.fn>;
+  getOpen: ReturnType<typeof vi.fn>;
+  start: ReturnType<typeof vi.fn>;
+  close: ReturnType<typeof vi.fn>;
+};
 
-describe("useTaskTimer", () => {
-  beforeEach(() => {
-    startTimeEntryMock.mockReset();
-    closeTimeEntryMock.mockReset();
-    getOpenTimeEntryMock.mockReset();
-    listTimeEntriesMock.mockReset();
-    updateTaskMock.mockReset();
-    logMock.mockReset();
-    // デフォルトは何もない状態
-    startTimeEntryMock.mockResolvedValue({
+function makeTimerMocks(): TimerMocks {
+  return {
+    update: vi.fn().mockResolvedValue({}),
+    list: vi.fn().mockResolvedValue([]),
+    getOpen: vi.fn().mockResolvedValue(null),
+    start: vi.fn().mockResolvedValue({
       id: "te-new",
       taskId: "t1",
       startedAt: "2026-04-19T10:00:00.000Z",
       pausedAt: null,
       pauseReason: null,
       durationSeconds: null,
-    });
-    closeTimeEntryMock.mockImplementation(async (_sb, entry, reason) => ({
+    }),
+    close: vi.fn().mockImplementation(async (entry, reason) => ({
       ...(entry as Record<string, unknown>),
       pausedAt: "2026-04-19T10:01:00.000Z",
       pauseReason: reason ?? null,
       durationSeconds: 60,
-    }));
-    getOpenTimeEntryMock.mockResolvedValue(null);
-    listTimeEntriesMock.mockResolvedValue([]);
-    updateTaskMock.mockResolvedValue({});
+    })),
+  };
+}
+
+function wrapTimer(m: TimerMocks) {
+  const taskGateway: Partial<TaskGateway> = {
+    update: m.update as unknown as TaskGateway["update"],
+  };
+  const taskTimeEntryGateway: Partial<TaskTimeEntryGateway> = {
+    list: m.list as unknown as TaskTimeEntryGateway["list"],
+    getOpen: m.getOpen as unknown as TaskTimeEntryGateway["getOpen"],
+    start: m.start as unknown as TaskTimeEntryGateway["start"],
+    close: m.close as unknown as TaskTimeEntryGateway["close"],
+  };
+  return withGateways({ taskGateway, taskTimeEntryGateway });
+}
+
+describe("useTaskTimer", () => {
+  let m: TimerMocks;
+  beforeEach(() => {
+    logMock.mockReset();
+    m = makeTimerMocks();
   });
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   test("task=null のとき start/pause/resume/complete は no-op", async () => {
-    const { Wrapper } = wrap();
+    const { Wrapper } = wrapTimer(m);
     const { result } = renderHook(() => useTaskTimer(null), {
       wrapper: Wrapper,
     });
@@ -133,29 +113,24 @@ describe("useTaskTimer", () => {
       await result.current.resume();
       await result.current.complete();
     });
-    expect(startTimeEntryMock).not.toHaveBeenCalled();
-    expect(updateTaskMock).not.toHaveBeenCalled();
+    expect(m.start).not.toHaveBeenCalled();
+    expect(m.update).not.toHaveBeenCalled();
     expect(logMock).not.toHaveBeenCalled();
   });
 
   test("start: open entry なし → 新規 entry 作成 + status=active + TASK_STARTED ログ", async () => {
-    getOpenTimeEntryMock.mockResolvedValueOnce(null);
-    const { Wrapper } = wrap();
+    m.getOpen.mockResolvedValueOnce(null);
+    const { Wrapper } = wrapTimer(m);
     const { result } = renderHook(() => useTaskTimer(baseTask), {
       wrapper: Wrapper,
     });
     await act(async () => {
       await result.current.start();
     });
-    expect(getOpenTimeEntryMock).toHaveBeenCalledWith(
-      expect.anything(),
-      "t1",
-    );
-    expect(closeTimeEntryMock).not.toHaveBeenCalled();
-    expect(startTimeEntryMock).toHaveBeenCalledWith(expect.anything(), "t1");
-    expect(updateTaskMock).toHaveBeenCalledWith(expect.anything(), "t1", {
-      status: "active",
-    });
+    expect(m.getOpen).toHaveBeenCalledWith("t1");
+    expect(m.close).not.toHaveBeenCalled();
+    expect(m.start).toHaveBeenCalledWith("t1");
+    expect(m.update).toHaveBeenCalledWith("t1", { status: "active" });
     expect(logMock).toHaveBeenCalledWith("task_started", { task_id: "t1" });
   });
 
@@ -168,20 +143,16 @@ describe("useTaskTimer", () => {
       pauseReason: null,
       durationSeconds: null,
     };
-    getOpenTimeEntryMock.mockResolvedValueOnce(existing);
-    const { Wrapper } = wrap();
+    m.getOpen.mockResolvedValueOnce(existing);
+    const { Wrapper } = wrapTimer(m);
     const { result } = renderHook(() => useTaskTimer(baseTask), {
       wrapper: Wrapper,
     });
     await act(async () => {
       await result.current.start();
     });
-    expect(closeTimeEntryMock).toHaveBeenCalledWith(
-      expect.anything(),
-      existing,
-      "voluntary",
-    );
-    expect(startTimeEntryMock).toHaveBeenCalled();
+    expect(m.close).toHaveBeenCalledWith(existing, "voluntary");
+    expect(m.start).toHaveBeenCalled();
   });
 
   test("pause: open entry を reason 付きで閉じ、status=paused、TASK_PAUSED ログ", async () => {
@@ -193,25 +164,18 @@ describe("useTaskTimer", () => {
       pauseReason: null,
       durationSeconds: null,
     };
-    listTimeEntriesMock.mockResolvedValue([open]);
-    // entriesQuery が未解決でも pause 内部の fallback (getOpenTimeEntry) で拾える
-    getOpenTimeEntryMock.mockResolvedValue(open);
+    m.list.mockResolvedValue([open]);
+    m.getOpen.mockResolvedValue(open);
     const activeTask: Task = { ...baseTask, status: "active" };
-    const { Wrapper } = wrap();
+    const { Wrapper } = wrapTimer(m);
     const { result } = renderHook(() => useTaskTimer(activeTask), {
       wrapper: Wrapper,
     });
     await act(async () => {
       await result.current.pause("meeting");
     });
-    expect(closeTimeEntryMock).toHaveBeenCalledWith(
-      expect.anything(),
-      open,
-      "meeting",
-    );
-    expect(updateTaskMock).toHaveBeenCalledWith(expect.anything(), "t1", {
-      status: "paused",
-    });
+    expect(m.close).toHaveBeenCalledWith(open, "meeting");
+    expect(m.update).toHaveBeenCalledWith("t1", { status: "paused" });
     expect(logMock).toHaveBeenCalledWith("task_paused", {
       task_id: "t1",
       pause_reason: "meeting",
@@ -220,17 +184,15 @@ describe("useTaskTimer", () => {
 
   test("resume: 新規 entry 作成 + status=active + TASK_RESUMED ログ", async () => {
     const pausedTask: Task = { ...baseTask, status: "paused" };
-    const { Wrapper } = wrap();
+    const { Wrapper } = wrapTimer(m);
     const { result } = renderHook(() => useTaskTimer(pausedTask), {
       wrapper: Wrapper,
     });
     await act(async () => {
       await result.current.resume();
     });
-    expect(startTimeEntryMock).toHaveBeenCalledWith(expect.anything(), "t1");
-    expect(updateTaskMock).toHaveBeenCalledWith(expect.anything(), "t1", {
-      status: "active",
-    });
+    expect(m.start).toHaveBeenCalledWith("t1");
+    expect(m.update).toHaveBeenCalledWith("t1", { status: "active" });
     expect(logMock).toHaveBeenCalledWith("task_resumed", { task_id: "t1" });
   });
 
@@ -243,26 +205,18 @@ describe("useTaskTimer", () => {
       pauseReason: null,
       durationSeconds: null,
     };
-    // 合計 3 分 (180 秒) の履歴を返す (最終 actual_minutes = 3)
-    listTimeEntriesMock.mockResolvedValue([
-      { ...open, pausedAt: "x", durationSeconds: 180 },
-    ]);
-    getOpenTimeEntryMock.mockResolvedValue(open);
+    m.list.mockResolvedValue([{ ...open, pausedAt: "x", durationSeconds: 180 }]);
+    m.getOpen.mockResolvedValue(open);
     const activeTask: Task = { ...baseTask, status: "active" };
-    const { Wrapper } = wrap();
+    const { Wrapper } = wrapTimer(m);
     const { result } = renderHook(() => useTaskTimer(activeTask), {
       wrapper: Wrapper,
     });
     await act(async () => {
       await result.current.complete();
     });
-    expect(closeTimeEntryMock).toHaveBeenCalledWith(
-      expect.anything(),
-      open,
-      null,
-    );
-    expect(updateTaskMock).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(m.close).toHaveBeenCalledWith(open, null);
+    expect(m.update).toHaveBeenCalledWith(
       "t1",
       expect.objectContaining({
         status: "done",
@@ -277,7 +231,7 @@ describe("useTaskTimer", () => {
   });
 
   test("リロード復元: paused タスクの最終 pause_reason を pauseReason で返す", async () => {
-    listTimeEntriesMock.mockResolvedValue([
+    m.list.mockResolvedValue([
       {
         id: "1",
         taskId: "t1",
@@ -288,7 +242,7 @@ describe("useTaskTimer", () => {
       },
     ]);
     const pausedTask: Task = { ...baseTask, status: "paused" };
-    const { Wrapper } = wrap();
+    const { Wrapper } = wrapTimer(m);
     const { result } = renderHook(() => useTaskTimer(pausedTask), {
       wrapper: Wrapper,
     });

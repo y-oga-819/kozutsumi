@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { GatewayProvider } from "@/shared/gateway/GatewayContext";
 import { createClient } from "@/shared/supabase/server";
 
 import { AppShell } from "./AppShell";
@@ -16,12 +17,15 @@ export default async function Page() {
 
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   return (
-    <AppShell
-      initialView="stack"
-      user={{
-        email: user.email ?? null,
-        avatarUrl: typeof meta.avatar_url === "string" ? meta.avatar_url : null,
-      }}
-    />
+    <GatewayProvider>
+      <AppShell
+        initialView="stack"
+        user={{
+          email: user.email ?? null,
+          avatarUrl:
+            typeof meta.avatar_url === "string" ? meta.avatar_url : null,
+        }}
+      />
+    </GatewayProvider>
   );
 }

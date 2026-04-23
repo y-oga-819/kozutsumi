@@ -10,27 +10,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ACTION_TYPES, log } from "@/entities/action-log/logger";
-import {
-  createEvent as apiCreateEvent,
-  listEvents,
-  type CreateEventInput,
-} from "@/entities/event/api";
+import type { CreateEventInput } from "@/entities/event/gateway";
 import type { Event } from "@/entities/event/types";
-import {
-  createProject as apiCreateProject,
-  listProjects,
-  type CreateProjectInput,
-} from "@/entities/project/api";
+import type { CreateProjectInput } from "@/entities/project/gateway";
 import { ProjectsProvider } from "@/entities/project/ProjectsContext";
 import type { Project } from "@/entities/project/types";
-import {
-  createTask as apiCreateTask,
-  deleteTask as apiDeleteTask,
-  listTasks,
-  reorderTasks as apiReorderTasks,
-  updateTask as apiUpdateTask,
-  type CreateTaskInput,
-} from "@/entities/task/api";
+import type { CreateTaskInput } from "@/entities/task/gateway";
 import type { Task } from "@/entities/task/types";
 import { AddButton } from "@/features/add-forms/AddButton";
 import { AddPanel } from "@/features/add-forms/AddPanel";
@@ -44,14 +29,18 @@ import { TreeView } from "@/features/tree-view/TreeView";
 import { UserMenu } from "@/features/user-menu/UserMenu";
 import type { PauseReason } from "@/entities/task/time-entries";
 import { historyData } from "@/mocks/history";
-import { clearAllUserData, seedSampleDataToSupabase } from "@/mocks/seed";
+import { clearAllUserData, seedSampleData } from "@/mocks/seed";
+import {
+  useEventGateway,
+  useProjectGateway,
+  useTaskGateway,
+} from "@/shared/gateway/GatewayContext";
 import {
   readSampleDataMode,
   writeSampleDataMode,
 } from "@/shared/lib/sample-data";
 import { isDone } from "@/shared/lib/task";
 import { nowMinutesOfDay, todayIso } from "@/shared/lib/time";
-import { createClient } from "@/shared/supabase/client";
 
 type View = "stack" | "tree";
 
@@ -75,20 +64,26 @@ const keys = {
 
 export function AppShell({ initialView, user }: AppShellProps) {
   const view = initialView;
-  const supabase = useMemo(() => createClient(), []);
+  const taskGateway = useTaskGateway();
+  const projectGateway = useProjectGateway();
+  const eventGateway = useEventGateway();
   const queryClient = useQueryClient();
+  const seedGateways = useMemo(
+    () => ({ projectGateway, eventGateway, taskGateway }),
+    [projectGateway, eventGateway, taskGateway],
+  );
 
   const projectsQuery = useQuery({
     queryKey: keys.projects,
-    queryFn: () => listProjects(supabase),
+    queryFn: () => projectGateway.list(),
   });
   const tasksQuery = useQuery({
     queryKey: keys.tasks,
-    queryFn: () => listTasks(supabase),
+    queryFn: () => taskGateway.list(),
   });
   const eventsQuery = useQuery({
     queryKey: keys.events,
-    queryFn: () => listEvents(supabase),
+    queryFn: () => eventGateway.list(),
   });
 
   const projects = useMemo(
@@ -124,7 +119,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
     if (readSampleDataMode() === "cleared") return;
     if (projects.length > 0 || tasks.length > 0 || events.length > 0) return;
     seedingRef.current = true;
-    seedSampleDataToSupabase(supabase)
+    seedSampleData(seedGateways)
       .then(() => {
         writeSampleDataMode("default");
         return invalidateAll(queryClient);
@@ -141,7 +136,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
     projects.length,
     tasks.length,
     events.length,
-    supabase,
+    seedGateways,
     queryClient,
   ]);
 
@@ -152,7 +147,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
       const target = tasks.find((t) => t.id === id);
       if (!target) throw new Error("task not found");
       const nextDone = !isDone(target);
-      return apiUpdateTask(supabase, id, {
+      return taskGateway.update(id, {
         status: nextDone ? "done" : "idle",
         completedAt: nextDone ? new Date().toISOString() : null,
       });
@@ -187,7 +182,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
 
   const updateBodyMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: string }) =>
-      apiUpdateTask(supabase, id, { body }),
+      taskGateway.update(id, { body }),
     onMutate: async ({ id, body }) => {
       await queryClient.cancelQueries({ queryKey: keys.tasks });
       const previous = queryClient.getQueryData<Task[]>(keys.tasks);
@@ -206,34 +201,34 @@ export function AppShell({ initialView, user }: AppShellProps) {
 
   const reorderMutation = useMutation({
     mutationFn: (entries: { id: string; stackOrder: number | null }[]) =>
-      apiReorderTasks(supabase, entries),
+      taskGateway.reorder(entries),
     // DnD は optimistic で UI 側は onMutate で即反映、サーバー同期は背面で進める。
   });
 
   const createTaskMutation = useMutation({
-    mutationFn: (input: CreateTaskInput) => apiCreateTask(supabase, input),
+    mutationFn: (input: CreateTaskInput) => taskGateway.create(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: keys.tasks });
     },
   });
 
   const createEventMutation = useMutation({
-    mutationFn: (input: CreateEventInput) => apiCreateEvent(supabase, input),
+    mutationFn: (input: CreateEventInput) => eventGateway.create(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: keys.events });
     },
   });
 
   const createProjectMutation = useMutation({
-    mutationFn: (input: CreateProjectInput) => apiCreateProject(supabase, input),
+    mutationFn: (input: CreateProjectInput) => projectGateway.create(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: keys.projects });
     },
   });
 
-  // タスク削除は TASK_DELETED action_log も記録する (api.ts の deleteTask 内)。
+  // タスク削除は TASK_DELETED action_log も記録する (SupabaseTaskGateway.delete 内)。
   const deleteTaskMutation = useMutation({
-    mutationFn: (id: string) => apiDeleteTask(supabase, id),
+    mutationFn: (id: string) => taskGateway.delete(id),
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: keys.tasks });
       const previous = queryClient.getQueryData<Task[]>(keys.tasks);
@@ -292,18 +287,18 @@ export function AppShell({ initialView, user }: AppShellProps) {
 
   const resetSample = useCallback(async () => {
     try {
-      await clearAllUserData(supabase);
-      await seedSampleDataToSupabase(supabase);
+      await clearAllUserData(seedGateways);
+      await seedSampleData(seedGateways);
       writeSampleDataMode("default");
       await invalidateAll(queryClient);
     } catch (err) {
       console.error("[reset-sample] failed", err);
     }
-  }, [supabase, queryClient]);
+  }, [seedGateways, queryClient]);
 
   const clearAll = useCallback(async () => {
     try {
-      await clearAllUserData(supabase);
+      await clearAllUserData(seedGateways);
       writeSampleDataMode("cleared");
       setDetailId(null);
       setEventDetailId(null);
@@ -311,7 +306,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
     } catch (err) {
       console.error("[clear-all] failed", err);
     }
-  }, [supabase, queryClient]);
+  }, [seedGateways, queryClient]);
 
   const pendingTasks = useMemo(
     () => tasks.filter((t) => !isDone(t)),

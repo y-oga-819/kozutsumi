@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import type { CreateProjectInput } from "@/entities/project/api";
+import type { CreateProjectInput } from "@/entities/project/gateway";
 
 type ProjectFormProps = {
   onSubmit: (input: CreateProjectInput) => Promise<void>;
