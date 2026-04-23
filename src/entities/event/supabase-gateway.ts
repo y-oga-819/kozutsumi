@@ -11,8 +11,9 @@ import type {
   CreateEventInput,
   EventGateway,
   UpdateEventInput,
+  UpsertGoogleCalendarEventInput,
 } from "./gateway";
-import type { Event } from "./types";
+import { EVENT_SOURCE, type Event } from "./types";
 
 type Sb = SupabaseClient<Database>;
 
@@ -63,7 +64,7 @@ export class SupabaseEventGateway implements EventGateway {
       meet_url: input.meetUrl ?? null,
       has_attachments: input.hasAttachments ?? false,
       description: input.description ?? "",
-      source: input.source ?? "manual",
+      source: input.source ?? EVENT_SOURCE.MANUAL,
       external_id: input.externalId ?? null,
     };
     const { data, error } = await this.supabase
@@ -107,5 +108,45 @@ export class SupabaseEventGateway implements EventGateway {
       .delete()
       .eq("user_id", uid);
     if (error) throw error;
+  }
+
+  async upsertFromGoogleCalendar(
+    inputs: UpsertGoogleCalendarEventInput[],
+  ): Promise<number> {
+    if (inputs.length === 0) return 0;
+    const user_id = await getUserId(this.supabase);
+    // project_id を payload に含めないことで、ON CONFLICT DO UPDATE SET ... から除外され、
+    // 既存行の project_id は保持される (kozutsumi 側の拡張、ADR 0010)
+    const payloads: TablesInsert<"events">[] = inputs.map((input) => ({
+      user_id,
+      title: input.title,
+      start_time: input.startTime,
+      end_time: input.endTime,
+      meet_url: input.meetUrl,
+      has_attachments: input.hasAttachments,
+      description: input.description,
+      source: EVENT_SOURCE.GOOGLE_CALENDAR,
+      external_id: input.externalId,
+    }));
+    const { error } = await this.supabase
+      .from("events")
+      .upsert(payloads, { onConflict: "source,external_id" });
+    if (error) throw error;
+    // upsert は全 input に対して insert または update を実行するため、affected = inputs.length
+    return inputs.length;
+  }
+
+  async deleteByGoogleExternalIds(externalIds: string[]): Promise<number> {
+    if (externalIds.length === 0) return 0;
+    const uid = await getUserId(this.supabase);
+    // count のみ欲しいので head: true で row を返させない
+    const { error, count } = await this.supabase
+      .from("events")
+      .delete({ count: "exact" })
+      .eq("user_id", uid)
+      .eq("source", EVENT_SOURCE.GOOGLE_CALENDAR)
+      .in("external_id", externalIds);
+    if (error) throw error;
+    return count ?? 0;
   }
 }

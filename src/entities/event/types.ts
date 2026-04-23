@@ -1,5 +1,10 @@
 export type EventSource = "manual" | "google_calendar";
 
+export const EVENT_SOURCE = {
+  MANUAL: "manual",
+  GOOGLE_CALENDAR: "google_calendar",
+} as const satisfies Record<string, EventSource>;
+
 /**
  * DB スキーマ (supabase/migrations/..._initial_schema.sql の events) と 1:1 対応。
  * 時刻は ISO 8601 文字列 (timestamptz) として扱う。
