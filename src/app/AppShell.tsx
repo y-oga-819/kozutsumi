@@ -24,6 +24,7 @@ import { EventDetailPanel } from "@/features/event-detail/EventDetailPanel";
 import { CalendarSyncButton } from "@/features/sync/CalendarSyncButton";
 import { ReauthBanner } from "@/features/sync/ReauthBanner";
 import { useCalendarSync } from "@/features/sync/useCalendarSync";
+import { useLazyCalendarSync } from "@/features/sync/useLazyCalendarSync";
 import { TaskDetailPanel } from "@/features/task-detail/TaskDetailPanel";
 import { PauseReasonModal } from "@/features/task-stack/PauseReasonModal";
 import { TaskStack, type TopTimerBinding } from "@/features/task-stack/TaskStack";
@@ -325,6 +326,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
   const [pauseModalOpen, setPauseModalOpen] = useState(false);
 
   const calendarSync = useCalendarSync();
+  useLazyCalendarSync({ triggerSync: calendarSync.triggerSync });
 
   const topTimer = useMemo<TopTimerBinding>(
     () => ({
