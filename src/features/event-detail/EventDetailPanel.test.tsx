@@ -7,6 +7,7 @@ import { EventDetailPanel } from "./EventDetailPanel";
 
 const projects: Project[] = [
   { id: "slo", name: "SLO推進", color: "#2D9F45", isPrimary: true, createdAt: "" },
+  { id: "career", name: "転職活動", color: "#E85D04", isPrimary: false, createdAt: "" },
 ];
 const render = (ui: React.ReactElement) =>
   rtlRender(<ProjectsProvider projects={projects}>{ui}</ProjectsProvider>);
@@ -25,9 +26,22 @@ const baseEvent: Event = {
   createdAt: "2026-04-11T00:00:00",
 };
 
+const googleEvent: Event = {
+  ...baseEvent,
+  id: "g1",
+  source: "google_calendar",
+  externalId: "ext-1",
+};
+
 const noop = () => {};
 
-function renderPanel(overrides: Partial<{ event: Event; onClose: () => void }> = {}) {
+function renderPanel(
+  overrides: Partial<{
+    event: Event;
+    onClose: () => void;
+    onChangeProject: (id: string, projectId: string | null) => void;
+  }> = {},
+) {
   const props = { event: baseEvent, onClose: noop, ...overrides };
   return render(<EventDetailPanel {...props} />);
 }
@@ -97,5 +111,75 @@ describe("EventDetailPanel", () => {
     const backdrop = container.firstElementChild!.firstElementChild!;
     fireEvent.click(backdrop);
     expect(onClose).toHaveBeenCalled();
+  });
+
+  // ADR 0010 / P2-4: source 別の編集制約
+  describe("source による表示・編集制約", () => {
+    test("manual: Google バッジ・補足テキスト・project 編集 UI を出さない", () => {
+      const { queryByTestId, queryByText } = renderPanel({
+        onChangeProject: vi.fn(),
+      });
+      expect(queryByTestId("google-calendar-badge")).toBeNull();
+      expect(
+        queryByText(/Google Calendar で編集した内容は次回同期で反映されます/),
+      ).toBeNull();
+      expect(queryByText(/を変更$/)).toBeNull();
+    });
+
+    test("google_calendar: Google バッジと同期補足テキストを出す", () => {
+      const { getByTestId, getByText } = renderPanel({ event: googleEvent });
+      expect(getByTestId("google-calendar-badge")).toBeTruthy();
+      expect(
+        getByText(/Google Calendar で編集した内容は次回同期で反映されます/),
+      ).toBeTruthy();
+    });
+
+    test("google_calendar: onChangeProject 未指定なら project 編集 UI を出さない", () => {
+      const { queryByText } = renderPanel({ event: googleEvent });
+      expect(queryByText(/を変更$/)).toBeNull();
+    });
+
+    test("google_calendar: project 変更ボタンから select に切り替わる", () => {
+      const onChangeProject = vi.fn();
+      const { getByText, getByRole } = renderPanel({
+        event: googleEvent,
+        onChangeProject,
+      });
+      fireEvent.click(getByText(/を変更$/));
+      const select = getByRole("combobox") as HTMLSelectElement;
+      expect(select.value).toBe("slo");
+    });
+
+    test("google_calendar: select で project を変えると onChangeProject が呼ばれる", () => {
+      const onChangeProject = vi.fn();
+      const { getByText, getByRole } = renderPanel({
+        event: googleEvent,
+        onChangeProject,
+      });
+      fireEvent.click(getByText(/を変更$/));
+      fireEvent.change(getByRole("combobox"), { target: { value: "career" } });
+      expect(onChangeProject).toHaveBeenCalledWith("g1", "career");
+    });
+
+    test("google_calendar: project を「なし」にすると null で呼ばれる", () => {
+      const onChangeProject = vi.fn();
+      const { getByText, getByRole } = renderPanel({
+        event: googleEvent,
+        onChangeProject,
+      });
+      fireEvent.click(getByText(/を変更$/));
+      fireEvent.change(getByRole("combobox"), { target: { value: "" } });
+      expect(onChangeProject).toHaveBeenCalledWith("g1", null);
+    });
+
+    test("どの source でも「削除」ボタンは表示されない", () => {
+      const m = renderPanel();
+      expect(m.queryByText("削除")).toBeNull();
+      const g = renderPanel({
+        event: googleEvent,
+        onChangeProject: vi.fn(),
+      });
+      expect(g.queryByText("削除")).toBeNull();
+    });
   });
 });

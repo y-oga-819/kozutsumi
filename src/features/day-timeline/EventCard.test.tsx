@@ -66,4 +66,28 @@ describe("EventCard", () => {
     );
     expect(getByText("NOW")).toBeTruthy();
   });
+
+  test("source=manual なら Google バッジは表示しない", () => {
+    const { queryByTestId } = render(
+      <EventCard
+        event={baseEvent}
+        nowMin={0}
+        isNextCandidate={false}
+        onClick={() => {}}
+      />,
+    );
+    expect(queryByTestId("google-calendar-badge")).toBeNull();
+  });
+
+  test("source=google_calendar なら Google バッジを表示する", () => {
+    const { getByTestId } = render(
+      <EventCard
+        event={{ ...baseEvent, source: "google_calendar", externalId: "g1" }}
+        nowMin={0}
+        isNextCandidate={false}
+        onClick={() => {}}
+      />,
+    );
+    expect(getByTestId("google-calendar-badge")).toBeTruthy();
+  });
 });

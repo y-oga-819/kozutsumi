@@ -77,6 +77,23 @@ export class SupabaseEventGateway implements EventGateway {
   }
 
   async update(id: string, patch: UpdateEventInput): Promise<Event> {
+    // ADR 0010: source='google_calendar' の行は project_id 以外を kozutsumi 側で更新不可。
+    // UI を bypass されてもガードできるよう、ここでも source を確認する。
+    const touchesGoogleOwned =
+      patch.title !== undefined ||
+      patch.startTime !== undefined ||
+      patch.endTime !== undefined ||
+      patch.meetUrl !== undefined ||
+      patch.hasAttachments !== undefined ||
+      patch.description !== undefined;
+    if (touchesGoogleOwned) {
+      const source = await this.fetchSource(id);
+      if (source === EVENT_SOURCE.GOOGLE_CALENDAR) {
+        throw new Error(
+          "google_calendar event is read-only (only project_id can be updated)",
+        );
+      }
+    }
     const update: TablesUpdate<"events"> = {};
     if (patch.title !== undefined) update.title = patch.title;
     if (patch.startTime !== undefined) update.start_time = patch.startTime;
@@ -97,8 +114,29 @@ export class SupabaseEventGateway implements EventGateway {
   }
 
   async delete(id: string): Promise<void> {
+    // ADR 0010: source='google_calendar' の行は UI からは削除不可
+    // (Google 側で削除すれば次回同期で消える)。
+    const source = await this.fetchSource(id);
+    if (source === EVENT_SOURCE.GOOGLE_CALENDAR) {
+      throw new Error(
+        "google_calendar event cannot be deleted from kozutsumi (delete it on Google Calendar)",
+      );
+    }
     const { error } = await this.supabase.from("events").delete().eq("id", id);
     if (error) throw error;
+  }
+
+  /**
+   * 単一行の source だけを取得する。RLS 違反 / 行未発見時は null を返す。
+   */
+  private async fetchSource(id: string): Promise<Event["source"] | null> {
+    const { data, error } = await this.supabase
+      .from("events")
+      .select("source")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data?.source ?? null;
   }
 
   async deleteAllForCurrentUser(): Promise<void> {
