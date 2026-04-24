@@ -32,6 +32,7 @@ export const ACTION_TYPES = Object.freeze({
   INTERRUPTION_COMPLETED: "interruption_completed",
   STACK_PROPOSED: "stack_proposed",
   STACK_PROPOSAL_ACCEPTED: "stack_proposal_accepted",
+  CALENDAR_SYNCED: "calendar_synced",
 }) satisfies Readonly<Record<string, ActionType>>;
 
 const KNOWN_TYPES = new Set<ActionType>(Object.values(ACTION_TYPES));

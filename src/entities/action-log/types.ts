@@ -9,9 +9,13 @@ export type ActionType =
   | "interruption_pushed"
   | "interruption_completed"
   | "stack_proposed"
-  | "stack_proposal_accepted";
+  | "stack_proposal_accepted"
+  | "calendar_synced";
 
 export type PauseReason = "meeting" | "interruption" | "voluntary";
+
+/** Google Calendar 同期がどの経路でトリガーされたか。Phase 4 の頻度分析に使う (#51)。 */
+export type CalendarSyncTrigger = "manual" | "lazy";
 
 export type ActionMetadataMap = {
   task_started: { task_id: string };
@@ -37,6 +41,11 @@ export type ActionMetadataMap = {
   interruption_completed: { task_id: string };
   stack_proposed: Record<string, unknown>;
   stack_proposal_accepted: Record<string, unknown>;
+  calendar_synced: {
+    synced: number;
+    deleted: number;
+    trigger: CalendarSyncTrigger;
+  };
 };
 
 export type ActionLogEntry<T extends ActionType = ActionType> = {

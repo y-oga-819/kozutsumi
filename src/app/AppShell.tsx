@@ -21,6 +21,10 @@ import { AddButton } from "@/features/add-forms/AddButton";
 import { AddPanel } from "@/features/add-forms/AddPanel";
 import { DayTimeline } from "@/features/day-timeline/DayTimeline";
 import { EventDetailPanel } from "@/features/event-detail/EventDetailPanel";
+import { CalendarSyncButton } from "@/features/sync/CalendarSyncButton";
+import { ReauthBanner } from "@/features/sync/ReauthBanner";
+import { useCalendarSync } from "@/features/sync/useCalendarSync";
+import { useLazyCalendarSync } from "@/features/sync/useLazyCalendarSync";
 import { TaskDetailPanel } from "@/features/task-detail/TaskDetailPanel";
 import { PauseReasonModal } from "@/features/task-stack/PauseReasonModal";
 import { TaskStack, type TopTimerBinding } from "@/features/task-stack/TaskStack";
@@ -321,6 +325,9 @@ export function AppShell({ initialView, user }: AppShellProps) {
   const timer = useTaskTimer(topTask);
   const [pauseModalOpen, setPauseModalOpen] = useState(false);
 
+  const calendarSync = useCalendarSync();
+  useLazyCalendarSync({ triggerSync: calendarSync.triggerSync });
+
   const topTimer = useMemo<TopTimerBinding>(
     () => ({
       elapsedSeconds: timer.elapsedSeconds,
@@ -390,6 +397,11 @@ export function AppShell({ initialView, user }: AppShellProps) {
               );
             })}
           </div>
+          <CalendarSyncButton
+            isPending={calendarSync.isPending}
+            lastSyncedAt={calendarSync.lastSyncedAt}
+            onClick={() => calendarSync.triggerSync("manual")}
+          />
           <UserMenu
             email={user.email}
             avatarUrl={user.avatarUrl}
@@ -397,6 +409,11 @@ export function AppShell({ initialView, user }: AppShellProps) {
             onClearAll={clearAll}
           />
         </div>
+
+        <ReauthBanner
+          visible={calendarSync.needsReauth}
+          onDismiss={calendarSync.dismissReauth}
+        />
 
         {view === "stack" ? (
           <StackView

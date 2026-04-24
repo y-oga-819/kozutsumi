@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { CalendarSyncStateGateway } from "@/entities/calendar-sync/gateway";
+import { SupabaseCalendarSyncStateGateway } from "@/entities/calendar-sync/supabase-gateway";
 import {
   GoogleApiUnauthorizedError,
   type GoogleCalendarEvent,
@@ -47,6 +49,7 @@ export type SyncResult = {
 
 export type SyncGoogleCalendarDeps = {
   gateway: EventGateway;
+  syncStateGateway: CalendarSyncStateGateway;
   listEvents: (
     params: ListEventsParams,
   ) => Promise<GoogleCalendarEventsListResponse>;
@@ -65,6 +68,9 @@ export async function syncGoogleCalendar(
 ): Promise<SyncResult> {
   const deps: SyncGoogleCalendarDeps = {
     gateway: overrides.gateway ?? new SupabaseEventGateway(supabase),
+    syncStateGateway:
+      overrides.syncStateGateway ??
+      new SupabaseCalendarSyncStateGateway(supabase),
     listEvents: overrides.listEvents ?? defaultListEvents,
     getValidAccessToken:
       overrides.getValidAccessToken ?? defaultGetValidAccessToken,
@@ -126,10 +132,15 @@ export async function syncGoogleCalendar(
     deleted = await deps.gateway.deleteByGoogleExternalIds(cancelled);
   }
 
+  const lastSyncedAt = nowDate.toISOString();
+  // 成功したときだけ記録する (listEvents/refresh が throw した経路では呼ばれない)。
+  // ADR 0007 の起動時 15 分閾値判定、ADR 0006 の syncToken 保持の両方をこの 1 行で繋ぐ。
+  await deps.syncStateGateway.upsertLastSyncedAt(lastSyncedAt);
+
   return {
     synced,
     deleted,
-    lastSyncedAt: nowDate.toISOString(),
+    lastSyncedAt,
   };
 }
 

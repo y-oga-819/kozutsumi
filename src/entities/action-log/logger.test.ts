@@ -146,7 +146,7 @@ describe("clearLog()", () => {
 });
 
 describe("ACTION_TYPES", () => {
-  test("phase1.md に記載の action_type をすべて含む", () => {
+  test("Phase 1 / Phase 2 の action_type をすべて含む", () => {
     expect(ACTION_TYPES).toEqual({
       TASK_STARTED: "task_started",
       TASK_PAUSED: "task_paused",
@@ -159,6 +159,37 @@ describe("ACTION_TYPES", () => {
       INTERRUPTION_COMPLETED: "interruption_completed",
       STACK_PROPOSED: "stack_proposed",
       STACK_PROPOSAL_ACCEPTED: "stack_proposal_accepted",
+      CALENDAR_SYNCED: "calendar_synced",
+    });
+  });
+});
+
+describe("log(calendar_synced)", () => {
+  beforeEach(() => {
+    clearLog();
+    __resetLoggerClientForTest();
+    insertMock.mockClear();
+    fromMock.mockClear();
+    getUserMock.mockClear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("metadata に synced / deleted / trigger を含めて insert する (task_id は null)", async () => {
+    log(ACTION_TYPES.CALENDAR_SYNCED, {
+      synced: 5,
+      deleted: 1,
+      trigger: "manual",
+    });
+    await flushMicrotasks();
+    expect(insertMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      action_type: "calendar_synced",
+      task_id: null,
+      metadata: { synced: 5, deleted: 1, trigger: "manual" },
     });
   });
 });
