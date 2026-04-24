@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
 
-import { ProviderTokenMissingError, getValidAccessToken } from "@/shared/google/token";
+import { syncGoogleCalendar } from "@/entities/event/sync";
+import {
+  ProviderTokenMissingError,
+  RefreshTokenExpiredError,
+} from "@/shared/google/token";
 import { createClient } from "@/shared/supabase/server";
 
 /**
- * Google Calendar 同期エンドポイント。
+ * Google Calendar 同期エンドポイント (ADR 0005)。
  *
- * 本 issue (P2-1) では骨格のみ。実同期ロジックは P2-2 で埋める。
- * 401 系の分岐は P2-3 で再ログインバナーを出す側で利用する。
+ * 認証層:
+ * - Supabase session 無し → 401 unauthorized
+ * - provider_token / refresh_token が無い or 失効 → 401 provider_token_missing
+ *   (UI 側でバナーを出し、再ログイン (= calendar.readonly scope 再付与) に誘導する。P2-3)
  */
 export async function POST() {
   const supabase = await createClient();
@@ -20,9 +26,13 @@ export async function POST() {
   }
 
   try {
-    await getValidAccessToken(supabase);
+    const result = await syncGoogleCalendar(supabase);
+    return NextResponse.json(result);
   } catch (error) {
-    if (error instanceof ProviderTokenMissingError) {
+    if (
+      error instanceof ProviderTokenMissingError ||
+      error instanceof RefreshTokenExpiredError
+    ) {
       return NextResponse.json(
         {
           error: "provider_token_missing",
@@ -31,9 +41,10 @@ export async function POST() {
         { status: 401 },
       );
     }
-    throw error;
+    console.error("[calendar-sync] unexpected error", error);
+    return NextResponse.json(
+      { error: "sync_failed", message: "同期中にエラーが発生しました" },
+      { status: 500 },
+    );
   }
-
-  // P2-2 で本実装。ここでは骨格として 0 件同期の体を返す。
-  return NextResponse.json({ synced: 0, deleted: 0 });
 }
