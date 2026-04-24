@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, test, vi } from "vitest";
 
+import type { CalendarSyncStateGateway } from "@/entities/calendar-sync/gateway";
 import {
   GoogleApiUnauthorizedError,
   type GoogleCalendarEvent,
@@ -201,6 +202,17 @@ function makeFakeGateway() {
   return { gateway, upsertCalls, deleteCalls };
 }
 
+function makeFakeSyncStateGateway() {
+  const upsertLastSyncedAt = vi.fn<(iso: string) => Promise<void>>(
+    async () => {},
+  );
+  const gateway: CalendarSyncStateGateway = {
+    get: vi.fn(async () => null),
+    upsertLastSyncedAt,
+  };
+  return { gateway, upsertLastSyncedAt };
+}
+
 function makeActiveEvent(id: string): GoogleCalendarEvent {
   return {
     id,
@@ -216,6 +228,7 @@ const DEFAULT_NOW = () => new Date("2026-04-23T00:00:00.000Z");
 /** テスト共通の DI overrides。`listEvents` / `refreshAccessToken` はテスト側で差し替える */
 function makeDeps(overrides: {
   gateway: EventGateway;
+  syncStateGateway?: CalendarSyncStateGateway;
   listEvents: ListEventsFn;
   refreshAccessToken?: () => Promise<{
     accessToken: string;
@@ -226,6 +239,8 @@ function makeDeps(overrides: {
 }) {
   return {
     gateway: overrides.gateway,
+    syncStateGateway:
+      overrides.syncStateGateway ?? makeFakeSyncStateGateway().gateway,
     listEvents: overrides.listEvents,
     getValidAccessToken: vi.fn(async () => ({
       accessToken: overrides.accessToken ?? "t",
@@ -415,5 +430,55 @@ describe("syncGoogleCalendar", () => {
         }),
       ),
     ).rejects.toBeInstanceOf(RefreshTokenExpiredError);
+  });
+
+  test("成功時は last_synced_at を永続化する", async () => {
+    const { gateway } = makeFakeGateway();
+    const { gateway: syncStateGateway, upsertLastSyncedAt } =
+      makeFakeSyncStateGateway();
+    const listEvents = vi.fn<ListEventsFn>(async () => ({
+      items: [makeActiveEvent("a")],
+    }));
+
+    const result = await syncGoogleCalendar(
+      FAKE_SUPABASE,
+      makeDeps({
+        gateway,
+        syncStateGateway,
+        listEvents,
+        now: () => new Date("2026-04-24T01:30:00.000Z"),
+      }),
+    );
+
+    expect(result.lastSyncedAt).toBe("2026-04-24T01:30:00.000Z");
+    expect(upsertLastSyncedAt).toHaveBeenCalledTimes(1);
+    expect(upsertLastSyncedAt).toHaveBeenCalledWith("2026-04-24T01:30:00.000Z");
+  });
+
+  test("401 retry 後も失敗する場合は last_synced_at を記録しない", async () => {
+    const { gateway } = makeFakeGateway();
+    const { gateway: syncStateGateway, upsertLastSyncedAt } =
+      makeFakeSyncStateGateway();
+    const listEvents = vi.fn<ListEventsFn>(async () => {
+      throw new GoogleApiUnauthorizedError();
+    });
+    const refreshAccessToken = async () => ({
+      accessToken: "new-token",
+      refreshToken: "r",
+    });
+
+    await expect(
+      syncGoogleCalendar(
+        FAKE_SUPABASE,
+        makeDeps({
+          gateway,
+          syncStateGateway,
+          listEvents,
+          refreshAccessToken,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(GoogleApiUnauthorizedError);
+
+    expect(upsertLastSyncedAt).not.toHaveBeenCalled();
   });
 });
