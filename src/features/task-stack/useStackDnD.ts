@@ -10,14 +10,15 @@ import { findDropTarget } from "./findDropTarget";
 export type UseStackDnDResult = {
   dragIdx: number | null;
   overIdx: number | null;
-  rowRefs: MutableRefObject<(HTMLDivElement | null)[]>;
+  /** 行要素 (li or div) の ref。getBoundingClientRect しか使わないので HTMLElement で十分。 */
+  rowRefs: MutableRefObject<(HTMLElement | null)[]>;
   handlePointerDown: (idx: number, e: ReactPointerEvent<HTMLElement>) => void;
 };
 
 export function useStackDnD(onReorder: (from: number, to: number) => void): UseStackDnDResult {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
-  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const rowRefs = useRef<(HTMLElement | null)[]>([]);
   const dragIdxRef = useRef<number | null>(null);
   const overIdxRef = useRef<number | null>(null);
   const startY = useRef(0);

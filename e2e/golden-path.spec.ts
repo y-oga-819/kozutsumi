@@ -27,36 +27,35 @@ test("Phase 1 golden path", async ({ signedInPage: page }) => {
   // 追加後は AddPanel が閉じる
   await expect(addDialog).toHaveCount(0);
 
+  // タスクスタックは role=list / listitem なので semantic に取れる。
+  const stack = page.getByRole("list", { name: "タスクスタック" });
+
   // --- タスク A を作る ------------------------------------------------------
   await createTask(page, taskA, projectName);
-  await expect(page.getByText(taskA, { exact: false })).toBeVisible();
+  await expect(stack.getByRole("listitem").filter({ hasText: taskA })).toBeVisible();
 
   // --- タスク B を作る ------------------------------------------------------
   await createTask(page, taskB, projectName);
-  await expect(page.getByText(taskB, { exact: false })).toBeVisible();
+  await expect(stack.getByRole("listitem").filter({ hasText: taskB })).toBeVisible();
 
   // --- 並び替え (A が top / B が 2 番目 → B を top に) ---------------------
   // DnD は custom pointer events ハンドラ (useStackDnD) なので Playwright の
   // dragAndDrop (HTML5 DnD) ではなく mouse API で手動 emit する。
-  const rowB = page
-    .locator(`div:has-text("${taskB}")`)
-    .locator("xpath=ancestor::div[contains(@class,'mx-4')][1]")
-    .first();
-  const cardA = page
-    .locator(`div:has-text("${taskA}")`)
-    .locator("xpath=ancestor::div[contains(@class,'mx-4')][1]")
-    .first();
+  const rowA = stack.getByRole("listitem").filter({ hasText: taskA });
+  const rowB = stack.getByRole("listitem").filter({ hasText: taskB });
 
-  const rowBBox = await rowB.boundingBox();
-  const cardABox = await cardA.boundingBox();
-  if (!rowBBox || !cardABox) throw new Error("rows not measurable");
+  // grip (cursor-grab クラスを持つ wrapper) を掴む必要がある。
+  // 行外をクリックすると onClick (詳細を開く) が走ってしまうため。
+  const gripB = rowB.locator(".cursor-grab").first();
+  const gripBBox = await gripB.boundingBox();
+  const rowABox = await rowA.boundingBox();
+  if (!gripBBox || !rowABox) throw new Error("row/grip not measurable");
 
-  // rowB の grip (左端) を掴んで cardA の上端より上にドロップする。
-  // findDropTarget は clientY < rect.top + height/2 で i=0 を返す。
-  const startX = rowBBox.x + 10;
-  const startY = rowBBox.y + rowBBox.height / 2;
-  const endX = cardABox.x + 10;
-  const endY = cardABox.y + 4;
+  const startX = gripBBox.x + gripBBox.width / 2;
+  const startY = gripBBox.y + gripBBox.height / 2;
+  // rowA の上端より上にドロップ → findDropTarget が i=0 を返し B が top に挿入される。
+  const endX = startX;
+  const endY = rowABox.y + 4;
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
@@ -66,7 +65,7 @@ test("Phase 1 golden path", async ({ signedInPage: page }) => {
   await page.mouse.up();
 
   // 並び替え後、taskB が残っていることを確認 (top 判定は UI 変化が多く brittle なので最小限)。
-  await expect(page.getByText(taskB).first()).toBeVisible();
+  await expect(stack.getByRole("listitem").filter({ hasText: taskB })).toBeVisible();
 
   // --- 開始 / 中断 / 再開 / 完了 -------------------------------------------
   await page.getByRole("button", { name: "開始" }).click();
@@ -83,8 +82,9 @@ test("Phase 1 golden path", async ({ signedInPage: page }) => {
   await expect(page.getByRole("button", { name: "完了" })).toBeVisible();
   await page.getByRole("button", { name: "完了" }).click();
 
-  // 完了したタスクは done リストへ移動する。top は残っているタスク A 側に。
-  await expect(page.getByText(taskA).first()).toBeVisible();
+  // 完了したタスクは done リストへ移動する。pending stack に taskA だけ残っているはず。
+  await expect(stack.getByRole("listitem").filter({ hasText: taskA })).toBeVisible();
+  await expect(stack.getByRole("listitem").filter({ hasText: taskB })).toHaveCount(0);
 
   // --- Tree View に遷移 ----------------------------------------------------
   await page.getByRole("link", { name: "Tree" }).click();
