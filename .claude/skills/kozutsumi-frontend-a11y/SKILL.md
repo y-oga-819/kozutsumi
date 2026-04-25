@@ -139,5 +139,5 @@ PR / branch を見るとき、以下を順に確認する:
 ## 4. 関連
 
 - ADR 0011（e2e 基盤）— a11y 構造が e2e の頑健性を支える前提
-- `kozutsumi-issues` skill — PR / 起票運用
+- `kozutsumi-flow` skill — PR / 起票運用
 - `/review` skill — branch / PR レビューの一般運用。本 skill のチェックリストは review 時にも踏む

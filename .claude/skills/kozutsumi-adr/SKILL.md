@@ -11,7 +11,7 @@ ADR (Architecture Decision Record) は kozutsumi の設計判断を**1 判断 = 
 本 skill は以下の場面で必ず参照する:
 
 - 設計判断を下したので ADR を起票する
-- Phase 計画で大きな設計判断を ADR 化する（`kozutsumi-issues` から呼ばれる）
+- Phase 計画で大きな設計判断を ADR 化する（`kozutsumi-flow` から呼ばれる）
 - 既存 ADR を supersede / Deprecated にする
 - ADR の粒度に迷う / 1 ADR にまとめるか分けるか判断する
 - `open-questions.md` の論点が決着して ADR 化する
@@ -113,5 +113,5 @@ ls docs/adr/ | grep -E '^[0-9]+-' | sort | tail -3
 
 ## 6. 関連する skill
 
-- **`kozutsumi-issues`** — issue / Milestone / PR の運用。Phase 計画は本 skill と連携する
-  （Phase 計画フローでは先に本 skill で ADR を起票し、確定後に `kozutsumi-issues` で Milestone と issue を起票する）
+- **`kozutsumi-flow`** — issue / Milestone / PR の運用。Phase 計画は本 skill と連携する
+  （Phase 計画フローでは先に本 skill で ADR を起票し、確定後に `kozutsumi-flow` で Milestone と issue を起票する）
