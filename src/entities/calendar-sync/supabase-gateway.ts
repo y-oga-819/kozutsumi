@@ -33,16 +33,19 @@ export class SupabaseCalendarSyncStateGateway
     };
   }
 
-  async upsertLastSyncedAt(lastSyncedAt: string): Promise<void> {
+  async saveSyncState(input: {
+    lastSyncedAt: string;
+    syncToken: string | null;
+  }): Promise<void> {
     const {
       data: { user },
     } = await this.supabase.auth.getUser();
     if (!user) throw new Error("not authenticated");
 
-    // sync_token は payload から外すことで既存値を保持する (P2-6 で使う予約枠)。
     const payload: TablesInsert<"user_calendar_sync_state"> = {
       user_id: user.id,
-      last_synced_at: lastSyncedAt,
+      last_synced_at: input.lastSyncedAt,
+      sync_token: input.syncToken,
     };
     const { error } = await this.supabase
       .from("user_calendar_sync_state")

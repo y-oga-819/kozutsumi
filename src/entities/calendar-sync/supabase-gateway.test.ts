@@ -46,8 +46,35 @@ function makeSupabase(overrides: {
 }
 
 describe("SupabaseCalendarSyncStateGateway.get", () => {
-  test("行があれば CalendarSyncState を返す", async () => {
+  test("行があれば CalendarSyncState を返す (sync_token も含めて)", async () => {
     const { supabase, from, select, eqSelect } = makeSupabase({
+      selectResult: {
+        data: {
+          user_id: "user-1",
+          last_synced_at: "2026-04-24T10:00:00.000Z",
+          sync_token: "tok-abc",
+          updated_at: "2026-04-24T10:00:00.000Z",
+        },
+        error: null,
+      },
+    });
+
+    const gw = new SupabaseCalendarSyncStateGateway(supabase);
+    const state = await gw.get();
+
+    expect(state).toEqual({
+      lastSyncedAt: "2026-04-24T10:00:00.000Z",
+      syncToken: "tok-abc",
+    });
+    expect(from).toHaveBeenCalledWith("user_calendar_sync_state");
+    expect(select).toHaveBeenCalledWith(
+      "user_id, last_synced_at, sync_token, updated_at",
+    );
+    expect(eqSelect).toHaveBeenCalledWith("user_id", "user-1");
+  });
+
+  test("sync_token が null でもそのまま返す (初回 / 410 fallback 直後)", async () => {
+    const { supabase } = makeSupabase({
       selectResult: {
         data: {
           user_id: "user-1",
@@ -66,11 +93,6 @@ describe("SupabaseCalendarSyncStateGateway.get", () => {
       lastSyncedAt: "2026-04-24T10:00:00.000Z",
       syncToken: null,
     });
-    expect(from).toHaveBeenCalledWith("user_calendar_sync_state");
-    expect(select).toHaveBeenCalledWith(
-      "user_id, last_synced_at, sync_token, updated_at",
-    );
-    expect(eqSelect).toHaveBeenCalledWith("user_id", "user-1");
   });
 
   test("行がなければ null を返す", async () => {
@@ -107,23 +129,42 @@ describe("SupabaseCalendarSyncStateGateway.get", () => {
   });
 });
 
-describe("SupabaseCalendarSyncStateGateway.upsertLastSyncedAt", () => {
-  test("user_id + last_synced_at を on conflict user_id で upsert する", async () => {
+describe("SupabaseCalendarSyncStateGateway.saveSyncState", () => {
+  test("user_id + last_synced_at + sync_token を on conflict user_id で upsert する", async () => {
     const { supabase, from, upsert } = makeSupabase({});
     const gw = new SupabaseCalendarSyncStateGateway(supabase);
 
-    await gw.upsertLastSyncedAt("2026-04-24T10:00:00.000Z");
+    await gw.saveSyncState({
+      lastSyncedAt: "2026-04-24T10:00:00.000Z",
+      syncToken: "tok-xyz",
+    });
 
     expect(from).toHaveBeenCalledWith("user_calendar_sync_state");
     expect(upsert).toHaveBeenCalledTimes(1);
     const [payload, options] = upsert.mock.calls[0]!;
-    expect(payload).toMatchObject({
+    expect(payload).toEqual({
       user_id: "user-1",
       last_synced_at: "2026-04-24T10:00:00.000Z",
+      sync_token: "tok-xyz",
     });
-    // sync_token は触らない (P2-6 予約枠、既存値を保持)
-    expect(payload).not.toHaveProperty("sync_token");
     expect(options).toEqual({ onConflict: "user_id" });
+  });
+
+  test("syncToken: null を渡すと sync_token も null で上書きされる (410 fallback で nextSyncToken が無いケース)", async () => {
+    const { supabase, upsert } = makeSupabase({});
+    const gw = new SupabaseCalendarSyncStateGateway(supabase);
+
+    await gw.saveSyncState({
+      lastSyncedAt: "2026-04-24T10:00:00.000Z",
+      syncToken: null,
+    });
+
+    const [payload] = upsert.mock.calls[0]!;
+    expect(payload).toEqual({
+      user_id: "user-1",
+      last_synced_at: "2026-04-24T10:00:00.000Z",
+      sync_token: null,
+    });
   });
 
   test("未ログイン時は throw する (Route Handler 以外からの呼び出しを防ぐ)", async () => {
@@ -131,7 +172,10 @@ describe("SupabaseCalendarSyncStateGateway.upsertLastSyncedAt", () => {
     const gw = new SupabaseCalendarSyncStateGateway(supabase);
 
     await expect(
-      gw.upsertLastSyncedAt("2026-04-24T10:00:00.000Z"),
+      gw.saveSyncState({
+        lastSyncedAt: "2026-04-24T10:00:00.000Z",
+        syncToken: null,
+      }),
     ).rejects.toThrow(/not authenticated/i);
   });
 
@@ -142,7 +186,10 @@ describe("SupabaseCalendarSyncStateGateway.upsertLastSyncedAt", () => {
     const gw = new SupabaseCalendarSyncStateGateway(supabase);
 
     await expect(
-      gw.upsertLastSyncedAt("2026-04-24T10:00:00.000Z"),
+      gw.saveSyncState({
+        lastSyncedAt: "2026-04-24T10:00:00.000Z",
+        syncToken: "t",
+      }),
     ).rejects.toMatchObject({ message: "insert failed" });
   });
 });
