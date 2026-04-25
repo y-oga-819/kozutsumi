@@ -32,6 +32,8 @@ jobs:
               - 'postcss.config.*'
               - 'tailwind.config.*'
               - 'vitest.config.*'
+              - '.prettierrc*'
+              - '.prettierignore'
               - '.github/workflows/ci.yml'
             supabase:
               - 'supabase/**'
@@ -64,6 +66,20 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+
+  format:
+    name: Format
+    needs: changes
+    if: needs.changes.outputs.node == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
 
   test:
     name: Test
