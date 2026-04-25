@@ -9,10 +9,19 @@
 
 <!-- 1-3 行。このPRが何を達成するか。 -->
 
+## 関連 Issue
+
+<!-- 必須。マージで自動 close したい issue は `Closes #N`。
+     参照するだけ（close しない）なら `Refs #N`。
+     複数 close する場合は `Closes #1, Closes #2` のように `Closes` を都度書く。
+     対応する issue が無い場合は、まず issue を起票してから PR を出す。 -->
+
+Closes #
+
 ## 背景 (Why)
 
 <!-- なぜこの変更が必要だったか。トリガーになった出来事 / 制約 / 課題。
-     関連 issue / ADR があればリンク（例: Closes #123, ADR-0005）。 -->
+     ADR があればリンク（例: ADR-0005）。 -->
 
 ## Before → After (概念・フロー・メンタルモデル)
 
