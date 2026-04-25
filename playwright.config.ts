@@ -18,10 +18,13 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: false,
+  // worker 間 isolation は per-worker test user (e2e/users.ts) で担保。
+  // ローカルは 1 worker (debug しやすさ + Supabase 1 stack の負荷上限)、
+  // CI は 4 worker (ubuntu-latest 2 vCPU + 7GB RAM 想定の上限近く)。
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: 1,
+  workers: process.env.CI ? 4 : 1,
   reporter: [["list"], ["html", { open: "never" }]],
   globalSetup: "./e2e/global-setup.ts",
   use: {

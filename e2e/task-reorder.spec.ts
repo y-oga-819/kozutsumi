@@ -1,12 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import {
-  createAdminClient,
-  findTestUserId,
-  getTaskByTitle,
-  requiredEnv,
-  waitForActionLog,
-} from "./db";
+import { createAdminClient, getTaskByTitle, waitForActionLog } from "./db";
 import { expect, test } from "./fixtures";
 
 /**
@@ -21,11 +15,10 @@ test.describe("DnD 並び替え (task_reordered + tasks.stack_order)", () => {
   test("末尾を先頭に持ち上げると stack_order が 0,1,2 で再採番され、from/to ログが残る", async ({
     signedInPageWithProject: page,
     projectName,
+    testUserId: userId,
   }) => {
     const titles = ["並べ替え A", "並べ替え B", "並べ替え C"] as const;
     const admin = createAdminClient();
-    const userId = await findTestUserId(admin, requiredEnv("E2E_TEST_USER_EMAIL"));
-    if (!userId) throw new Error("[e2e] test user must exist (created by global-setup)");
 
     for (const t of titles) {
       await createTask(page, t, projectName);
@@ -74,11 +67,10 @@ test.describe("DnD 並び替え (task_reordered + tasks.stack_order)", () => {
   test("先頭を末尾に下ろすと stack_order が更新される", async ({
     signedInPageWithProject: page,
     projectName,
+    testUserId: userId,
   }) => {
     const titles = ["逆方向 X", "逆方向 Y", "逆方向 Z"] as const;
     const admin = createAdminClient();
-    const userId = await findTestUserId(admin, requiredEnv("E2E_TEST_USER_EMAIL"));
-    if (!userId) throw new Error("[e2e] test user must exist (created by global-setup)");
 
     for (const t of titles) {
       await createTask(page, t, projectName);

@@ -1,9 +1,16 @@
 import { test as base, expect, type Page } from "@playwright/test";
 
 import { createAdminClient, findTestUserId, purgeUserData, requiredEnv } from "./db";
+import { getWorkerEmail } from "./users";
 
 /**
  * e2e 共通 fixture (ADR 0011)。
+ *
+ * `testEmail` / `testUserId`: workers >1 化に伴う per-worker test user。
+ *   Playwright の testInfo.parallelIndex で worker を識別し、各 worker は
+ *   別 user (e2e-w0@... / e2e-w1@... / ...) を扱う。これによって purge / DB
+ *   assert が干渉しない。spec 側は env を読まずに `testEmail` / `testUserId`
+ *   を destructure するだけで自分の worker の user に届く。
  *
  * `signedInPage` を使うと:
  *   1. service_role で当該ユーザーの projects / tasks / events / action_logs を purge する
@@ -19,21 +26,37 @@ import { createAdminClient, findTestUserId, purgeUserData, requiredEnv } from ".
  * 重複セットアップを減らすための fixture。
  */
 type Fixtures = {
+  testEmail: string;
+  testUserId: string;
   signedInPage: Page;
   projectName: string;
   signedInPageWithProject: Page;
 };
 
 export const test = base.extend<Fixtures>({
-  signedInPage: async ({ page, baseURL }, use) => {
-    const email = requiredEnv("E2E_TEST_USER_EMAIL");
+  // eslint-disable-next-line no-empty-pattern
+  testEmail: async ({}, use, testInfo) => {
+    const baseEmail = requiredEnv("E2E_TEST_USER_EMAIL");
+    await use(getWorkerEmail(baseEmail, testInfo.parallelIndex));
+  },
+
+  testUserId: async ({ testEmail }, use) => {
+    const admin = createAdminClient();
+    const id = await findTestUserId(admin, testEmail);
+    if (!id) {
+      throw new Error(`[e2e] test user ${testEmail} must exist (created by global-setup)`);
+    }
+    await use(id);
+  },
+
+  signedInPage: async ({ page, baseURL, testEmail }, use) => {
     const password = requiredEnv("E2E_TEST_USER_PASSWORD");
 
     // --- 1. DB を per-test で clean に戻す ---------------------------------
     // global-setup の purge は 1 回しか走らないため、retry や複数 spec 間で
     // データが持ち越される。ここで毎回 purge して isolation を保つ。
     const admin = createAdminClient();
-    const userId = await findTestUserId(admin, email);
+    const userId = await findTestUserId(admin, testEmail);
     if (userId) {
       await purgeUserData(admin, userId);
     }
@@ -50,7 +73,7 @@ export const test = base.extend<Fixtures>({
     // --- 3. password sign-in でログイン ------------------------------------
     await page.goto(`${baseURL ?? ""}/login`);
     await expect(page.getByTestId("e2e-login-form")).toBeVisible();
-    await page.getByTestId("e2e-login-email").fill(email);
+    await page.getByTestId("e2e-login-email").fill(testEmail);
     await page.getByTestId("e2e-login-password").fill(password);
     await page.getByTestId("e2e-login-submit").click();
 
