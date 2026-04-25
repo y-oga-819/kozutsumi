@@ -16,8 +16,10 @@ export default async function LoginPage() {
   }
 
   // ADR 0011: e2e モードでだけ password sign-in フォームを表示する。
-  // NEXT_PUBLIC_E2E_TEST_AUTH=true のときに限り render され、本番では存在しない。
-  const e2eAuthEnabled = process.env.NEXT_PUBLIC_E2E_TEST_AUTH === "true";
+  // NODE_ENV と NEXT_PUBLIC_E2E_TEST_AUTH の二重ガード。
+  // 片方の env が誤って prod に継承されても prod build なら描画されない。
+  const e2eAuthEnabled =
+    process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_E2E_TEST_AUTH === "true";
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-8 px-6">

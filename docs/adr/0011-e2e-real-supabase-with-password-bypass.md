@@ -83,9 +83,27 @@ e2e テストを入れたいが、以下の制約がある:
 ## Notes
 
 - 実装ファイル: `playwright.config.ts` / `e2e/golden-path.spec.ts` / `e2e/global-setup.ts` /
-  `src/app/login/TestLoginForm.tsx`。
+  `e2e/db.ts` / `e2e/fixtures.ts` / `src/app/login/TestLoginForm.tsx` / `src/app/login/page.tsx`。
 - env: `E2E_TEST_USER_EMAIL` / `E2E_TEST_USER_PASSWORD` / `SUPABASE_SERVICE_ROLE_KEY` /
   `NEXT_PUBLIC_E2E_TEST_AUTH`。値（パスワード等）は code の constant ではなく env で渡す。
-- 見直し条件:
-  - Phase 3 で AI モック設計が固まったら、e2e の AI 周りカバー方針を別 ADR にする。
-  - Google OAuth フローを e2e に乗せたくなったら（プロダクト化検討時）、別 ADR で再設計。
+
+### 二重ガード (Issue #66)
+
+password sign-in 経路は本番に絶対漏らさない方針。3 層で防御する:
+
+1. **本質防衛: 本番 Supabase Dashboard で email/password provider を Disabled にする**。
+   form を消しても `signInWithPassword` endpoint は JS から直接叩けるため、本番側で
+   provider を無効化するのが唯一の真の防衛線。
+2. **build-time gate**: `TestLoginForm` の描画は
+   `NODE_ENV !== "production" && NEXT_PUBLIC_E2E_TEST_AUTH === "true"` の AND。
+   `page.tsx` (server) と `TestLoginForm` 自体 (client) の両方でチェックする。
+   どちらかの env が誤って prod に継承されても prod build なら描画されない。
+3. **e2e 側の URL guard**: `e2e/db.ts createAdminClient` が
+   `NEXT_PUBLIC_SUPABASE_URL` の hostname を localhost / 127.0.0.1 に限定して
+   abort する。`global-setup.ts` で誤って prod Supabase URL を指しても
+   test ユーザー作成 / purge が走る前に止まる。
+
+### 見直し条件
+
+- Phase 3 で AI モック設計が固まったら、e2e の AI 周りカバー方針を別 ADR にする。
+- Google OAuth フローを e2e に乗せたくなったら（プロダクト化検討時）、別 ADR で再設計。

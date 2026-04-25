@@ -7,8 +7,8 @@ import { createClient } from "@/shared/supabase/client";
 /**
  * E2E テスト専用の password sign-in フォーム。
  *
- * `NEXT_PUBLIC_E2E_TEST_AUTH=true` のときだけ login page から render される
- * (ADR 0011)。本番ビルドでは env 未設定 → 表示されない。
+ * `NODE_ENV !== "production"` かつ `NEXT_PUBLIC_E2E_TEST_AUTH=true` のときだけ
+ * 描画される (ADR 0011 二重ガード)。本番ビルドでは early return で消える。
  *
  * 役割:
  * - Playwright が Google OAuth を踏まずに本物の Supabase へログインするための導線
@@ -16,6 +16,16 @@ import { createClient } from "@/shared/supabase/client";
  *   browser client の signInWithPassword をそのまま呼ぶ
  */
 export function TestLoginForm() {
+  // 二重ガード: page.tsx 側 (server) のガードが env 漏れで素通りしても、
+  // client 側のここで止める。NODE_ENV / NEXT_PUBLIC_E2E_TEST_AUTH は build 時に
+  // inline されるため、prod build からはこの分岐ごと落ちる。
+  if (process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_E2E_TEST_AUTH !== "true") {
+    return null;
+  }
+  return <TestLoginFormInner />;
+}
+
+function TestLoginFormInner() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
