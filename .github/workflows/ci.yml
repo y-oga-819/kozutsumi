@@ -181,8 +181,28 @@ jobs:
           } >> "$GITHUB_ENV"
       - name: Install npm deps
         run: npm ci
+      # Playwright の browser binary (~/.cache/ms-playwright) を Playwright の
+      # version で key 付けして cache する。version が変わったら自動で miss する。
+      # cache hit でも system deps (apt) は別途 install-deps で入れる必要がある
+      # (apt 部分は数秒なので browser DL の 25s と比べると誤差)。
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: |
+          version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
       - name: Run Playwright
         env:
           E2E_TEST_USER_EMAIL: e2e@kozutsumi.local
