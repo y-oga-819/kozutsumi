@@ -11,10 +11,10 @@
 
 ## 関連 Issue
 
-<!-- 必須。マージで自動 close したい issue は `Closes #N`。
+<!-- 対応 issue があれば必ずリンクする（マージ時自動 close したい場合は `Closes #N`）。
      参照するだけ（close しない）なら `Refs #N`。
      複数 close する場合は `Closes #1, Closes #2` のように `Closes` を都度書く。
-     対応する issue が無い場合は、まず issue を起票してから PR を出す。 -->
+     対応 issue が無い PR の場合はこのセクションごと削除して構わない。 -->
 
 Closes #
 
