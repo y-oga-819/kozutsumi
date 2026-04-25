@@ -17,14 +17,15 @@ test("Phase 1 golden path", async ({ signedInPage: page }) => {
   await expect(page.getByText("task stack")).toBeVisible();
 
   // --- プロジェクトを作る ---------------------------------------------------
-  // exact:true は「プロジェクトを先に作る」(EmptyProjectsNotice) と
-  // 「新規追加」(AddButton aria-label) との substring 衝突を避けるため。
-  await page.getByRole("button", { name: "新規追加", exact: true }).click();
-  await page.getByRole("button", { name: "プロジェクト", exact: true }).click();
-  await page.getByLabel("名前").fill(projectName);
-  await page.getByRole("button", { name: "追加", exact: true }).click();
+  // AddPanel は role=dialog、タブ群は role=tab、submit は dialog scope 内の
+  // role=button { name: "追加" } で取れる (AddButton "新規追加" は dialog 外なので衝突しない)。
+  await page.getByRole("button", { name: "新規追加" }).click();
+  const addDialog = page.getByRole("dialog", { name: "追加メニュー" });
+  await addDialog.getByRole("tab", { name: "プロジェクト" }).click();
+  await addDialog.getByLabel("名前").fill(projectName);
+  await addDialog.getByRole("button", { name: "追加" }).click();
   // 追加後は AddPanel が閉じる
-  await expect(page.getByLabel("名前")).toHaveCount(0);
+  await expect(addDialog).toHaveCount(0);
 
   // --- タスク A を作る ------------------------------------------------------
   await createTask(page, taskA, projectName);
@@ -72,9 +73,9 @@ test("Phase 1 golden path", async ({ signedInPage: page }) => {
   await expect(page.getByRole("button", { name: "中断" })).toBeVisible();
 
   await page.getByRole("button", { name: "中断" }).click();
-  // PauseReasonModal
-  await expect(page.getByText("中断の理由")).toBeVisible();
-  await page.getByRole("button", { name: /自発的に中断/ }).click();
+  // PauseReasonModal も role=dialog / aria-labelledby="中断の理由"
+  const pauseDialog = page.getByRole("dialog", { name: "中断の理由" });
+  await pauseDialog.getByRole("button", { name: /自発的に中断/ }).click();
 
   await expect(page.getByRole("button", { name: "再開" })).toBeVisible();
   await page.getByRole("button", { name: "再開" }).click();
@@ -101,10 +102,11 @@ async function createTask(
   title: string,
   projectName: string,
 ): Promise<void> {
-  await page.getByRole("button", { name: "新規追加", exact: true }).click();
-  await page.getByRole("button", { name: "タスク", exact: true }).click();
-  await page.getByLabel("タイトル").fill(title);
-  await page.getByLabel("プロジェクト").selectOption({ label: projectName });
-  await page.getByRole("button", { name: "追加", exact: true }).click();
-  await expect(page.getByLabel("タイトル")).toHaveCount(0);
+  await page.getByRole("button", { name: "新規追加" }).click();
+  const addDialog = page.getByRole("dialog", { name: "追加メニュー" });
+  await addDialog.getByRole("tab", { name: "タスク" }).click();
+  await addDialog.getByLabel("タイトル").fill(title);
+  await addDialog.getByLabel("プロジェクト").selectOption({ label: projectName });
+  await addDialog.getByRole("button", { name: "追加" }).click();
+  await expect(addDialog).toHaveCount(0);
 }
