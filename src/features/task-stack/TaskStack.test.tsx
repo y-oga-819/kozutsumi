@@ -1,5 +1,5 @@
 import { fireEvent, render as rtlRender } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { DoneList } from "./DoneList";
 import { TaskRow } from "./TaskRow";
 import { TaskStack, type TopTimerBinding } from "./TaskStack";
@@ -8,6 +8,16 @@ import type { Task } from "../../entities/task/types";
 import type { Event } from "../../entities/event/types";
 import type { Project } from "../../entities/project/types";
 import { ProjectsProvider } from "../../entities/project/ProjectsContext";
+
+// 依存イベントの相対時刻表現は「現在時刻」依存。テストは固定時刻 2026-04-11T09:00 で評価する。
+const FIXED_NOW = new Date("2026-04-11T09:00:00");
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(FIXED_NOW);
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const projects: Project[] = [
   { id: "slo", name: "SLO推進", color: "#2D9F45", isPrimary: true, createdAt: "" },
@@ -55,8 +65,11 @@ const idleTimer: TopTimerBinding = {
   onComplete: noop,
 };
 
+const NOW_MS = FIXED_NOW.getTime();
+
 const topProps = {
   events: [] as Event[],
+  now: NOW_MS,
   isBeingDragged: false,
   elapsedSeconds: 0,
   pauseReason: null,
@@ -75,7 +88,8 @@ describe("TopTaskCard", () => {
     expect(getByText("SLO推進")).toBeTruthy();
   });
 
-  test("dependsOnEventId の依存イベントを解決してバッジ表示", () => {
+  test("dependsOnEventId の依存イベントを解決してバッジ表示 (相対時刻 + タイトル)", () => {
+    // FIXED_NOW=09:00, event=14:00 → 5時間後 → 「今日 14:00 MTG」
     const { getByText } = render(
       <TopTaskCard
         {...topProps}
@@ -83,7 +97,7 @@ describe("TopTaskCard", () => {
         events={[baseEvent]}
       />,
     );
-    expect(getByText("← 14:00までに")).toBeTruthy();
+    expect(getByText(/今日 14:00 MTG/)).toBeTruthy();
   });
 
   test("body の先頭非見出し行をプレビュー表示", () => {
@@ -147,6 +161,8 @@ describe("TaskRow", () => {
     const { getByText } = render(
       <TaskRow
         task={baseTask}
+        events={[]}
+        now={NOW_MS}
         isBeingDragged={false}
         onPointerDown={noop}
         onClick={noop}
@@ -158,17 +174,35 @@ describe("TaskRow", () => {
     expect(getByText("45m")).toBeTruthy();
   });
 
-  test("dependsOnEventId があれば ⏱ アイコンを表示", () => {
+  test("dependsOnEventId があれば「相対時刻 + タイトル」のバッジを表示", () => {
     const { getByText } = render(
       <TaskRow
         task={{ ...baseTask, dependsOnEventId: "e1" }}
+        events={[baseEvent]}
+        now={NOW_MS}
         isBeingDragged={false}
         onPointerDown={noop}
         onClick={noop}
         onToggleDone={noop}
       />,
     );
-    expect(getByText("⏱")).toBeTruthy();
+    expect(getByText(/今日 14:00 MTG/)).toBeTruthy();
+  });
+
+  test("依存イベントが events に無い (削除済) 場合はバッジを表示しない", () => {
+    const { queryByText } = render(
+      <TaskRow
+        task={{ ...baseTask, dependsOnEventId: "missing" }}
+        events={[]}
+        now={NOW_MS}
+        isBeingDragged={false}
+        onPointerDown={noop}
+        onClick={noop}
+        onToggleDone={noop}
+      />,
+    );
+    expect(queryByText(/MTG/)).toBeNull();
+    expect(queryByText(/今日/)).toBeNull();
   });
 });
 
@@ -219,6 +253,7 @@ describe("TaskStack", () => {
     const { getByText, getAllByText } = render(
       <TaskStack
         events={[]}
+        now={NOW_MS}
         pendingTasks={pending}
         doneTasks={[]}
         topTimer={idleTimer}
@@ -240,6 +275,7 @@ describe("TaskStack", () => {
     const { getByText } = render(
       <TaskStack
         events={[]}
+        now={NOW_MS}
         pendingTasks={pending}
         doneTasks={doneTasks}
         topTimer={idleTimer}
@@ -257,6 +293,7 @@ describe("TaskStack", () => {
     const { getByText } = render(
       <TaskStack
         events={[]}
+        now={NOW_MS}
         pendingTasks={pending}
         doneTasks={[]}
         topTimer={idleTimer}

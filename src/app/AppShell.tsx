@@ -44,7 +44,7 @@ import {
   writeSampleDataMode,
 } from "@/shared/lib/sample-data";
 import { isDone } from "@/shared/lib/task";
-import { nowMinutesOfDay, todayIso } from "@/shared/lib/time";
+import { todayIso } from "@/shared/lib/time";
 
 type View = "stack" | "tree";
 
@@ -100,17 +100,25 @@ export function AppShell({ initialView, user }: AppShellProps) {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [eventDetailId, setEventDetailId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [nowMin, setNowMin] = useState<number>(9 * 60);
+  // ms 表現の「今」。SSR は 0 placeholder で hydration mismatch を回避し、
+  // mount 後に実時刻へ差し替える。nowMin (タイムライン用) と依存イベント比較用に共用する。
+  const [nowMs, setNowMs] = useState<number>(0);
   const today = useMemo(() => todayIso(), []);
 
   useEffect(() => {
     // マウント後にローカル時刻と同期する。SSR 時 nowMinutesOfDay() はブラウザ API 依存のため不可。
     /* eslint-disable react-hooks/set-state-in-effect */
-    setNowMin(nowMinutesOfDay());
+    setNowMs(Date.now());
     /* eslint-enable react-hooks/set-state-in-effect */
-    const id = window.setInterval(() => setNowMin(nowMinutesOfDay()), 60_000);
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
     return () => window.clearInterval(id);
   }, []);
+
+  const nowMin = useMemo(() => {
+    if (nowMs === 0) return 9 * 60;
+    const d = new Date(nowMs);
+    return d.getHours() * 60 + d.getMinutes();
+  }, [nowMs]);
 
   // 初回ログイン時に自動 seed: 全テーブル空かつ「cleared」フラグ無しなら投入する。
   // ref ガードでストリクトモードでの 2 重 fire を防ぎつつ、ローディング完了後 1 回だけ実行。
@@ -192,6 +200,47 @@ export function AppShell({ initialView, user }: AppShellProps) {
       const previous = queryClient.getQueryData<Task[]>(keys.tasks);
       queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
         (prev ?? []).map((t) => (t.id === id ? { ...t, body } : t)),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(keys.tasks, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: keys.tasks });
+    },
+  });
+
+  // P2-5 (#53): タスクの依存イベント設定。set / cleared を action_log に残し、
+  // Phase 4 で「依存設定が着手順に効いたか」の分析データに使う。
+  const updateDependencyMutation = useMutation({
+    mutationFn: ({
+      id,
+      dependsOnEventId,
+    }: {
+      id: string;
+      dependsOnEventId: string | null;
+    }) => taskGateway.update(id, { dependsOnEventId }),
+    onMutate: async ({ id, dependsOnEventId }) => {
+      await queryClient.cancelQueries({ queryKey: keys.tasks });
+      const previous = queryClient.getQueryData<Task[]>(keys.tasks);
+      const target = previous?.find((t) => t.id === id);
+      const was = target?.dependsOnEventId ?? null;
+      if (was !== dependsOnEventId) {
+        if (dependsOnEventId) {
+          log(ACTION_TYPES.TASK_DEPENDENCY_SET, {
+            task_id: id,
+            event_id: dependsOnEventId,
+            was,
+          });
+        } else if (was) {
+          log(ACTION_TYPES.TASK_DEPENDENCY_CLEARED, { task_id: id, was });
+        }
+      }
+      queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
+        (prev ?? []).map((t) =>
+          t.id === id ? { ...t, dependsOnEventId } : t,
+        ),
       );
       return { previous };
     },
@@ -445,6 +494,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
             toggleDone={toggleDone}
             reorder={reorder}
             nowMin={nowMin}
+            now={nowMs}
             today={today}
             onOpenDetail={setDetailId}
             onOpenEvent={setEventDetailId}
@@ -460,10 +510,14 @@ export function AppShell({ initialView, user }: AppShellProps) {
           <TaskDetailPanel
             task={detailTask}
             events={events}
+            now={nowMs}
             onClose={() => setDetailId(null)}
             onUpdate={updateBody}
             onToggleDone={toggleDone}
             onDelete={(id) => deleteTaskMutation.mutate(id)}
+            onChangeDependency={(id, dependsOnEventId) =>
+              updateDependencyMutation.mutate({ id, dependsOnEventId })
+            }
           />
         )}
 
@@ -568,6 +622,7 @@ type StackViewProps = {
   toggleDone: (id: string) => void;
   reorder: (from: number, to: number) => void;
   nowMin: number;
+  now: number;
   today: string;
   onOpenDetail: (id: string) => void;
   onOpenEvent: (id: string) => void;
@@ -581,6 +636,7 @@ function StackView({
   toggleDone,
   reorder,
   nowMin,
+  now,
   today,
   onOpenDetail,
   onOpenEvent,
@@ -598,6 +654,7 @@ function StackView({
         pendingTasks={pendingTasks}
         doneTasks={doneTasks}
         topTimer={topTimer}
+        now={now}
         onReorder={reorder}
         onToggleDone={toggleDone}
         onOpenDetail={onOpenDetail}

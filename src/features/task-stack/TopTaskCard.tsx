@@ -5,7 +5,10 @@ import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
 import type { PauseReason } from "../../entities/task/time-entries";
 import type { Task } from "../../entities/task/types";
-import { formatClock } from "../../shared/lib/time";
+import {
+  IMMINENT_THRESHOLD_MS,
+  formatRelativeTime,
+} from "../../shared/lib/time";
 import { Grip } from "./Grip";
 import { pauseReasonLabel } from "./PauseReasonModal";
 import { formatElapsed } from "./useTaskTimer";
@@ -18,6 +21,8 @@ function bodyPreview(body: string): string {
 type TopTaskCardProps = {
   task: Task;
   events: Event[];
+  /** 現在時刻 (ms)。依存イベントの相対時刻 / 直近判定で使う。0 は SSR placeholder で計算をスキップ。 */
+  now: number;
   isBeingDragged: boolean;
   elapsedSeconds: number;
   pauseReason: PauseReason | null;
@@ -32,6 +37,7 @@ type TopTaskCardProps = {
 export function TopTaskCard({
   task,
   events,
+  now,
   isBeingDragged,
   elapsedSeconds,
   pauseReason,
@@ -47,6 +53,13 @@ export function TopTaskCard({
   const dep = task.dependsOnEventId
     ? events.find((e) => e.id === task.dependsOnEventId)
     : null;
+  // 24h 以内に迫っている依存はハイライト (背景濃度 + 太字) して着手判断のシグナルを強める。
+  // now=0 (SSR placeholder) のときは判定スキップ。
+  const depImminent =
+    dep !== null &&
+    dep !== undefined &&
+    now > 0 &&
+    new Date(dep.startTime).getTime() - now <= IMMINENT_THRESHOLD_MS;
   const preview = bodyPreview(task.body);
   const isActive = task.status === "active";
   const isPaused = task.status === "paused";
@@ -85,8 +98,15 @@ export function TopTaskCard({
               {proj.name}
             </span>
             {dep && (
-              <span className="rounded-[3px] bg-[#E85D0415] px-1.5 py-px font-jp text-[8px] text-accent-amber">
-                ← {formatClock(dep.startTime)}までに
+              <span
+                className={`max-w-[180px] truncate rounded-[3px] px-1.5 py-px font-jp text-[8px] text-accent-amber ${
+                  depImminent
+                    ? "bg-[#E85D0440] font-semibold"
+                    : "bg-[#E85D0415]"
+                }`}
+                title={`${dep.title} (${formatRelativeTime(dep.startTime, new Date(now))})`}
+              >
+                ← {formatRelativeTime(dep.startTime, new Date(now))} {dep.title}
               </span>
             )}
             {isActive && (

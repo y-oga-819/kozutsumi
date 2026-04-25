@@ -36,6 +36,8 @@ type TaskStackProps = {
   pendingTasks: Task[];
   doneTasks: Task[];
   topTimer: TopTimerBinding;
+  /** 現在時刻 (ms)。依存イベントの相対時刻 / 直近判定で使う。0 は SSR 時の placeholder。 */
+  now: number;
   onReorder: (from: number, to: number) => void;
   onToggleDone: (id: string) => void;
   onOpenDetail: (id: string) => void;
@@ -46,6 +48,7 @@ export function TaskStack({
   pendingTasks,
   doneTasks,
   topTimer,
+  now,
   onReorder,
   onToggleDone,
   onOpenDetail,
@@ -75,6 +78,7 @@ export function TaskStack({
               <TopTaskCard
                 task={task}
                 events={events}
+                now={now}
                 isBeingDragged={isBeingDragged}
                 elapsedSeconds={topTimer.elapsedSeconds}
                 pauseReason={topTimer.pauseReason}
@@ -88,6 +92,8 @@ export function TaskStack({
             ) : (
               <TaskRow
                 task={task}
+                events={events}
+                now={now}
                 isBeingDragged={isBeingDragged}
                 onPointerDown={(e) => handlePointerDown(idx, e)}
                 onClick={() => onOpenDetail(task.id)}

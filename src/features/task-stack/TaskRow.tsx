@@ -1,21 +1,45 @@
 import type { Task } from "../../entities/task/types";
+import type { Event } from "../../entities/event/types";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
-import { fmtDuration } from "../../shared/lib/time";
+import {
+  IMMINENT_THRESHOLD_MS,
+  fmtDuration,
+  formatRelativeTime,
+} from "../../shared/lib/time";
 import { Grip } from "./Grip";
 
 type TaskRowProps = {
   task: Task;
+  events: readonly Event[];
+  /** 現在時刻 (ms)。依存イベントの相対時刻 / 直近判定で使う。0 は SSR placeholder。 */
+  now: number;
   isBeingDragged: boolean;
   onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
   onClick: () => void;
   onToggleDone: () => void;
 };
 
-export function TaskRow({ task, isBeingDragged, onPointerDown, onClick, onToggleDone }: TaskRowProps) {
+export function TaskRow({
+  task,
+  events,
+  now,
+  isBeingDragged,
+  onPointerDown,
+  onClick,
+  onToggleDone,
+}: TaskRowProps) {
   const { projectsById } = useProjects();
   const proj = getProject(projectsById, task.projectId);
+  const dep = task.dependsOnEventId
+    ? events.find((e) => e.id === task.dependsOnEventId)
+    : null;
+  const depImminent =
+    dep !== null &&
+    dep !== undefined &&
+    now > 0 &&
+    new Date(dep.startTime).getTime() - now <= IMMINENT_THRESHOLD_MS;
 
   return (
     <div
@@ -40,8 +64,17 @@ export function TaskRow({ task, isBeingDragged, onPointerDown, onClick, onToggle
       <span className="flex-1 truncate font-jp text-[12px] text-fg-muted">
         {task.title}
       </span>
-      {task.dependsOnEventId && (
-        <span className="text-[8px] text-fg-subtle">⏱</span>
+      {dep && (
+        <span
+          className={`max-w-[140px] shrink-0 truncate rounded-[3px] px-1 py-px font-jp text-[8px] text-accent-amber ${
+            depImminent
+              ? "bg-[#E85D0440] font-semibold"
+              : "bg-[#E85D0415]"
+          }`}
+          title={`${dep.title} (${formatRelativeTime(dep.startTime, new Date(now))})`}
+        >
+          ← {formatRelativeTime(dep.startTime, new Date(now))} {dep.title}
+        </span>
       )}
       {task.estimatedMinutes !== null && (
         <span className="text-[9px] tabular-nums text-fg-faint">
