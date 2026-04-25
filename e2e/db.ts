@@ -128,10 +128,35 @@ export type TaskRow = {
   user_id: string;
   project_id: string | null;
   title: string;
+  body: string;
+  estimated_minutes: number | null;
   status: "idle" | "active" | "paused" | "done";
   stack_order: number | null;
   depends_on_event_id: string | null;
   completed_at: string | null;
+};
+
+export type ProjectRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  is_primary: boolean;
+  created_at: string;
+};
+
+export type EventRow = {
+  id: string;
+  user_id: string;
+  title: string;
+  start_time: string;
+  end_time: string;
+  project_id: string | null;
+  meet_url: string | null;
+  has_attachments: boolean;
+  description: string;
+  source: "manual" | "google_calendar";
+  external_id: string | null;
 };
 
 /** ユーザーの action_logs を created_at 昇順で取得する。 */
@@ -215,6 +240,40 @@ export async function getTaskByTitle(
     throw new Error(`[e2e] getTaskByTitle(${title}) failed: ${error?.message ?? "not found"}`);
   }
   return data as TaskRow;
+}
+
+export async function getProjectByName(
+  admin: SupabaseClient,
+  userId: string,
+  name: string,
+): Promise<ProjectRow> {
+  const { data, error } = await admin
+    .from("projects")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("name", name)
+    .single();
+  if (error || !data) {
+    throw new Error(`[e2e] getProjectByName(${name}) failed: ${error?.message ?? "not found"}`);
+  }
+  return data as ProjectRow;
+}
+
+export async function getEventByTitle(
+  admin: SupabaseClient,
+  userId: string,
+  title: string,
+): Promise<EventRow> {
+  const { data, error } = await admin
+    .from("events")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("title", title)
+    .single();
+  if (error || !data) {
+    throw new Error(`[e2e] getEventByTitle(${title}) failed: ${error?.message ?? "not found"}`);
+  }
+  return data as EventRow;
 }
 
 /**
