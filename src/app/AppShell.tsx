@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type QueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -39,10 +34,7 @@ import {
   useProjectGateway,
   useTaskGateway,
 } from "@/shared/gateway/GatewayContext";
-import {
-  readSampleDataMode,
-  writeSampleDataMode,
-} from "@/shared/lib/sample-data";
+import { readSampleDataMode, writeSampleDataMode } from "@/shared/lib/sample-data";
 import { isDone } from "@/shared/lib/task";
 import { todayIso } from "@/shared/lib/time";
 
@@ -90,10 +82,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
     queryFn: () => eventGateway.list(),
   });
 
-  const projects = useMemo(
-    () => projectsQuery.data ?? [],
-    [projectsQuery.data],
-  );
+  const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
   const events = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data]);
 
@@ -193,8 +182,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
   });
 
   const updateBodyMutation = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: string }) =>
-      taskGateway.update(id, { body }),
+    mutationFn: ({ id, body }: { id: string; body: string }) => taskGateway.update(id, { body }),
     onMutate: async ({ id, body }) => {
       await queryClient.cancelQueries({ queryKey: keys.tasks });
       const previous = queryClient.getQueryData<Task[]>(keys.tasks);
@@ -214,13 +202,8 @@ export function AppShell({ initialView, user }: AppShellProps) {
   // P2-5 (#53): タスクの依存イベント設定。set / cleared を action_log に残し、
   // Phase 4 で「依存設定が着手順に効いたか」の分析データに使う。
   const updateDependencyMutation = useMutation({
-    mutationFn: ({
-      id,
-      dependsOnEventId,
-    }: {
-      id: string;
-      dependsOnEventId: string | null;
-    }) => taskGateway.update(id, { dependsOnEventId }),
+    mutationFn: ({ id, dependsOnEventId }: { id: string; dependsOnEventId: string | null }) =>
+      taskGateway.update(id, { dependsOnEventId }),
     onMutate: async ({ id, dependsOnEventId }) => {
       await queryClient.cancelQueries({ queryKey: keys.tasks });
       const previous = queryClient.getQueryData<Task[]>(keys.tasks);
@@ -238,9 +221,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
         }
       }
       queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
-        (prev ?? []).map((t) =>
-          t.id === id ? { ...t, dependsOnEventId } : t,
-        ),
+        (prev ?? []).map((t) => (t.id === id ? { ...t, dependsOnEventId } : t)),
       );
       return { previous };
     },
@@ -382,10 +363,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
     }
   }, [seedGateways, queryClient]);
 
-  const pendingTasks = useMemo(
-    () => tasks.filter((t) => !isDone(t)),
-    [tasks],
-  );
+  const pendingTasks = useMemo(() => tasks.filter((t) => !isDone(t)), [tasks]);
   const doneTasks = useMemo(() => tasks.filter((t) => isDone(t)), [tasks]);
   const detailTask = detailId ? tasks.find((t) => t.id === detailId) : null;
 
@@ -457,9 +435,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
                   key={tab.key}
                   href={tab.href}
                   className={`cursor-pointer rounded-[4px] px-3.5 py-1 text-[11px] font-medium no-underline ${
-                    active
-                      ? "bg-bg-divider text-fg-emphasized"
-                      : "bg-transparent text-fg-weak"
+                    active ? "bg-bg-divider text-fg-emphasized" : "bg-transparent text-fg-weak"
                   }`}
                 >
                   {tab.label}
@@ -480,10 +456,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
           />
         </div>
 
-        <ReauthBanner
-          visible={calendarSync.needsReauth}
-          onDismiss={calendarSync.dismissReauth}
-        />
+        <ReauthBanner visible={calendarSync.needsReauth} onDismiss={calendarSync.dismissReauth} />
 
         {view === "stack" ? (
           <StackView
@@ -500,10 +473,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
             onOpenEvent={setEventDetailId}
           />
         ) : (
-          <TreeView
-            historyData={historyData}
-            projectOrder={projectOrderForTree}
-          />
+          <TreeView historyData={historyData} projectOrder={projectOrderForTree} />
         )}
 
         {detailTask && (
@@ -557,12 +527,8 @@ export function AppShell({ initialView, user }: AppShellProps) {
         ) : null}
 
         {pauseModalOpen ? (
-          <PauseReasonModal
-            onSelect={handlePauseSelect}
-            onClose={() => setPauseModalOpen(false)}
-          />
+          <PauseReasonModal onSelect={handlePauseSelect} onClose={() => setPauseModalOpen(false)} />
         ) : null}
-
       </div>
     </ProjectsProvider>
   );
@@ -609,7 +575,10 @@ function mergeTreeProjects(
 // history (mock) に現れる slug 群だけ埋めれば十分。
 const TREE_FALLBACK_BY_SLUG: ReadonlyMap<string, Project> = new Map([
   ["career", { id: "career", name: "転職活動", color: "#E85D04", isPrimary: false, createdAt: "" }],
-  ["loadtest", { id: "loadtest", name: "負荷試験", color: "#0096C7", isPrimary: false, createdAt: "" }],
+  [
+    "loadtest",
+    { id: "loadtest", name: "負荷試験", color: "#0096C7", isPrimary: false, createdAt: "" },
+  ],
   ["slo", { id: "slo", name: "SLO推進", color: "#2D9F45", isPrimary: true, createdAt: "" }],
   ["tasuki", { id: "tasuki", name: "Tasuki", color: "#9B5DE5", isPrimary: false, createdAt: "" }],
 ]);
@@ -643,12 +612,7 @@ function StackView({
 }: StackViewProps) {
   return (
     <div className="pb-[100px]">
-      <DayTimeline
-        events={events}
-        nowMin={nowMin}
-        today={today}
-        onOpenEvent={onOpenEvent}
-      />
+      <DayTimeline events={events} nowMin={nowMin} today={today} onOpenEvent={onOpenEvent} />
       <TaskStack
         events={events}
         pendingTasks={pendingTasks}

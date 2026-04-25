@@ -17,9 +17,7 @@ export function GoogleCalendarBadge({ size = "sm", className }: Props) {
       aria-label="Google Calendar から同期"
       title="Google Calendar から同期"
       className={`inline-flex shrink-0 items-center justify-center rounded-[3px] border border-bg-divider bg-bg-elevated font-jp font-semibold leading-none text-fg-subtle ${
-        size === "md"
-          ? "h-[18px] w-[18px] text-[10px]"
-          : "h-[14px] w-[14px] text-[8px]"
+        size === "md" ? "h-[18px] w-[18px] text-[10px]" : "h-[14px] w-[14px] text-[8px]"
       } ${className ?? ""}`}
       data-testid="google-calendar-badge"
     >

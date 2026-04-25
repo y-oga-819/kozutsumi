@@ -120,18 +120,14 @@ describe("EventDetailPanel", () => {
         onChangeProject: vi.fn(),
       });
       expect(queryByTestId("google-calendar-badge")).toBeNull();
-      expect(
-        queryByText(/Google Calendar で編集した内容は次回同期で反映されます/),
-      ).toBeNull();
+      expect(queryByText(/Google Calendar で編集した内容は次回同期で反映されます/)).toBeNull();
       expect(queryByText(/を変更$/)).toBeNull();
     });
 
     test("google_calendar: Google バッジと同期補足テキストを出す", () => {
       const { getByTestId, getByText } = renderPanel({ event: googleEvent });
       expect(getByTestId("google-calendar-badge")).toBeTruthy();
-      expect(
-        getByText(/Google Calendar で編集した内容は次回同期で反映されます/),
-      ).toBeTruthy();
+      expect(getByText(/Google Calendar で編集した内容は次回同期で反映されます/)).toBeTruthy();
     });
 
     test("google_calendar: onChangeProject 未指定なら project 編集 UI を出さない", () => {

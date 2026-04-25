@@ -1,12 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-  COL,
-  GRAPH_LEFT,
-  groupByDateDesc,
-  laneLeftPx,
-  lanesWidthPx,
-  nodeCenterPx,
-} from "./layout";
+import { COL, GRAPH_LEFT, groupByDateDesc, laneLeftPx, lanesWidthPx, nodeCenterPx } from "./layout";
 
 describe("laneLeftPx / nodeCenterPx / lanesWidthPx", () => {
   test("プロジェクトインデックス 0 のレーン位置", () => {
@@ -33,11 +26,7 @@ describe("groupByDateDesc", () => {
       { id: "h4", date: "2026-04-06", title: "t4", projectId: "tasuki" },
     ];
     const result = groupByDateDesc(history);
-    expect(result.map(([date]) => date)).toEqual([
-      "2026-04-07",
-      "2026-04-06",
-      "2026-04-05",
-    ]);
+    expect(result.map(([date]) => date)).toEqual(["2026-04-07", "2026-04-06", "2026-04-05"]);
     expect(result[2][1]).toHaveLength(2);
   });
 });

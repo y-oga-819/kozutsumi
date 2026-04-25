@@ -19,13 +19,7 @@ vi.mock("@/shared/supabase/client", () => ({
   }),
 }));
 
-import {
-  ACTION_TYPES,
-  __resetLoggerClientForTest,
-  clearLog,
-  getLog,
-  log,
-} from "./logger";
+import { ACTION_TYPES, __resetLoggerClientForTest, clearLog, getLog, log } from "./logger";
 
 function flushMicrotasks() {
   // persist() は fire-and-forget で複数段の await を含むため、

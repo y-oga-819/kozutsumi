@@ -21,9 +21,7 @@ function makeSupabase(overrides: {
   upsertError?: { message: string } | null;
 }) {
   const userId = overrides.getUserId === undefined ? "user-1" : overrides.getUserId;
-  const maybeSingle = vi.fn(async () =>
-    overrides.selectResult ?? { data: null, error: null },
-  );
+  const maybeSingle = vi.fn(async () => overrides.selectResult ?? { data: null, error: null });
   const eqSelect = vi.fn(() => ({ maybeSingle }));
   const select = vi.fn(() => ({ eq: eqSelect }));
   const upsert = vi.fn<
@@ -67,9 +65,7 @@ describe("SupabaseCalendarSyncStateGateway.get", () => {
       syncToken: "tok-abc",
     });
     expect(from).toHaveBeenCalledWith("user_calendar_sync_state");
-    expect(select).toHaveBeenCalledWith(
-      "user_id, last_synced_at, sync_token, updated_at",
-    );
+    expect(select).toHaveBeenCalledWith("user_id, last_synced_at, sync_token, updated_at");
     expect(eqSelect).toHaveBeenCalledWith("user_id", "user-1");
   });
 

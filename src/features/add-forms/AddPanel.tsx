@@ -46,10 +46,7 @@ export function AddPanel({
 
   return (
     <div className="fixed inset-0 z-[210] flex flex-col">
-      <div
-        onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-[4px]"
-      />
+      <div onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-[4px]" />
       <div className="relative mt-auto flex max-h-[85vh] animate-panel-slide-up flex-col rounded-t-2xl bg-bg-surface">
         <div className="flex justify-center pb-1 pt-2.5">
           <div className="h-[3px] w-8 rounded-[2px] bg-bg-divider" />
@@ -64,9 +61,7 @@ export function AddPanel({
                 key={t.key}
                 onClick={() => setTab(t.key)}
                 className={`rounded-t-md px-3 py-1.5 font-jp text-[11px] font-medium ${
-                  active
-                    ? "bg-bg-elevated text-fg-emphasized"
-                    : "bg-transparent text-fg-weak"
+                  active ? "bg-bg-elevated text-fg-emphasized" : "bg-transparent text-fg-weak"
                 }`}
               >
                 {t.label}
@@ -91,15 +86,9 @@ export function AddPanel({
             )
           ) : null}
           {tab === "event" ? (
-            <EventForm
-              projects={projects}
-              onSubmit={onCreateEvent}
-              onClose={onClose}
-            />
+            <EventForm projects={projects} onSubmit={onCreateEvent} onClose={onClose} />
           ) : null}
-          {tab === "project" ? (
-            <ProjectForm onSubmit={onCreateProject} onClose={onClose} />
-          ) : null}
+          {tab === "project" ? <ProjectForm onSubmit={onCreateProject} onClose={onClose} /> : null}
         </div>
       </div>
     </div>
@@ -109,9 +98,7 @@ export function AddPanel({
 function EmptyProjectsNotice({ onSwitch }: { onSwitch: () => void }) {
   return (
     <div className="flex flex-col items-center gap-3 py-6 text-center">
-      <p className="font-jp text-[12px] text-fg-muted">
-        タスクにはプロジェクトが必要です。
-      </p>
+      <p className="font-jp text-[12px] text-fg-muted">タスクにはプロジェクトが必要です。</p>
       <button
         type="button"
         onClick={onSwitch}

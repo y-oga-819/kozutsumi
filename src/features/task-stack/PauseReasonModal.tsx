@@ -22,10 +22,7 @@ const OPTIONS: { value: PauseReason; label: string; hint: string }[] = [
 export function PauseReasonModal({ onSelect, onClose }: PauseReasonModalProps) {
   return (
     <div className="fixed inset-0 z-[220] flex flex-col">
-      <div
-        onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-[4px]"
-      />
+      <div onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-[4px]" />
       <div className="relative mt-auto flex animate-panel-slide-up flex-col rounded-t-2xl bg-bg-surface">
         <div className="flex justify-center pb-1 pt-2.5">
           <div className="h-[3px] w-8 rounded-[2px] bg-bg-divider" />
@@ -42,12 +39,8 @@ export function PauseReasonModal({ onSelect, onClose }: PauseReasonModalProps) {
                 onClick={() => onSelect(opt.value)}
                 className="flex items-center justify-between rounded-lg bg-bg-elevated px-4 py-3 text-left"
               >
-                <span className="font-jp text-[13px] text-fg-strong">
-                  {opt.label}
-                </span>
-                <span className="font-jp text-[10px] text-fg-weak">
-                  {opt.hint}
-                </span>
+                <span className="font-jp text-[13px] text-fg-strong">{opt.label}</span>
+                <span className="font-jp text-[10px] text-fg-weak">{opt.hint}</span>
               </button>
             ))}
           </div>

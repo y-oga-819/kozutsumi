@@ -12,10 +12,7 @@ import {
 import { RefreshTokenExpiredError } from "@/shared/google/token";
 import type { Database } from "@/shared/types/database";
 
-import type {
-  EventGateway,
-  UpsertGoogleCalendarEventInput,
-} from "./gateway";
+import type { EventGateway, UpsertGoogleCalendarEventInput } from "./gateway";
 import {
   extractMeetUrl,
   mapGoogleEventToUpsertInput,
@@ -68,9 +65,7 @@ describe("extractMeetUrl", () => {
         id: "e1",
         hangoutLink: "https://meet.google.com/abc-defg-hij",
         conferenceData: {
-          entryPoints: [
-            { entryPointType: "video", uri: "https://other.example/video" },
-          ],
+          entryPoints: [{ entryPointType: "video", uri: "https://other.example/video" }],
         },
       }),
     ).toBe("https://meet.google.com/abc-defg-hij");
@@ -137,9 +132,7 @@ describe("mapGoogleEventToUpsertInput", () => {
   });
 
   test("時刻が無い壊れたイベントは null を返す", () => {
-    expect(
-      mapGoogleEventToUpsertInput({ id: "bad", start: {}, end: {} }),
-    ).toBeNull();
+    expect(mapGoogleEventToUpsertInput({ id: "bad", start: {}, end: {} })).toBeNull();
   });
 });
 
@@ -167,10 +160,7 @@ describe("partitionEvents", () => {
     const result = partitionEvents(events);
 
     expect(result.cancelled).toEqual(["deleted-1", "deleted-2"]);
-    expect(result.upserts.map((u) => u.externalId)).toEqual([
-      "active-1",
-      "active-2",
-    ]);
+    expect(result.upserts.map((u) => u.externalId)).toEqual(["active-1", "active-2"]);
   });
 });
 
@@ -178,9 +168,7 @@ describe("partitionEvents", () => {
 // syncGoogleCalendar orchestration
 // =====================================================================
 
-type ListEventsFn = (
-  params: ListEventsParams,
-) => Promise<GoogleCalendarEventsListResponse>;
+type ListEventsFn = (params: ListEventsParams) => Promise<GoogleCalendarEventsListResponse>;
 
 function makeFakeGateway() {
   const upsertCalls: UpsertGoogleCalendarEventInput[][] = [];
@@ -203,10 +191,12 @@ function makeFakeGateway() {
   return { gateway, upsertCalls, deleteCalls };
 }
 
-function makeFakeSyncStateGateway(initial: {
-  lastSyncedAt: string;
-  syncToken: string | null;
-} | null = null) {
+function makeFakeSyncStateGateway(
+  initial: {
+    lastSyncedAt: string;
+    syncToken: string | null;
+  } | null = null,
+) {
   const get = vi.fn<() => Promise<typeof initial>>(async () => initial);
   const saveSyncState = vi.fn<
     (input: { lastSyncedAt: string; syncToken: string | null }) => Promise<void>
@@ -241,8 +231,7 @@ function makeDeps(overrides: {
 }) {
   return {
     gateway: overrides.gateway,
-    syncStateGateway:
-      overrides.syncStateGateway ?? makeFakeSyncStateGateway().gateway,
+    syncStateGateway: overrides.syncStateGateway ?? makeFakeSyncStateGateway().gateway,
     listEvents: overrides.listEvents,
     getValidAccessToken: vi.fn(async () => ({
       accessToken: overrides.accessToken ?? "t",
@@ -311,21 +300,13 @@ describe("syncGoogleCalendar (full sync)", () => {
         nextSyncToken: "final-sync",
       });
 
-    const result = await syncGoogleCalendar(
-      FAKE_SUPABASE,
-      makeDeps({ gateway, listEvents }),
-    );
+    const result = await syncGoogleCalendar(FAKE_SUPABASE, makeDeps({ gateway, listEvents }));
 
     expect(result.synced).toBe(4);
     expect(listEvents).toHaveBeenCalledTimes(3);
     expect(listEvents.mock.calls[1]![0].pageToken).toBe("tok-2");
     expect(listEvents.mock.calls[2]![0].pageToken).toBe("tok-3");
-    expect(upsertCalls[0]!.map((e) => e.externalId)).toEqual([
-      "p1-a",
-      "p1-b",
-      "p2-a",
-      "p3-a",
-    ]);
+    expect(upsertCalls[0]!.map((e) => e.externalId)).toEqual(["p1-a", "p1-b", "p2-a", "p3-a"]);
   });
 
   test("cancelled イベントは delete 側に集約される", async () => {
@@ -338,10 +319,7 @@ describe("syncGoogleCalendar (full sync)", () => {
       ],
     }));
 
-    const result = await syncGoogleCalendar(
-      FAKE_SUPABASE,
-      makeDeps({ gateway, listEvents }),
-    );
+    const result = await syncGoogleCalendar(FAKE_SUPABASE, makeDeps({ gateway, listEvents }));
 
     expect(result.synced).toBe(1);
     expect(result.deleted).toBe(2);
@@ -353,10 +331,7 @@ describe("syncGoogleCalendar (full sync)", () => {
     const { gateway, upsertCalls, deleteCalls } = makeFakeGateway();
     const listEvents = vi.fn<ListEventsFn>(async () => ({ items: [] }));
 
-    const result = await syncGoogleCalendar(
-      FAKE_SUPABASE,
-      makeDeps({ gateway, listEvents }),
-    );
+    const result = await syncGoogleCalendar(FAKE_SUPABASE, makeDeps({ gateway, listEvents }));
 
     expect(result).toMatchObject({ synced: 0, deleted: 0 });
     expect(upsertCalls).toHaveLength(0);
@@ -439,8 +414,7 @@ describe("syncGoogleCalendar (full sync)", () => {
 
   test("成功時は last_synced_at + nextSyncToken を atomic に永続化する", async () => {
     const { gateway } = makeFakeGateway();
-    const { gateway: syncStateGateway, saveSyncState } =
-      makeFakeSyncStateGateway();
+    const { gateway: syncStateGateway, saveSyncState } = makeFakeSyncStateGateway();
     const listEvents = vi.fn<ListEventsFn>(async () => ({
       items: [makeActiveEvent("a")],
       nextSyncToken: "fresh-tok",
@@ -466,14 +440,10 @@ describe("syncGoogleCalendar (full sync)", () => {
 
   test("nextSyncToken が無いレスポンスは syncToken: null で保存する", async () => {
     const { gateway } = makeFakeGateway();
-    const { gateway: syncStateGateway, saveSyncState } =
-      makeFakeSyncStateGateway();
+    const { gateway: syncStateGateway, saveSyncState } = makeFakeSyncStateGateway();
     const listEvents = vi.fn<ListEventsFn>(async () => ({ items: [] }));
 
-    await syncGoogleCalendar(
-      FAKE_SUPABASE,
-      makeDeps({ gateway, syncStateGateway, listEvents }),
-    );
+    await syncGoogleCalendar(FAKE_SUPABASE, makeDeps({ gateway, syncStateGateway, listEvents }));
 
     expect(saveSyncState).toHaveBeenCalledWith({
       lastSyncedAt: expect.any(String),
@@ -483,11 +453,10 @@ describe("syncGoogleCalendar (full sync)", () => {
 
   test("401 retry 後も失敗する場合は sync state を上書きしない (stale syncToken を保持)", async () => {
     const { gateway } = makeFakeGateway();
-    const { gateway: syncStateGateway, saveSyncState } =
-      makeFakeSyncStateGateway({
-        lastSyncedAt: "2026-04-23T00:00:00.000Z",
-        syncToken: "previous",
-      });
+    const { gateway: syncStateGateway, saveSyncState } = makeFakeSyncStateGateway({
+      lastSyncedAt: "2026-04-23T00:00:00.000Z",
+      syncToken: "previous",
+    });
     const listEvents = vi.fn<ListEventsFn>(async () => {
       throw new GoogleApiUnauthorizedError();
     });
@@ -515,11 +484,10 @@ describe("syncGoogleCalendar (full sync)", () => {
 describe("syncGoogleCalendar (incremental sync via syncToken)", () => {
   test("syncToken が DB にあれば incremental として呼び出す (timeMin/timeMax/orderBy を送らない)", async () => {
     const { gateway, upsertCalls } = makeFakeGateway();
-    const { gateway: syncStateGateway, saveSyncState } =
-      makeFakeSyncStateGateway({
-        lastSyncedAt: "2026-04-23T00:00:00.000Z",
-        syncToken: "tok-prev",
-      });
+    const { gateway: syncStateGateway, saveSyncState } = makeFakeSyncStateGateway({
+      lastSyncedAt: "2026-04-23T00:00:00.000Z",
+      syncToken: "tok-prev",
+    });
     const listEvents = vi.fn<ListEventsFn>(async () => ({
       items: [makeActiveEvent("incr-1")],
       nextSyncToken: "tok-next",
@@ -558,10 +526,7 @@ describe("syncGoogleCalendar (incremental sync via syncToken)", () => {
       syncToken: "tok-prev",
     });
     const listEvents = vi.fn<ListEventsFn>(async () => ({
-      items: [
-        { id: "gone-incr", status: "cancelled" },
-        makeActiveEvent("kept"),
-      ],
+      items: [{ id: "gone-incr", status: "cancelled" }, makeActiveEvent("kept")],
       nextSyncToken: "tok-next",
     }));
 
@@ -576,11 +541,10 @@ describe("syncGoogleCalendar (incremental sync via syncToken)", () => {
 
   test("incremental sync のページングは中間ページの nextSyncToken を無視し最終ページのみ採用する", async () => {
     const { gateway } = makeFakeGateway();
-    const { gateway: syncStateGateway, saveSyncState } =
-      makeFakeSyncStateGateway({
-        lastSyncedAt: "2026-04-23T00:00:00.000Z",
-        syncToken: "tok-prev",
-      });
+    const { gateway: syncStateGateway, saveSyncState } = makeFakeSyncStateGateway({
+      lastSyncedAt: "2026-04-23T00:00:00.000Z",
+      syncToken: "tok-prev",
+    });
     const listEvents = vi.fn<ListEventsFn>();
     listEvents
       .mockResolvedValueOnce({
@@ -594,10 +558,7 @@ describe("syncGoogleCalendar (incremental sync via syncToken)", () => {
         nextSyncToken: "final-only",
       });
 
-    await syncGoogleCalendar(
-      FAKE_SUPABASE,
-      makeDeps({ gateway, syncStateGateway, listEvents }),
-    );
+    await syncGoogleCalendar(FAKE_SUPABASE, makeDeps({ gateway, syncStateGateway, listEvents }));
 
     expect(saveSyncState).toHaveBeenCalledWith({
       lastSyncedAt: expect.any(String),
@@ -607,16 +568,13 @@ describe("syncGoogleCalendar (incremental sync via syncToken)", () => {
 
   test("410 Gone を受けたら syncToken を捨てて full sync に fallback する", async () => {
     const { gateway, upsertCalls } = makeFakeGateway();
-    const { gateway: syncStateGateway, saveSyncState } =
-      makeFakeSyncStateGateway({
-        lastSyncedAt: "2026-04-23T00:00:00.000Z",
-        syncToken: "tok-stale",
-      });
+    const { gateway: syncStateGateway, saveSyncState } = makeFakeSyncStateGateway({
+      lastSyncedAt: "2026-04-23T00:00:00.000Z",
+      syncToken: "tok-stale",
+    });
     const listEvents = vi.fn<ListEventsFn>();
     listEvents
-      .mockRejectedValueOnce(
-        new GoogleApiError("Gone", 410, { error: "fullSyncRequired" }),
-      )
+      .mockRejectedValueOnce(new GoogleApiError("Gone", 410, { error: "fullSyncRequired" }))
       .mockResolvedValueOnce({
         items: [makeActiveEvent("after-fallback")],
         nextSyncToken: "fresh-after-fallback",
@@ -642,9 +600,7 @@ describe("syncGoogleCalendar (incremental sync via syncToken)", () => {
     expect(listEvents.mock.calls[1]![0].timeMin).toBeDefined();
     expect(listEvents.mock.calls[1]![0].timeMax).toBeDefined();
     expect(listEvents.mock.calls[1]![0].orderBy).toBe("startTime");
-    expect(upsertCalls[0]!.map((e) => e.externalId)).toEqual([
-      "after-fallback",
-    ]);
+    expect(upsertCalls[0]!.map((e) => e.externalId)).toEqual(["after-fallback"]);
     // fallback 後の full sync で得た新しい syncToken を保存
     expect(saveSyncState).toHaveBeenCalledWith({
       lastSyncedAt: "2026-04-24T05:00:00.000Z",
@@ -660,10 +616,7 @@ describe("syncGoogleCalendar (incremental sync via syncToken)", () => {
     });
 
     await expect(
-      syncGoogleCalendar(
-        FAKE_SUPABASE,
-        makeDeps({ gateway, syncStateGateway, listEvents }),
-      ),
+      syncGoogleCalendar(FAKE_SUPABASE, makeDeps({ gateway, syncStateGateway, listEvents })),
     ).rejects.toBeInstanceOf(GoogleApiError);
 
     expect(listEvents).toHaveBeenCalledTimes(1);
@@ -680,10 +633,7 @@ describe("syncGoogleCalendar (incremental sync via syncToken)", () => {
     });
 
     await expect(
-      syncGoogleCalendar(
-        FAKE_SUPABASE,
-        makeDeps({ gateway, syncStateGateway, listEvents }),
-      ),
+      syncGoogleCalendar(FAKE_SUPABASE, makeDeps({ gateway, syncStateGateway, listEvents })),
     ).rejects.toBeInstanceOf(GoogleApiError);
 
     // 1 回目 incremental → 410, 2 回目 full → また 410 で throw

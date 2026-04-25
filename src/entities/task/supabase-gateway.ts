@@ -1,12 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ACTION_TYPES, log } from "@/entities/action-log/logger";
-import type {
-  Database,
-  Tables,
-  TablesInsert,
-  TablesUpdate,
-} from "@/shared/types/database";
+import type { Database, Tables, TablesInsert, TablesUpdate } from "@/shared/types/database";
 
 import type { CreateTaskInput, TaskGateway, UpdateTaskInput } from "./gateway";
 import type { Task } from "./types";
@@ -64,11 +59,7 @@ export class SupabaseTaskGateway implements TaskGateway {
       is_interruption: input.isInterruption ?? false,
       parent_task_id: input.parentTaskId ?? null,
     };
-    const { data, error } = await this.supabase
-      .from("tasks")
-      .insert(payload)
-      .select("*")
-      .single();
+    const { data, error } = await this.supabase.from("tasks").insert(payload).select("*").single();
     if (error) throw error;
     return fromRow(data);
   }
@@ -78,16 +69,12 @@ export class SupabaseTaskGateway implements TaskGateway {
     if (patch.projectId !== undefined) update.project_id = patch.projectId;
     if (patch.title !== undefined) update.title = patch.title;
     if (patch.body !== undefined) update.body = patch.body;
-    if (patch.estimatedMinutes !== undefined)
-      update.estimated_minutes = patch.estimatedMinutes;
+    if (patch.estimatedMinutes !== undefined) update.estimated_minutes = patch.estimatedMinutes;
     if (patch.status !== undefined) update.status = patch.status;
     if (patch.stackOrder !== undefined) update.stack_order = patch.stackOrder;
-    if (patch.dependsOnEventId !== undefined)
-      update.depends_on_event_id = patch.dependsOnEventId;
-    if (patch.isInterruption !== undefined)
-      update.is_interruption = patch.isInterruption;
-    if (patch.completedAt !== undefined)
-      update.completed_at = patch.completedAt;
+    if (patch.dependsOnEventId !== undefined) update.depends_on_event_id = patch.dependsOnEventId;
+    if (patch.isInterruption !== undefined) update.is_interruption = patch.isInterruption;
+    if (patch.completedAt !== undefined) update.completed_at = patch.completedAt;
     const { data, error } = await this.supabase
       .from("tasks")
       .update(update)
@@ -98,9 +85,7 @@ export class SupabaseTaskGateway implements TaskGateway {
     return fromRow(data);
   }
 
-  async reorder(
-    entries: readonly { id: string; stackOrder: number | null }[],
-  ): Promise<void> {
+  async reorder(entries: readonly { id: string; stackOrder: number | null }[]): Promise<void> {
     if (entries.length === 0) return;
     // 並列 update: 個別 patch を Promise.all で流す。件数は高々 20〜30 件想定。
     // 1 call で済ませるには upsert + on_conflict だが、全カラムを送る必要が出るので採用しない。
@@ -123,10 +108,7 @@ export class SupabaseTaskGateway implements TaskGateway {
 
   async deleteAllForCurrentUser(): Promise<void> {
     const uid = await getUserId(this.supabase);
-    const { error } = await this.supabase
-      .from("tasks")
-      .delete()
-      .eq("user_id", uid);
+    const { error } = await this.supabase.from("tasks").delete().eq("user_id", uid);
     if (error) throw error;
   }
 }

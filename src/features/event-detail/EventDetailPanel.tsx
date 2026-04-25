@@ -4,11 +4,7 @@ import { EVENT_SOURCE, type Event } from "../../entities/event/types";
 import { GoogleCalendarBadge } from "../../entities/event/GoogleCalendarBadge";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
-import {
-  fmtDuration,
-  formatClock,
-  minutesOfDay,
-} from "../../shared/lib/time";
+import { fmtDuration, formatClock, minutesOfDay } from "../../shared/lib/time";
 import { renderMarkdown } from "../../shared/lib/markdown";
 
 type EventDetailPanelProps = {
@@ -21,11 +17,7 @@ type EventDetailPanelProps = {
   onChangeProject?: (id: string, projectId: string | null) => void;
 };
 
-export function EventDetailPanel({
-  event,
-  onClose,
-  onChangeProject,
-}: EventDetailPanelProps) {
+export function EventDetailPanel({ event, onClose, onChangeProject }: EventDetailPanelProps) {
   const { projects, projectsById } = useProjects();
   const proj = event.projectId ? getProject(projectsById, event.projectId) : null;
   const evColor = proj ? proj.color : "#52525b";
@@ -46,10 +38,7 @@ export function EventDetailPanel({
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col">
-      <div
-        onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-[4px]"
-      />
+      <div onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-[4px]" />
       <div
         className="relative mt-auto flex max-h-[85vh] animate-panel-slide-up flex-col rounded-t-2xl bg-bg-surface"
         style={{
@@ -62,17 +51,8 @@ export function EventDetailPanel({
 
         <div className="px-5 pb-3 pt-2">
           <div className="mb-2 flex items-center gap-2">
-            {proj && (
-              <div
-                className="h-2 w-2 rounded-full"
-                style={{ background: evColor }}
-              />
-            )}
-            {proj && (
-              <span className="font-jp text-[10px] text-fg-subtle">
-                {proj.name}
-              </span>
-            )}
+            {proj && <div className="h-2 w-2 rounded-full" style={{ background: evColor }} />}
+            {proj && <span className="font-jp text-[10px] text-fg-subtle">{proj.name}</span>}
             <span className="text-[10px] tabular-nums text-fg-weak">
               {formatClock(event.startTime)}–{formatClock(event.endTime)} ({fmtDuration(duration)})
             </span>
@@ -103,12 +83,7 @@ export function EventDetailPanel({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
-                <path
-                  d="M14 2L8 8"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
+                <path d="M14 2L8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 <path
                   d="M6 3H3V13H13V10"
                   stroke="currentColor"
@@ -132,12 +107,7 @@ export function EventDetailPanel({
                   strokeWidth="1.2"
                   strokeLinejoin="round"
                 />
-                <path
-                  d="M9 2V5H12"
-                  stroke="#52525b"
-                  strokeWidth="1.2"
-                  strokeLinejoin="round"
-                />
+                <path d="M9 2V5H12" stroke="#52525b" strokeWidth="1.2" strokeLinejoin="round" />
               </svg>
               添付資料あり
             </div>
@@ -147,9 +117,7 @@ export function EventDetailPanel({
         {canEditProject && (
           <div className="px-5 pb-2">
             <div className="flex items-center gap-2">
-              <span className="font-jp text-[10px] text-fg-weak">
-                プロジェクト
-              </span>
+              <span className="font-jp text-[10px] text-fg-weak">プロジェクト</span>
               {editingProject ? (
                 <select
                   autoFocus

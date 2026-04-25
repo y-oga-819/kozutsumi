@@ -1,11 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type {
-  Database,
-  Tables,
-  TablesInsert,
-  TablesUpdate,
-} from "@/shared/types/database";
+import type { Database, Tables, TablesInsert, TablesUpdate } from "@/shared/types/database";
 
 import type {
   CreateEventInput,
@@ -67,11 +62,7 @@ export class SupabaseEventGateway implements EventGateway {
       source: input.source ?? EVENT_SOURCE.MANUAL,
       external_id: input.externalId ?? null,
     };
-    const { data, error } = await this.supabase
-      .from("events")
-      .insert(payload)
-      .select("*")
-      .single();
+    const { data, error } = await this.supabase.from("events").insert(payload).select("*").single();
     if (error) throw error;
     return fromRow(data);
   }
@@ -89,9 +80,7 @@ export class SupabaseEventGateway implements EventGateway {
     if (touchesGoogleOwned) {
       const source = await this.fetchSource(id);
       if (source === EVENT_SOURCE.GOOGLE_CALENDAR) {
-        throw new Error(
-          "google_calendar event is read-only (only project_id can be updated)",
-        );
+        throw new Error("google_calendar event is read-only (only project_id can be updated)");
       }
     }
     const update: TablesUpdate<"events"> = {};
@@ -100,8 +89,7 @@ export class SupabaseEventGateway implements EventGateway {
     if (patch.endTime !== undefined) update.end_time = patch.endTime;
     if (patch.projectId !== undefined) update.project_id = patch.projectId;
     if (patch.meetUrl !== undefined) update.meet_url = patch.meetUrl;
-    if (patch.hasAttachments !== undefined)
-      update.has_attachments = patch.hasAttachments;
+    if (patch.hasAttachments !== undefined) update.has_attachments = patch.hasAttachments;
     if (patch.description !== undefined) update.description = patch.description;
     const { data, error } = await this.supabase
       .from("events")
@@ -141,16 +129,11 @@ export class SupabaseEventGateway implements EventGateway {
 
   async deleteAllForCurrentUser(): Promise<void> {
     const uid = await getUserId(this.supabase);
-    const { error } = await this.supabase
-      .from("events")
-      .delete()
-      .eq("user_id", uid);
+    const { error } = await this.supabase.from("events").delete().eq("user_id", uid);
     if (error) throw error;
   }
 
-  async upsertFromGoogleCalendar(
-    inputs: UpsertGoogleCalendarEventInput[],
-  ): Promise<number> {
+  async upsertFromGoogleCalendar(inputs: UpsertGoogleCalendarEventInput[]): Promise<number> {
     if (inputs.length === 0) return 0;
     const user_id = await getUserId(this.supabase);
     // project_id を payload に含めないことで、ON CONFLICT DO UPDATE SET ... から除外され、

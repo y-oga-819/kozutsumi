@@ -35,10 +35,7 @@ export function TaskForm({ projects, events, onSubmit, onClose }: TaskFormProps)
   const futureEvents = useMemo(() => {
     return [...events]
       .filter((ev) => new Date(ev.startTime).getTime() >= openedAt)
-      .sort(
-        (a, b) =>
-          new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
-      );
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   }, [events, openedAt]);
 
   const submit = async (e: React.FormEvent) => {
@@ -95,9 +92,7 @@ export function TaskForm({ projects, events, onSubmit, onClose }: TaskFormProps)
           onChange={(e) => setProjectId(e.target.value)}
           className="rounded border border-bg-divider bg-bg-elevated px-3 py-2 text-[13px] text-fg-default outline-none focus:border-accent-blue"
         >
-          {projects.length === 0 ? (
-            <option value="">プロジェクトがありません</option>
-          ) : null}
+          {projects.length === 0 ? <option value="">プロジェクトがありません</option> : null}
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -128,7 +123,7 @@ export function TaskForm({ projects, events, onSubmit, onClose }: TaskFormProps)
           <option value="">なし</option>
           {futureEvents.map((ev) => (
             <option key={ev.id} value={ev.id}>
-              {formatRelativeTime(ev.startTime, new Date(openedAt))}  {ev.title}
+              {formatRelativeTime(ev.startTime, new Date(openedAt))} {ev.title}
             </option>
           ))}
         </select>

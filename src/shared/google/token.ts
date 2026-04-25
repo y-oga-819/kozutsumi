@@ -27,21 +27,15 @@ export class RefreshTokenExpiredError extends Error {
   readonly name = "RefreshTokenExpiredError";
 }
 
-export async function getValidAccessToken(
-  supabase: SupabaseClient,
-): Promise<GoogleProviderAccess> {
+export async function getValidAccessToken(supabase: SupabaseClient): Promise<GoogleProviderAccess> {
   const { accessToken, refreshToken } = await readProviderTokens(supabase);
   if (!accessToken) {
-    throw new ProviderTokenMissingError(
-      "No Google provider_token in Supabase session",
-    );
+    throw new ProviderTokenMissingError("No Google provider_token in Supabase session");
   }
   return { accessToken, refreshToken };
 }
 
-export async function refreshAccessToken(
-  supabase: SupabaseClient,
-): Promise<GoogleProviderAccess> {
+export async function refreshAccessToken(supabase: SupabaseClient): Promise<GoogleProviderAccess> {
   const { refreshToken } = await readProviderTokens(supabase);
   const { clientId, clientSecret } = getGoogleOAuthEnv();
 
@@ -84,9 +78,7 @@ async function readProviderTokens(
   }
   const refreshToken = data.session.provider_refresh_token;
   if (!refreshToken) {
-    throw new ProviderTokenMissingError(
-      "No Google provider_refresh_token in Supabase session",
-    );
+    throw new ProviderTokenMissingError("No Google provider_refresh_token in Supabase session");
   }
   return {
     accessToken: data.session.provider_token ?? null,

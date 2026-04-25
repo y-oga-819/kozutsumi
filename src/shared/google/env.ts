@@ -7,22 +7,14 @@
  */
 function required(name: string, value: string | undefined): string {
   if (!value) {
-    throw new Error(
-      `[kozutsumi] Missing env: ${name}. See .env.local.example`,
-    );
+    throw new Error(`[kozutsumi] Missing env: ${name}. See .env.local.example`);
   }
   return value;
 }
 
 export function getGoogleOAuthEnv() {
   return {
-    clientId: required(
-      "GOOGLE_OAUTH_CLIENT_ID",
-      process.env.GOOGLE_OAUTH_CLIENT_ID,
-    ),
-    clientSecret: required(
-      "GOOGLE_OAUTH_CLIENT_SECRET",
-      process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-    ),
+    clientId: required("GOOGLE_OAUTH_CLIENT_ID", process.env.GOOGLE_OAUTH_CLIENT_ID),
+    clientSecret: required("GOOGLE_OAUTH_CLIENT_SECRET", process.env.GOOGLE_OAUTH_CLIENT_SECRET),
   };
 }

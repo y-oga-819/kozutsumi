@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { syncGoogleCalendar } from "@/entities/event/sync";
-import {
-  ProviderTokenMissingError,
-  RefreshTokenExpiredError,
-} from "@/shared/google/token";
+import { ProviderTokenMissingError, RefreshTokenExpiredError } from "@/shared/google/token";
 import { createClient } from "@/shared/supabase/server";
 
 /**
@@ -29,10 +26,7 @@ export async function POST() {
     const result = await syncGoogleCalendar(supabase);
     return NextResponse.json(result);
   } catch (error) {
-    if (
-      error instanceof ProviderTokenMissingError ||
-      error instanceof RefreshTokenExpiredError
-    ) {
+    if (error instanceof ProviderTokenMissingError || error instanceof RefreshTokenExpiredError) {
       return NextResponse.json(
         {
           error: "provider_token_missing",

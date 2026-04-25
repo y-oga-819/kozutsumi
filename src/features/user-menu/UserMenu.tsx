@@ -65,9 +65,7 @@ export function UserMenu({ email, avatarUrl, onResetSample, onClearAll }: UserMe
       {open ? (
         <div className="absolute right-0 top-9 z-50 w-52 rounded-md border border-bg-divider bg-bg-elevated p-2 shadow-lg">
           {email ? (
-            <div className="truncate px-2 py-1 text-[11px] text-fg-muted">
-              {email}
-            </div>
+            <div className="truncate px-2 py-1 text-[11px] text-fg-muted">{email}</div>
           ) : null}
           {onResetSample ? (
             <button

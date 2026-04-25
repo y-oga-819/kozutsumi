@@ -3,10 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
-import {
-  ACTION_TYPES,
-  log,
-} from "@/entities/action-log/logger";
+import { ACTION_TYPES, log } from "@/entities/action-log/logger";
 import type { CalendarSyncTrigger } from "@/entities/action-log/types";
 
 const SYNC_ENDPOINT = "/api/calendar/sync";

@@ -13,10 +13,7 @@ import { GatewayProvider, type GatewayBundle } from "./GatewayContext";
  * 「呼ばれるはずのないメソッドが呼ばれた」「テストが足りないモックを要求している」状況を
  * テスト失敗として検出する（undefined 関数呼び出しによる TypeError より診断しやすい）。
  */
-function strictMockGateway<T extends object>(
-  name: string,
-  override: Partial<T> = {},
-): T {
+function strictMockGateway<T extends object>(name: string, override: Partial<T> = {}): T {
   return new Proxy({} as T, {
     get(_target, prop) {
       const val = (override as Record<string | symbol, unknown>)[prop as string];
@@ -46,26 +43,15 @@ export type WithGatewaysResult = {
  * まとめて挿入する。`overrides` で渡した Gateway メソッドのみが呼び出し可能で、
  * 未指定メソッドへのアクセスは即 throw する。
  */
-export function withGateways(
-  overrides: GatewayOverrides = {},
-): WithGatewaysResult {
+export function withGateways(overrides: GatewayOverrides = {}): WithGatewaysResult {
   const bundle: GatewayBundle = {
-    taskGateway: strictMockGateway<TaskGateway>(
-      "TaskGateway",
-      overrides.taskGateway,
-    ),
+    taskGateway: strictMockGateway<TaskGateway>("TaskGateway", overrides.taskGateway),
     taskTimeEntryGateway: strictMockGateway<TaskTimeEntryGateway>(
       "TaskTimeEntryGateway",
       overrides.taskTimeEntryGateway,
     ),
-    projectGateway: strictMockGateway<ProjectGateway>(
-      "ProjectGateway",
-      overrides.projectGateway,
-    ),
-    eventGateway: strictMockGateway<EventGateway>(
-      "EventGateway",
-      overrides.eventGateway,
-    ),
+    projectGateway: strictMockGateway<ProjectGateway>("ProjectGateway", overrides.projectGateway),
+    eventGateway: strictMockGateway<EventGateway>("EventGateway", overrides.eventGateway),
   };
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },

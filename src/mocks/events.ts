@@ -63,8 +63,7 @@ export function buildInitialEvents(): Event[] {
       projectId: null,
       meetUrl: "https://meet.google.com/xyz-uvwx-rst",
       hasAttachments: false,
-      description:
-        "- 今週の振り返り\n- 来週の優先順位確認\n- キャリアの相談（転職活動の進捗共有）",
+      description: "- 今週の振り返り\n- 来週の優先順位確認\n- キャリアの相談（転職活動の進捗共有）",
     },
     {
       ...base,

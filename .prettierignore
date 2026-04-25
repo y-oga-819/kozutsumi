@@ -7,3 +7,6 @@ package-lock.json
 tsconfig.tsbuildinfo
 supabase/.branches/
 supabase/.temp/
+
+# Markdown は対象外（テーブル padding / 空行整理が手書きのリズムと噛み合わない）
+*.md

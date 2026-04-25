@@ -22,7 +22,14 @@ type SlotDisplayProps = {
   label: string;
 };
 
-function EventSlot({ slot, widthPct, isPast, isCurrent, nowPct, label }: SlotDisplayProps & { slot: EventSlotType }) {
+function EventSlot({
+  slot,
+  widthPct,
+  isPast,
+  isCurrent,
+  nowPct,
+  label,
+}: SlotDisplayProps & { slot: EventSlotType }) {
   const { projectsById } = useProjects();
   const evColor = slot.event.projectId
     ? getProject(projectsById, slot.event.projectId).color
@@ -37,7 +44,7 @@ function EventSlot({ slot, widthPct, isPast, isCurrent, nowPct, label }: SlotDis
     >
       {isCurrent && (
         <div
-          className="absolute top-0 bottom-0 z-[2] w-0.5 bg-accent-green"
+          className="absolute bottom-0 top-0 z-[2] w-0.5 bg-accent-green"
           style={{ left: `${nowPct}%` }}
         />
       )}
@@ -68,18 +75,14 @@ function FreeSlot({ widthPct, isPast, isCurrent, nowPct, label }: SlotDisplayPro
     >
       {isCurrent && (
         <div
-          className="absolute top-0 bottom-0 z-[2] w-0.5 bg-accent-green"
+          className="absolute bottom-0 top-0 z-[2] w-0.5 bg-accent-green"
           style={{ left: `${nowPct}%` }}
         />
       )}
       {widthPct > 4 && (
         <span
           className={`whitespace-nowrap text-[7px] tabular-nums ${
-            isPast
-              ? "text-bg-divider"
-              : isCurrent
-                ? "text-accent-green"
-                : "text-fg-faint"
+            isPast ? "text-bg-divider" : isCurrent ? "text-accent-green" : "text-fg-faint"
           }`}
         >
           {label}
@@ -104,9 +107,7 @@ export function TimelineBar({ slots, nowMin, dayStart, dayEnd }: TimelineBarProp
           const widthPct = (slot.duration / (dayEnd - dayStart)) * 100;
           const isPast = slot.end <= nowMin;
           const isCurrent = slot.start <= nowMin && slot.end > nowMin;
-          const nowPct = isCurrent
-            ? ((nowMin - slot.start) / slot.duration) * 100
-            : 0;
+          const nowPct = isCurrent ? ((nowMin - slot.start) / slot.duration) * 100 : 0;
           const label = fmtDuration(slot.duration);
           const props = { widthPct, isPast, isCurrent, nowPct, label };
           return slot.type === "event" ? (

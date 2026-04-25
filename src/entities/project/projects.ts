@@ -22,9 +22,7 @@ export const PROJECT_SEEDS: readonly ProjectSeed[] = [
 /**
  * Project 配列から id → Project のマップを作る。
  */
-export function indexProjectsById(
-  projects: readonly Project[],
-): Record<string, Project> {
+export function indexProjectsById(projects: readonly Project[]): Record<string, Project> {
   const out: Record<string, Project> = {};
   for (const p of projects) out[p.id] = p;
   return out;

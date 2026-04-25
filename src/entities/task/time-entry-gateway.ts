@@ -12,9 +12,5 @@ export interface TaskTimeEntryGateway {
   list(taskId: string): Promise<TimeEntry[]>;
   getOpen(taskId: string): Promise<TimeEntry | null>;
   start(taskId: string, startedAt?: string): Promise<TimeEntry>;
-  close(
-    entry: TimeEntry,
-    pauseReason: PauseReason | null,
-    pausedAt?: string,
-  ): Promise<TimeEntry>;
+  close(entry: TimeEntry, pauseReason: PauseReason | null, pausedAt?: string): Promise<TimeEntry>;
 }

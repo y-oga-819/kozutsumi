@@ -12,9 +12,7 @@ describe("GatewayContext hooks — Provider 未提供時", () => {
   test("useTaskGateway は Provider 無しで throw する", () => {
     const suppress = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      expect(() => renderHook(() => useTaskGateway())).toThrowError(
-        /GatewayProvider/,
-      );
+      expect(() => renderHook(() => useTaskGateway())).toThrowError(/GatewayProvider/);
     } finally {
       suppress.mockRestore();
     }
@@ -23,9 +21,7 @@ describe("GatewayContext hooks — Provider 未提供時", () => {
   test("useProjectGateway は Provider 無しで throw する", () => {
     const suppress = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      expect(() => renderHook(() => useProjectGateway())).toThrowError(
-        /GatewayProvider/,
-      );
+      expect(() => renderHook(() => useProjectGateway())).toThrowError(/GatewayProvider/);
     } finally {
       suppress.mockRestore();
     }
@@ -34,9 +30,7 @@ describe("GatewayContext hooks — Provider 未提供時", () => {
   test("useEventGateway は Provider 無しで throw する", () => {
     const suppress = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      expect(() => renderHook(() => useEventGateway())).toThrowError(
-        /GatewayProvider/,
-      );
+      expect(() => renderHook(() => useEventGateway())).toThrowError(/GatewayProvider/);
     } finally {
       suppress.mockRestore();
     }
@@ -45,9 +39,7 @@ describe("GatewayContext hooks — Provider 未提供時", () => {
   test("useTaskTimeEntryGateway は Provider 無しで throw する", () => {
     const suppress = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      expect(() => renderHook(() => useTaskTimeEntryGateway())).toThrowError(
-        /GatewayProvider/,
-      );
+      expect(() => renderHook(() => useTaskTimeEntryGateway())).toThrowError(/GatewayProvider/);
     } finally {
       suppress.mockRestore();
     }

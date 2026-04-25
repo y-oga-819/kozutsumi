@@ -10,14 +10,8 @@ type CalendarSyncButtonProps = {
  * ヘッダーに置くカレンダー同期ボタン。押下で `useCalendarSync.triggerSync('manual')` を呼ぶ前提。
  * 実行中はスピナー + disabled、成功時は最終同期時刻を tooltip として表示する。
  */
-export function CalendarSyncButton({
-  isPending,
-  lastSyncedAt,
-  onClick,
-}: CalendarSyncButtonProps) {
-  const tooltip = lastSyncedAt
-    ? `最終同期: ${formatRelative(lastSyncedAt)}`
-    : "カレンダーを同期";
+export function CalendarSyncButton({ isPending, lastSyncedAt, onClick }: CalendarSyncButtonProps) {
+  const tooltip = lastSyncedAt ? `最終同期: ${formatRelative(lastSyncedAt)}` : "カレンダーを同期";
   return (
     <button
       type="button"

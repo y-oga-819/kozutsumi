@@ -109,12 +109,7 @@ describe("TopTaskCard", () => {
     const onStart = vi.fn();
     const onClick = vi.fn();
     const { getByLabelText } = render(
-      <TopTaskCard
-        {...topProps}
-        task={baseTask}
-        onStart={onStart}
-        onClick={onClick}
-      />,
+      <TopTaskCard {...topProps} task={baseTask} onStart={onStart} onClick={onClick} />,
     );
     fireEvent.click(getByLabelText("開始"));
     expect(onStart).toHaveBeenCalledTimes(1);
@@ -217,11 +212,7 @@ describe("DoneList", () => {
   test("done タスクのタイトルと「戻す」ボタンを表示", () => {
     const doneTasks: Task[] = [{ ...baseTask, status: "done" }];
     const { getByText } = render(
-      <DoneList
-        doneTasks={doneTasks}
-        onOpenDetail={noop}
-        onToggleDone={noop}
-      />,
+      <DoneList doneTasks={doneTasks} onOpenDetail={noop} onToggleDone={noop} />,
     );
     expect(getByText("SLI 定義更新")).toBeTruthy();
     expect(getByText("戻す")).toBeTruthy();
@@ -269,9 +260,7 @@ describe("TaskStack", () => {
   });
 
   test("done が混在すると DoneList も表示される", () => {
-    const doneTasks: Task[] = [
-      { ...baseTask, id: "t9", title: "Completed", status: "done" },
-    ];
+    const doneTasks: Task[] = [{ ...baseTask, id: "t9", title: "Completed", status: "done" }];
     const { getByText } = render(
       <TaskStack
         events={[]}

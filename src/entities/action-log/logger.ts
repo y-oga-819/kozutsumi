@@ -1,11 +1,7 @@
 import { createClient } from "@/shared/supabase/client";
 import type { Json } from "@/shared/types/database";
 
-import type {
-  ActionLogEntry,
-  ActionMetadataMap,
-  ActionType,
-} from "./types";
+import type { ActionLogEntry, ActionMetadataMap, ActionType } from "./types";
 
 /**
  * action-log logger
@@ -64,9 +60,7 @@ function extractTaskId(metadata: Record<string, unknown>): string | null {
   return typeof v === "string" ? v : null;
 }
 
-async function persist<T extends ActionType>(
-  entry: ActionLogEntry<T>,
-): Promise<void> {
+async function persist<T extends ActionType>(entry: ActionLogEntry<T>): Promise<void> {
   const supabase = getClient();
   if (!supabase) return;
 
@@ -81,9 +75,7 @@ async function persist<T extends ActionType>(
   const { error } = await supabase.from("action_logs").insert({
     user_id: user.id,
     action_type: entry.action_type,
-    task_id: extractTaskId(
-      entry.metadata as unknown as Record<string, unknown>,
-    ),
+    task_id: extractTaskId(entry.metadata as unknown as Record<string, unknown>),
     metadata: entry.metadata as unknown as Json,
   });
   if (error) {

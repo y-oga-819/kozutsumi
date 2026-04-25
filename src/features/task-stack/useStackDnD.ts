@@ -11,15 +11,10 @@ export type UseStackDnDResult = {
   dragIdx: number | null;
   overIdx: number | null;
   rowRefs: MutableRefObject<(HTMLDivElement | null)[]>;
-  handlePointerDown: (
-    idx: number,
-    e: ReactPointerEvent<HTMLElement>,
-  ) => void;
+  handlePointerDown: (idx: number, e: ReactPointerEvent<HTMLElement>) => void;
 };
 
-export function useStackDnD(
-  onReorder: (from: number, to: number) => void,
-): UseStackDnDResult {
+export function useStackDnD(onReorder: (from: number, to: number) => void): UseStackDnDResult {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -29,9 +24,7 @@ export function useStackDnD(
   const isDragging = useRef(false);
 
   const computeTarget = useCallback((clientY: number): number => {
-    const rects = rowRefs.current.map((el) =>
-      el ? el.getBoundingClientRect() : null,
-    );
+    const rects = rowRefs.current.map((el) => (el ? el.getBoundingClientRect() : null));
     return findDropTarget(clientY, rects);
   }, []);
 
@@ -48,8 +41,7 @@ export function useStackDnD(
       const onMove = (ev: PointerEvent) => {
         ev.preventDefault();
         const cy = ev.clientY ?? 0;
-        if (!isDragging.current && Math.abs(cy - startY.current) > 5)
-          isDragging.current = true;
+        if (!isDragging.current && Math.abs(cy - startY.current) > 5) isDragging.current = true;
         if (isDragging.current) {
           const t = computeTarget(cy);
           overIdxRef.current = t;
@@ -59,8 +51,7 @@ export function useStackDnD(
       const onUp = () => {
         const from = dragIdxRef.current;
         const to = overIdxRef.current;
-        if (isDragging.current && from !== null && to !== null && from !== to)
-          onReorder(from, to);
+        if (isDragging.current && from !== null && to !== null && from !== to) onReorder(from, to);
         dragIdxRef.current = null;
         overIdxRef.current = null;
         isDragging.current = false;

@@ -28,10 +28,7 @@ export function DateGroup({ date, items, projectOrder }: DateGroupProps) {
         const pi = projectOrder.indexOf(task.projectId);
         const nodeLeft = nodeCenterPx(pi);
         return (
-          <div
-            key={task.id}
-            className="relative flex min-h-[30px] items-center px-4 py-0.5"
-          >
+          <div key={task.id} className="relative flex min-h-[30px] items-center px-4 py-0.5">
             <div
               className="absolute top-1/2 z-[3] h-2 w-2 -translate-y-1/2 rounded-full bg-bg-primary"
               style={{
@@ -40,9 +37,7 @@ export function DateGroup({ date, items, projectOrder }: DateGroupProps) {
               }}
             />
             <div className="shrink-0" style={{ width: lanesWidth }} />
-            <span className="font-jp text-[11px] text-fg-subtle">
-              {task.title}
-            </span>
+            <span className="font-jp text-[11px] text-fg-subtle">{task.title}</span>
           </div>
         );
       })}

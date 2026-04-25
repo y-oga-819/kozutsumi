@@ -32,9 +32,7 @@ export function DoneList({ doneTasks, onOpenDetail, onToggleDone }: DoneListProp
               strokeLinejoin="round"
             />
           </svg>
-          <span className="font-jp text-[11px] text-fg-weak line-through">
-            {task.title}
-          </span>
+          <span className="font-jp text-[11px] text-fg-weak line-through">{task.title}</span>
           <div className="flex-1" />
           <button
             onClick={(e) => {

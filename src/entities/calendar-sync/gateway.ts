@@ -18,8 +18,5 @@ export interface CalendarSyncStateGateway {
    * `syncToken: null` を渡すと DB の `sync_token` も `null` に上書きされ、次回は full sync になる
    * (410 Gone fallback で nextSyncToken が得られなかったケース等)。
    */
-  saveSyncState(input: {
-    lastSyncedAt: string;
-    syncToken: string | null;
-  }): Promise<void>;
+  saveSyncState(input: { lastSyncedAt: string; syncToken: string | null }): Promise<void>;
 }

@@ -1,11 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  test,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { GoogleApiUnauthorizedError, listEvents } from "./calendar";
 
@@ -21,10 +14,7 @@ describe("listEvents", () => {
     vi.restoreAllMocks();
   });
 
-  function mockResponse(
-    body: unknown,
-    init: { status?: number; statusText?: string } = {},
-  ) {
+  function mockResponse(body: unknown, init: { status?: number; statusText?: string } = {}) {
     return new Response(JSON.stringify(body), {
       status: init.status ?? 200,
       statusText: init.statusText ?? "OK",
@@ -52,22 +42,16 @@ describe("listEvents", () => {
   });
 
   test("Bearer token を Authorization ヘッダに載せる", async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
-      mockResponse({ items: [] }),
-    );
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(mockResponse({ items: [] }));
 
     await listEvents({ accessToken: "the-token", calendarId: "primary" });
 
     const [, init] = vi.mocked(globalThis.fetch).mock.calls[0]!;
-    expect(init?.headers).toEqual(
-      expect.objectContaining({ Authorization: "Bearer the-token" }),
-    );
+    expect(init?.headers).toEqual(expect.objectContaining({ Authorization: "Bearer the-token" }));
   });
 
   test("calendarId を URL に含み、クエリパラメータを組み立てる", async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
-      mockResponse({ items: [] }),
-    );
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(mockResponse({ items: [] }));
 
     await listEvents({
       accessToken: "token",
@@ -92,9 +76,7 @@ describe("listEvents", () => {
   });
 
   test("calendarId は URL エンコードされる", async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
-      mockResponse({ items: [] }),
-    );
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(mockResponse({ items: [] }));
 
     await listEvents({
       accessToken: "token",
@@ -102,15 +84,11 @@ describe("listEvents", () => {
     });
 
     const [url] = vi.mocked(globalThis.fetch).mock.calls[0]!;
-    expect(String(url)).toContain(
-      "/calendar/v3/calendars/user%40example.com/events",
-    );
+    expect(String(url)).toContain("/calendar/v3/calendars/user%40example.com/events");
   });
 
   test("syncToken 指定時は timeMin/timeMax を送らない (Google API 仕様)", async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
-      mockResponse({ items: [] }),
-    );
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(mockResponse({ items: [] }));
 
     await listEvents({
       accessToken: "token",
@@ -159,11 +137,11 @@ describe("listEvents", () => {
       mockResponse({ error: "server" }, { status: 500 }),
     );
 
-    await expect(
-      listEvents({ accessToken: "token", calendarId: "primary" }),
-    ).rejects.toMatchObject({
-      name: "GoogleApiError",
-      status: 500,
-    });
+    await expect(listEvents({ accessToken: "token", calendarId: "primary" })).rejects.toMatchObject(
+      {
+        name: "GoogleApiError",
+        status: 500,
+      },
+    );
   });
 });

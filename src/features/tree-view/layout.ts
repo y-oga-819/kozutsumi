@@ -15,9 +15,7 @@ export function lanesWidthPx(projectCount: number): number {
   return GRAPH_LEFT + COL * projectCount + 6;
 }
 
-export function groupByDateDesc(
-  historyData: readonly HistoryEntry[],
-): [string, HistoryEntry[]][] {
+export function groupByDateDesc(historyData: readonly HistoryEntry[]): [string, HistoryEntry[]][] {
   const groups: Record<string, HistoryEntry[]> = {};
   for (const item of historyData) {
     if (!groups[item.date]) groups[item.date] = [];

@@ -53,8 +53,7 @@ export function TaskStack({
   onToggleDone,
   onOpenDetail,
 }: TaskStackProps) {
-  const { dragIdx, overIdx, rowRefs, handlePointerDown } =
-    useStackDnD(onReorder);
+  const { dragIdx, overIdx, rowRefs, handlePointerDown } = useStackDnD(onReorder);
 
   return (
     <>
@@ -63,8 +62,7 @@ export function TaskStack({
       {pendingTasks.map((task, idx) => {
         const isFirst = idx === 0;
         const isBeingDragged = dragIdx === idx;
-        const isDropTarget =
-          overIdx === idx && dragIdx !== null && dragIdx !== idx;
+        const isDropTarget = overIdx === idx && dragIdx !== null && dragIdx !== idx;
 
         return (
           <div
@@ -104,11 +102,7 @@ export function TaskStack({
         );
       })}
 
-      <DoneList
-        doneTasks={doneTasks}
-        onOpenDetail={onOpenDetail}
-        onToggleDone={onToggleDone}
-      />
+      <DoneList doneTasks={doneTasks} onOpenDetail={onOpenDetail} onToggleDone={onToggleDone} />
     </>
   );
 }
