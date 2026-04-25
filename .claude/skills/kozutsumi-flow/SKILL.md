@@ -1,5 +1,5 @@
 ---
-name: kozutsumi-issues
+name: kozutsumi-flow
 description: kozutsumi リポジトリの GitHub flow（Issue / Milestone / PR）の運用ルール。次にやるタスクを選ぶ、新規 issue を起票する（roadmap / idea）、issue を close する、PR を作成する（テンプレート / `Closes #N` の付け方）、idea backlog を棚卸す、Milestone を作成・close する、Phase 計画の flow 部分（Milestone + issue 一括起票）を実行する、などの作業で必ず参照する。GitHub Issues / Milestones / PR / Phase の話題が出たら invoke する。ADR / 設計判断は `kozutsumi-adr` skill が担当。
 ---
 
