@@ -1,3 +1,4 @@
+import { expect } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -93,4 +94,198 @@ export function requiredEnv(name: string): string {
     throw new Error(`[e2e] Missing env: ${name}`);
   }
   return v;
+}
+
+// =====================================================================
+// Assertion helpers (Issue #67)
+//
+// 行動データ (action_logs / task_time_entries / tasks.status) は
+// kozutsumi の差別化の核 (vision.md)。UI が "それっぽく" 動いていても
+// DB に正しく落ちていなければ Phase 3 の学習基盤が壊れる。
+// service_role で直接 DB を query して、UI と DB の整合を踏みに行く。
+// =====================================================================
+
+export type ActionLogRow = {
+  id: string;
+  user_id: string;
+  action_type: string;
+  task_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type TimeEntryRow = {
+  id: string;
+  task_id: string;
+  started_at: string;
+  paused_at: string | null;
+  pause_reason: "meeting" | "interruption" | "voluntary" | null;
+  duration_seconds: number | null;
+};
+
+export type TaskRow = {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  title: string;
+  status: "idle" | "active" | "paused" | "done";
+  stack_order: number | null;
+  depends_on_event_id: string | null;
+  completed_at: string | null;
+};
+
+/** ユーザーの action_logs を created_at 昇順で取得する。 */
+export async function getActionLogs(
+  admin: SupabaseClient,
+  userId: string,
+  opts: { actionType?: string } = {},
+): Promise<ActionLogRow[]> {
+  let query = admin
+    .from("action_logs")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+  if (opts.actionType) {
+    query = query.eq("action_type", opts.actionType);
+  }
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(`[e2e] getActionLogs failed: ${error.message}`);
+  }
+  return (data ?? []) as ActionLogRow[];
+}
+
+/**
+ * action_logs は logger が fire-and-forget で書き込むため、UI 操作直後に
+ * SELECT しても未到達のことがある。条件を満たす行が現れるまで poll する。
+ */
+export async function waitForActionLog(
+  admin: SupabaseClient,
+  userId: string,
+  predicate: (row: ActionLogRow) => boolean,
+  opts: { timeoutMs?: number; intervalMs?: number; description?: string } = {},
+): Promise<ActionLogRow> {
+  const timeoutMs = opts.timeoutMs ?? 5_000;
+  const intervalMs = opts.intervalMs ?? 100;
+  const deadline = Date.now() + timeoutMs;
+  let lastSeen: ActionLogRow[] = [];
+  while (Date.now() < deadline) {
+    const logs = await getActionLogs(admin, userId);
+    lastSeen = logs;
+    const hit = logs.find(predicate);
+    if (hit) return hit;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  const desc = opts.description ?? "matching action_log";
+  throw new Error(
+    `[e2e] timed out waiting for ${desc}. seen action_types: ${lastSeen
+      .map((l) => l.action_type)
+      .join(", ")}`,
+  );
+}
+
+/** タスクの time_entries を started_at 昇順で取得する。 */
+export async function getTimeEntries(
+  admin: SupabaseClient,
+  taskId: string,
+): Promise<TimeEntryRow[]> {
+  const { data, error } = await admin
+    .from("task_time_entries")
+    .select("*")
+    .eq("task_id", taskId)
+    .order("started_at", { ascending: true });
+  if (error) {
+    throw new Error(`[e2e] getTimeEntries failed: ${error.message}`);
+  }
+  return (data ?? []) as TimeEntryRow[];
+}
+
+export async function getTaskByTitle(
+  admin: SupabaseClient,
+  userId: string,
+  title: string,
+): Promise<TaskRow> {
+  const { data, error } = await admin
+    .from("tasks")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("title", title)
+    .single();
+  if (error || !data) {
+    throw new Error(`[e2e] getTaskByTitle(${title}) failed: ${error?.message ?? "not found"}`);
+  }
+  return data as TaskRow;
+}
+
+/**
+ * 状態遷移 (idle -> active -> paused -> done など) は楽観的更新で UI が
+ * 先に変わり、DB は数十ms 遅れて反映される。期待 status まで poll する。
+ */
+export async function expectTaskStatus(
+  admin: SupabaseClient,
+  taskId: string,
+  expected: TaskRow["status"],
+  opts: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<TaskRow> {
+  const timeoutMs = opts.timeoutMs ?? 5_000;
+  const intervalMs = opts.intervalMs ?? 100;
+  const deadline = Date.now() + timeoutMs;
+  let lastStatus: string | null = null;
+  while (Date.now() < deadline) {
+    const { data, error } = await admin.from("tasks").select("*").eq("id", taskId).single();
+    if (error || !data) {
+      throw new Error(`[e2e] expectTaskStatus fetch failed: ${error?.message ?? "not found"}`);
+    }
+    lastStatus = (data as TaskRow).status;
+    if (lastStatus === expected) return data as TaskRow;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error(
+    `[e2e] timed out waiting for tasks.status=${expected} on ${taskId}. last=${lastStatus}`,
+  );
+}
+
+/**
+ * time_entries が期待数まで増える / 期待 entry の paused_at が埋まる、
+ * のような条件を満たすまで poll する。state machine (ADR 0004) を踏むのに使う。
+ */
+export async function waitForTimeEntries(
+  admin: SupabaseClient,
+  taskId: string,
+  predicate: (entries: TimeEntryRow[]) => boolean,
+  opts: { timeoutMs?: number; intervalMs?: number; description?: string } = {},
+): Promise<TimeEntryRow[]> {
+  const timeoutMs = opts.timeoutMs ?? 5_000;
+  const intervalMs = opts.intervalMs ?? 100;
+  const deadline = Date.now() + timeoutMs;
+  let lastSeen: TimeEntryRow[] = [];
+  while (Date.now() < deadline) {
+    lastSeen = await getTimeEntries(admin, taskId);
+    if (predicate(lastSeen)) return lastSeen;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  const desc = opts.description ?? "matching time_entries";
+  throw new Error(
+    `[e2e] timed out waiting for ${desc}. last entries: ${JSON.stringify(lastSeen, null, 2)}`,
+  );
+}
+
+/**
+ * task_time_entries の不変条件 (ADR 0004):
+ * - open entry (paused_at is null) は高々 1 件
+ * - close 済み entry は paused_at + duration_seconds が必ず埋まる
+ * - duration_seconds は 0 以上 (DB 制約と二重チェック)
+ */
+export function assertTimeEntriesInvariants(entries: readonly TimeEntryRow[]): void {
+  const openCount = entries.filter((e) => e.paused_at === null).length;
+  expect(openCount, "open entry must be at most 1").toBeLessThanOrEqual(1);
+  for (const e of entries) {
+    if (e.paused_at !== null) {
+      expect(e.duration_seconds, `closed entry ${e.id} must have duration_seconds`).not.toBeNull();
+      expect(e.duration_seconds ?? -1).toBeGreaterThanOrEqual(0);
+    } else {
+      expect(e.duration_seconds, `open entry ${e.id} must have null duration_seconds`).toBeNull();
+      expect(e.pause_reason, `open entry ${e.id} must have null pause_reason`).toBeNull();
+    }
+  }
 }
