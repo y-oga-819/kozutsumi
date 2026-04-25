@@ -14,9 +14,11 @@
 - タイムラインバーが空き時間の判断に役立つか
 - 見積もり時間と実作業時間の記録が自然にできるか
 
-### Phase 2: Google Calendar連携
+### Phase 2: Google Calendar連携 ✅
 
-カレンダーからイベントを自動取得。依存関係を手動設定可能に。
+Google Calendar (primary) のイベントを手動 + 起動時遅延で同期し、手入力の手間を取り除いた。タスクとイベントの依存関係も UI から設定可能になった。
+
+実装は GitHub Issue で管理（Milestone `Phase2：Googleカレンダー連携` 配下、Epic は #48）。設計判断は [docs/adr/](./adr/) の ADR 0005〜0010 を参照。
 
 ### Phase 3: AIサジェスト + 見積もり補正
 
