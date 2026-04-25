@@ -59,48 +59,54 @@ export function TaskStack({
     <>
       <StackHeader count={pendingTasks.length} />
 
-      {pendingTasks.map((task, idx) => {
-        const isFirst = idx === 0;
-        const isBeingDragged = dragIdx === idx;
-        const isDropTarget = overIdx === idx && dragIdx !== null && dragIdx !== idx;
+      {/*
+        並び順が意味を持つリスト。role=list / listitem を立てておくと
+        スクリーンリーダーが項目数を読み上げ、e2e も semantic に取れる。
+      */}
+      <ul role="list" aria-label="タスクスタック" className="m-0 list-none p-0">
+        {pendingTasks.map((task, idx) => {
+          const isFirst = idx === 0;
+          const isBeingDragged = dragIdx === idx;
+          const isDropTarget = overIdx === idx && dragIdx !== null && dragIdx !== idx;
 
-        return (
-          <div
-            key={task.id}
-            ref={(el: HTMLDivElement | null) => {
-              rowRefs.current[idx] = el;
-            }}
-          >
-            {isDropTarget && <DropIndicator />}
-            {isFirst ? (
-              <TopTaskCard
-                task={task}
-                events={events}
-                now={now}
-                isBeingDragged={isBeingDragged}
-                elapsedSeconds={topTimer.elapsedSeconds}
-                pauseReason={topTimer.pauseReason}
-                onPointerDown={(e) => handlePointerDown(idx, e)}
-                onClick={() => onOpenDetail(task.id)}
-                onStart={topTimer.onStart}
-                onPauseRequest={topTimer.onPauseRequest}
-                onResume={topTimer.onResume}
-                onComplete={topTimer.onComplete}
-              />
-            ) : (
-              <TaskRow
-                task={task}
-                events={events}
-                now={now}
-                isBeingDragged={isBeingDragged}
-                onPointerDown={(e) => handlePointerDown(idx, e)}
-                onClick={() => onOpenDetail(task.id)}
-                onToggleDone={() => onToggleDone(task.id)}
-              />
-            )}
-          </div>
-        );
-      })}
+          return (
+            <li
+              key={task.id}
+              ref={(el: HTMLLIElement | null) => {
+                rowRefs.current[idx] = el;
+              }}
+            >
+              {isDropTarget && <DropIndicator />}
+              {isFirst ? (
+                <TopTaskCard
+                  task={task}
+                  events={events}
+                  now={now}
+                  isBeingDragged={isBeingDragged}
+                  elapsedSeconds={topTimer.elapsedSeconds}
+                  pauseReason={topTimer.pauseReason}
+                  onPointerDown={(e) => handlePointerDown(idx, e)}
+                  onClick={() => onOpenDetail(task.id)}
+                  onStart={topTimer.onStart}
+                  onPauseRequest={topTimer.onPauseRequest}
+                  onResume={topTimer.onResume}
+                  onComplete={topTimer.onComplete}
+                />
+              ) : (
+                <TaskRow
+                  task={task}
+                  events={events}
+                  now={now}
+                  isBeingDragged={isBeingDragged}
+                  onPointerDown={(e) => handlePointerDown(idx, e)}
+                  onClick={() => onOpenDetail(task.id)}
+                  onToggleDone={() => onToggleDone(task.id)}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
 
       <DoneList doneTasks={doneTasks} onOpenDetail={onOpenDetail} onToggleDone={onToggleDone} />
     </>

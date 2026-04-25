@@ -21,14 +21,22 @@ const OPTIONS: { value: PauseReason; label: string; hint: string }[] = [
  */
 export function PauseReasonModal({ onSelect, onClose }: PauseReasonModalProps) {
   return (
-    <div className="fixed inset-0 z-[220] flex flex-col">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pause-reason-title"
+      className="fixed inset-0 z-[220] flex flex-col"
+    >
       <div onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-[4px]" />
       <div className="relative mt-auto flex animate-panel-slide-up flex-col rounded-t-2xl bg-bg-surface">
         <div className="flex justify-center pb-1 pt-2.5">
           <div className="h-[3px] w-8 rounded-[2px] bg-bg-divider" />
         </div>
         <div className="px-5 pb-5 pt-2">
-          <div className="pb-3 font-jp text-[13px] font-semibold text-fg-emphasized">
+          <div
+            id="pause-reason-title"
+            className="pb-3 font-jp text-[13px] font-semibold text-fg-emphasized"
+          >
             中断の理由
           </div>
           <div className="flex flex-col gap-2">

@@ -13,5 +13,7 @@ export default defineConfig({
     environment: "happy-dom",
     globals: true,
     css: false,
+    // e2e/ は Playwright (playwright.config.ts) で動かすので vitest 対象外。
+    exclude: ["node_modules/**", "e2e/**", ".next/**", "dist/**"],
   },
 });
