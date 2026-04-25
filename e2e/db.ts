@@ -5,15 +5,32 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  *
  * 役割:
  * - global-setup と各テスト fixture の双方から共有して使う
- * - ローカル Supabase 以外に向くのを防ぐため URL の host チェックは呼び出し側で行う想定
- *   (ADR 0011 二重ガードの follow-up #66 で集約予定)
+ * - prod Supabase に向いた状態で test ユーザー作成 / purge が走るのを防ぐため、
+ *   URL の hostname を localhost / 127.0.0.1 に限定する (ADR 0011 二重ガード)。
  */
+const ALLOWED_E2E_HOSTNAMES = new Set(["127.0.0.1", "localhost"]);
+
+function assertLocalSupabaseUrl(url: string): void {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    throw new Error(`[e2e] Invalid NEXT_PUBLIC_SUPABASE_URL: ${url}`);
+  }
+  if (!ALLOWED_E2E_HOSTNAMES.has(hostname)) {
+    throw new Error(
+      `[e2e] Refusing to use non-local Supabase (${hostname}). e2e must run against local Supabase only.`,
+    );
+  }
+}
+
 export function createAdminClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceRoleKey) {
     throw new Error("[e2e] Missing env: NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY");
   }
+  assertLocalSupabaseUrl(url);
   return createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
