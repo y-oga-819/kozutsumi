@@ -1,4 +1,7 @@
-import type { Event } from "../../entities/event/types";
+import { useState } from "react";
+
+import { EVENT_SOURCE, type Event } from "../../entities/event/types";
+import { GoogleCalendarBadge } from "../../entities/event/GoogleCalendarBadge";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
 import {
@@ -11,10 +14,19 @@ import { renderMarkdown } from "../../shared/lib/markdown";
 type EventDetailPanelProps = {
   event: Event;
   onClose: () => void;
+  /**
+   * `source === 'google_calendar'` のイベントで `project_id` を変更したい時に呼ぶ。
+   * 未指定なら project_id 編集 UI も表示しない (省略可で既存呼び出しを壊さない)。
+   */
+  onChangeProject?: (id: string, projectId: string | null) => void;
 };
 
-export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
-  const { projectsById } = useProjects();
+export function EventDetailPanel({
+  event,
+  onClose,
+  onChangeProject,
+}: EventDetailPanelProps) {
+  const { projects, projectsById } = useProjects();
   const proj = event.projectId ? getProject(projectsById, event.projectId) : null;
   const evColor = proj ? proj.color : "#52525b";
   const evStart = minutesOfDay(event.startTime);
@@ -26,6 +38,11 @@ export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
     : event.meetUrl?.includes("meet.google")
       ? "Google Meet"
       : "会議リンク";
+  const isGoogleCalendar = event.source === EVENT_SOURCE.GOOGLE_CALENDAR;
+  // ADR 0010: google_calendar イベントは project_id だけ kozutsumi 側で編集可。
+  // onChangeProject が渡されている時のみ編集 UI を出す (テストや特殊呼び出しで省略可)。
+  const canEditProject = isGoogleCalendar && !!onChangeProject;
+  const [editingProject, setEditingProject] = useState(false);
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col">
@@ -59,6 +76,7 @@ export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
             <span className="text-[10px] tabular-nums text-fg-weak">
               {formatClock(event.startTime)}–{formatClock(event.endTime)} ({fmtDuration(duration)})
             </span>
+            {isGoogleCalendar && <GoogleCalendarBadge size="md" />}
           </div>
           <h2 className="m-0 font-jp text-[16px] font-bold leading-[1.4] text-fg-strong">
             {event.title}
@@ -126,6 +144,44 @@ export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
           </div>
         )}
 
+        {canEditProject && (
+          <div className="px-5 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="font-jp text-[10px] text-fg-weak">
+                プロジェクト
+              </span>
+              {editingProject ? (
+                <select
+                  autoFocus
+                  value={event.projectId ?? ""}
+                  onChange={(e) => {
+                    const next = e.target.value === "" ? null : e.target.value;
+                    onChangeProject!(event.id, next);
+                    setEditingProject(false);
+                  }}
+                  onBlur={() => setEditingProject(false)}
+                  className="flex-1 rounded border border-bg-divider bg-bg-elevated px-2 py-1 text-[11px] text-fg-default outline-none focus:border-accent-blue"
+                >
+                  <option value="">なし</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingProject(true)}
+                  className="cursor-pointer rounded-[4px] border border-bg-divider bg-transparent px-2 py-[3px] font-jp text-[10px] text-fg-subtle"
+                >
+                  {proj ? proj.name : "未設定"} を変更
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="mx-5 h-px bg-bg-border" />
 
         <div className="flex-1 overflow-auto px-5 pb-6 pt-3">
@@ -134,6 +190,11 @@ export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
           ) : (
             <div className="py-5 text-center font-jp text-[12px] italic text-fg-faint">
               詳細なし
+            </div>
+          )}
+          {isGoogleCalendar && (
+            <div className="mt-4 font-jp text-[10px] leading-[1.6] text-fg-faint">
+              Google Calendar で編集した内容は次回同期で反映されます
             </div>
           )}
         </div>

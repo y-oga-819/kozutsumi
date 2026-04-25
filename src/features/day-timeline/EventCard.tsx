@@ -1,4 +1,4 @@
-import type { Event } from "../../entities/event/types";
+import { EVENT_SOURCE, type Event } from "../../entities/event/types";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
 import {
@@ -6,6 +6,7 @@ import {
   formatClock,
   minutesOfDay,
 } from "../../shared/lib/time";
+import { GoogleCalendarBadge } from "../../entities/event/GoogleCalendarBadge";
 
 type EventCardProps = {
   event: Event;
@@ -28,6 +29,7 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
   const hasMeet = !!event.meetUrl;
   const meetLabel = event.meetUrl?.includes("zoom") ? "Zoom" : "Meet";
   const isZoom = !!event.meetUrl?.includes("zoom");
+  const isGoogleCalendar = event.source === EVENT_SOURCE.GOOGLE_CALENDAR;
 
   return (
     <div
@@ -55,6 +57,7 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
         >
           {event.title}
         </span>
+        {isGoogleCalendar && <GoogleCalendarBadge />}
         {hasAttachments && (
           <svg
             width="12"

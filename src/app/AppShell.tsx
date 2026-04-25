@@ -223,6 +223,27 @@ export function AppShell({ initialView, user }: AppShellProps) {
     },
   });
 
+  // ADR 0010 / P2-4: google_calendar イベントは project_id だけ kozutsumi 側で
+  // 編集可。optimistic に反映し、失敗したら roll back する。
+  const updateEventProjectMutation = useMutation({
+    mutationFn: ({ id, projectId }: { id: string; projectId: string | null }) =>
+      eventGateway.update(id, { projectId }),
+    onMutate: async ({ id, projectId }) => {
+      await queryClient.cancelQueries({ queryKey: keys.events });
+      const previous = queryClient.getQueryData<Event[]>(keys.events);
+      queryClient.setQueryData<Event[]>(keys.events, (prev) =>
+        (prev ?? []).map((e) => (e.id === id ? { ...e, projectId } : e)),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(keys.events, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: keys.events });
+    },
+  });
+
   const createProjectMutation = useMutation({
     mutationFn: (input: CreateProjectInput) => projectGateway.create(input),
     onSuccess: () => {
@@ -453,6 +474,9 @@ export function AppShell({ initialView, user }: AppShellProps) {
               <EventDetailPanel
                 event={ev}
                 onClose={() => setEventDetailId(null)}
+                onChangeProject={(id, projectId) =>
+                  updateEventProjectMutation.mutate({ id, projectId })
+                }
               />
             ) : null;
           })()}
