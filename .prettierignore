@@ -1,0 +1,9 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+package-lock.json
+tsconfig.tsbuildinfo
+supabase/.branches/
+supabase/.temp/
