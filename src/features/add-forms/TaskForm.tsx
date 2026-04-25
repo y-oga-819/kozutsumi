@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { CreateTaskInput } from "@/entities/task/gateway";
 import type { Event } from "@/entities/event/types";
 import type { Project } from "@/entities/project/types";
-import { formatClock } from "@/shared/lib/time";
+import { formatRelativeTime } from "@/shared/lib/time";
 
 type TaskFormProps = {
   projects: readonly Project[];
@@ -25,6 +25,21 @@ export function TaskForm({ projects, events, onSubmit, onClose }: TaskFormProps)
   const [dependsOnEventId, setDependsOnEventId] = useState<string>("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // フォーム open 時刻を「今」として固定する。フォーム滞在中に分跨ぎしても候補が
+  // ばたつかないようにする。manual / google_calendar 両対応。
+  const [openedAt] = useState<number>(() => Date.now());
+
+  // 依存イベントは「未来 (現在時刻以降に開始する)」イベントのみを候補に出す。
+  // 過去のイベントを依存先に新規設定しても意味がないため。
+  const futureEvents = useMemo(() => {
+    return [...events]
+      .filter((ev) => new Date(ev.startTime).getTime() >= openedAt)
+      .sort(
+        (a, b) =>
+          new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+      );
+  }, [events, openedAt]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,9 +126,9 @@ export function TaskForm({ projects, events, onSubmit, onClose }: TaskFormProps)
           className="rounded border border-bg-divider bg-bg-elevated px-3 py-2 text-[13px] text-fg-default outline-none focus:border-accent-blue"
         >
           <option value="">なし</option>
-          {events.map((ev) => (
+          {futureEvents.map((ev) => (
             <option key={ev.id} value={ev.id}>
-              {formatClock(ev.startTime)} {ev.title}
+              {formatRelativeTime(ev.startTime, new Date(openedAt))}  {ev.title}
             </option>
           ))}
         </select>

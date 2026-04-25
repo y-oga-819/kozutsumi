@@ -1,30 +1,66 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Task } from "../../entities/task/types";
 import type { Event } from "../../entities/event/types";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
 import { isDone } from "../../shared/lib/task";
-import { fmtDuration, formatClock } from "../../shared/lib/time";
+import { fmtDuration, formatRelativeTime } from "../../shared/lib/time";
 import { renderMarkdown } from "../../shared/lib/markdown";
 
 export type TaskDetailPanelProps = {
   task: Task;
   events: Event[];
+  /** 現在時刻 (ms)。依存イベントの相対時刻 / 候補絞り込みに使う。省略時は呼び出し時刻。 */
+  now?: number;
   onClose: () => void;
   onUpdate: (id: string, body: string) => void;
   onToggleDone: (id: string) => void;
   onDelete?: (id: string) => void;
+  /**
+   * 依存イベント (`tasks.depends_on_event_id`) の更新。null は「依存なし」。
+   * 未指定なら依存編集 UI も表示しない (テストや特殊呼び出しで省略可)。
+   */
+  onChangeDependency?: (id: string, eventId: string | null) => void;
 };
 
-export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone, onDelete }: TaskDetailPanelProps) {
+export function TaskDetailPanel({
+  task,
+  events,
+  now,
+  onClose,
+  onUpdate,
+  onToggleDone,
+  onDelete,
+  onChangeDependency,
+}: TaskDetailPanelProps) {
   const { projectsById } = useProjects();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.body || "");
+  const [editingDep, setEditingDep] = useState(false);
+  // パネル open 時刻を「今」として固定する。パネル中に分跨ぎしても候補や相対時刻が
+  // ばたつかないようにするのが目的 (相対時刻はあくまで判断補助)。
+  const [openedAt] = useState<number>(() => now ?? Date.now());
+  const nowMs = now && now > 0 ? now : openedAt;
+  const nowDate = useMemo(() => new Date(nowMs), [nowMs]);
   const proj = getProject(projectsById, task.projectId);
   const dep = task.dependsOnEventId
     ? events.find((e) => e.id === task.dependsOnEventId)
     : null;
   const done = isDone(task);
+
+  // 依存先候補は「未来のイベント + 現在選択中のイベント (過去でも保持表示)」。
+  // 過去のイベントを新規依存先にしても意味がないが、既存の依存先を勝手に外すと混乱するため残す。
+  const depCandidates = useMemo(() => {
+    const future = events.filter(
+      (ev) => new Date(ev.startTime).getTime() >= nowMs,
+    );
+    const includesCurrent = dep ? future.some((ev) => ev.id === dep.id) : true;
+    const merged = includesCurrent && dep ? future : dep ? [dep, ...future] : future;
+    return [...merged].sort(
+      (a, b) =>
+        new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+    );
+  }, [events, dep, nowMs]);
 
   const handleSave = () => {
     onUpdate(task.id, draft);
@@ -64,7 +100,7 @@ export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone,
             )}
             {dep && (
               <span className="rounded-[3px] bg-[#E85D0415] px-1.5 py-px font-jp text-[9px] text-accent-amber">
-                ← {formatClock(dep.startTime)}までに
+                ← {formatRelativeTime(dep.startTime, nowDate)} {dep.title}
               </span>
             )}
             <div className="flex-1" />
@@ -86,6 +122,47 @@ export function TaskDetailPanel({ task, events, onClose, onUpdate, onToggleDone,
             {task.title}
           </h2>
         </div>
+
+        {onChangeDependency && (
+          <div className="px-5 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="font-jp text-[10px] text-fg-weak">
+                依存イベント
+              </span>
+              {editingDep ? (
+                <select
+                  autoFocus
+                  value={task.dependsOnEventId ?? ""}
+                  onChange={(e) => {
+                    const next = e.target.value === "" ? null : e.target.value;
+                    onChangeDependency(task.id, next);
+                    setEditingDep(false);
+                  }}
+                  onBlur={() => setEditingDep(false)}
+                  className="flex-1 rounded border border-bg-divider bg-bg-elevated px-2 py-1 text-[11px] text-fg-default outline-none focus:border-accent-blue"
+                >
+                  <option value="">なし</option>
+                  {depCandidates.map((ev) => (
+                    <option key={ev.id} value={ev.id}>
+                      {formatRelativeTime(ev.startTime, nowDate)}  {ev.title}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingDep(true)}
+                  className="cursor-pointer rounded-[4px] border border-bg-divider bg-transparent px-2 py-[3px] font-jp text-[10px] text-fg-subtle"
+                >
+                  {dep
+                    ? `${formatRelativeTime(dep.startTime, nowDate)} ${dep.title}`
+                    : "なし"}{" "}
+                  を変更
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="mx-5 h-px bg-bg-border" />
 

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { formatDate, fmtDuration, fmtMin, timeToMin } from "./time";
+import {
+  formatDate,
+  formatRelativeTime,
+  fmtDuration,
+  fmtMin,
+  timeToMin,
+} from "./time";
 
 describe("formatDate", () => {
   test('"YYYY-MM-DD" を "M/D (曜)" 形式に整形する', () => {
@@ -44,5 +50,35 @@ describe("fmtMin", () => {
     expect(fmtMin(570)).toBe("9:30");
     expect(fmtMin(0)).toBe("0:00");
     expect(fmtMin(605)).toBe("10:05");
+  });
+});
+
+describe("formatRelativeTime", () => {
+  // 基準時刻: 2026-04-11 (土) 09:00
+  const now = new Date("2026-04-11T09:00:00");
+
+  test("過去 / 1分以内は「もうすぐ」", () => {
+    expect(formatRelativeTime("2026-04-11T08:30:00", now)).toBe("もうすぐ");
+    expect(formatRelativeTime("2026-04-11T09:00:30", now)).toBe("もうすぐ");
+  });
+
+  test("1時間未満は「N分後」", () => {
+    expect(formatRelativeTime("2026-04-11T09:30:00", now)).toBe("30分後");
+    expect(formatRelativeTime("2026-04-11T09:59:00", now)).toBe("59分後");
+  });
+
+  test("同日 1 時間以上後は「今日 HH:MM」", () => {
+    expect(formatRelativeTime("2026-04-11T14:00:00", now)).toBe("今日 14:00");
+    expect(formatRelativeTime("2026-04-11T23:30:00", now)).toBe("今日 23:30");
+  });
+
+  test("翌日は「明日 HH:MM」", () => {
+    expect(formatRelativeTime("2026-04-12T08:00:00", now)).toBe("明日 08:00");
+    expect(formatRelativeTime("2026-04-12T23:59:00", now)).toBe("明日 23:59");
+  });
+
+  test("2日以上先は「M/D HH:MM」", () => {
+    expect(formatRelativeTime("2026-04-15T10:00:00", now)).toBe("4/15 10:00");
+    expect(formatRelativeTime("2026-05-02T18:30:00", now)).toBe("5/2 18:30");
   });
 });

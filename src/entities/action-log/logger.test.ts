@@ -155,6 +155,8 @@ describe("ACTION_TYPES", () => {
       TASK_REORDERED: "task_reordered",
       TASK_DELETED: "task_deleted",
       TASK_TITLE_CHANGED: "task_title_changed",
+      TASK_DEPENDENCY_SET: "task_dependency_set",
+      TASK_DEPENDENCY_CLEARED: "task_dependency_cleared",
       INTERRUPTION_PUSHED: "interruption_pushed",
       INTERRUPTION_COMPLETED: "interruption_completed",
       STACK_PROPOSED: "stack_proposed",
