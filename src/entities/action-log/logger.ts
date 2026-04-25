@@ -55,7 +55,19 @@ function getClient(): SupabaseClientLike | null {
   return cachedClient;
 }
 
-function extractTaskId(metadata: Record<string, unknown>): string | null {
+/**
+ * action_logs.task_id 列に書く値を決める。
+ *
+ * task_deleted のとき: 削除済みの task を参照する column 値を書くと
+ *   action_logs.task_id → tasks.id の FK 制約に違反して insert 自体が
+ *   失敗する (ON DELETE SET NULL は既存行向けで、INSERT 時には適用されない)。
+ *   metadata.task_id を一次の真実として残しつつ column は null で書く。
+ *   Phase 3 学習では metadata 経由で相関を取る前提 (vision.md / ADR 0001)。
+ *
+ * それ以外: metadata.task_id があればそれを column 値にする。
+ */
+function extractTaskId(actionType: ActionType, metadata: Record<string, unknown>): string | null {
+  if (actionType === "task_deleted") return null;
   const v = metadata["task_id"];
   return typeof v === "string" ? v : null;
 }
@@ -75,7 +87,7 @@ async function persist<T extends ActionType>(entry: ActionLogEntry<T>): Promise<
   const { error } = await supabase.from("action_logs").insert({
     user_id: user.id,
     action_type: entry.action_type,
-    task_id: extractTaskId(entry.metadata as unknown as Record<string, unknown>),
+    task_id: extractTaskId(entry.action_type, entry.metadata as unknown as Record<string, unknown>),
     metadata: entry.metadata as unknown as Json,
   });
   if (error) {

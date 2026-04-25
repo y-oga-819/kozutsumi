@@ -82,6 +82,22 @@ describe("log()", () => {
     });
   });
 
+  // action_logs.task_id → tasks.id の FK は ON DELETE SET NULL なので、
+  // 削除済み task を column 値に書こうとすると INSERT 自体が落ちる
+  // (logger は fire-and-forget なので「ログ欠損」として黙って消える)。
+  // task_deleted は metadata.task_id を一次の真実として残しつつ column は
+  // null で書く。
+  test("task_deleted は column.task_id を null にして insert する (FK 違反回避)", async () => {
+    log(ACTION_TYPES.TASK_DELETED, { task_id: "deleted-task" });
+    await flushMicrotasks();
+    expect(insertMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      action_type: "task_deleted",
+      task_id: null,
+      metadata: { task_id: "deleted-task" },
+    });
+  });
+
   test("未ログイン時は insert をスキップする", async () => {
     getUserMock.mockResolvedValueOnce({ data: { user: null }, error: null });
     log(ACTION_TYPES.TASK_COMPLETED, { task_id: "t1" });
