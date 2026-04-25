@@ -14,7 +14,7 @@ import { defineConfig, devices } from "@playwright/test";
  * login page にテスト用フォームを描画させる。
  */
 const PORT = 3000;
-const BASE_URL = `http://127.0.0.1:${PORT}`;
+const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",

@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { createClient } from "@/shared/supabase/client";
@@ -17,7 +16,6 @@ import { createClient } from "@/shared/supabase/client";
  *   browser client の signInWithPassword をそのまま呼ぶ
  */
 export function TestLoginForm() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
@@ -38,9 +36,10 @@ export function TestLoginForm() {
       setPending(false);
       return;
     }
-    // middleware が次回ナビゲーションでセッションを refresh する。
-    router.replace("/");
-    router.refresh();
+    // ハードナビにする。soft nav (router.replace) だと Playwright の
+    // page.waitForURL (default waitUntil:"load") が load イベントを取れず
+    // タイムアウトする。サーバー側 middleware も次回 request で cookie を読める。
+    window.location.assign("/");
   }
 
   return (
