@@ -17,10 +17,12 @@ test("Phase 1 golden path", async ({ signedInPage: page }) => {
   await expect(page.getByText("task stack")).toBeVisible();
 
   // --- プロジェクトを作る ---------------------------------------------------
-  await page.getByRole("button", { name: "新規追加" }).click();
-  await page.getByRole("button", { name: "プロジェクト" }).click();
+  // exact:true は「プロジェクトを先に作る」(EmptyProjectsNotice) と
+  // 「新規追加」(AddButton aria-label) との substring 衝突を避けるため。
+  await page.getByRole("button", { name: "新規追加", exact: true }).click();
+  await page.getByRole("button", { name: "プロジェクト", exact: true }).click();
   await page.getByLabel("名前").fill(projectName);
-  await page.getByRole("button", { name: "追加" }).click();
+  await page.getByRole("button", { name: "追加", exact: true }).click();
   // 追加後は AddPanel が閉じる
   await expect(page.getByLabel("名前")).toHaveCount(0);
 
@@ -99,10 +101,10 @@ async function createTask(
   title: string,
   projectName: string,
 ): Promise<void> {
-  await page.getByRole("button", { name: "新規追加" }).click();
-  await page.getByRole("button", { name: "タスク" }).click();
+  await page.getByRole("button", { name: "新規追加", exact: true }).click();
+  await page.getByRole("button", { name: "タスク", exact: true }).click();
   await page.getByLabel("タイトル").fill(title);
   await page.getByLabel("プロジェクト").selectOption({ label: projectName });
-  await page.getByRole("button", { name: "追加" }).click();
+  await page.getByRole("button", { name: "追加", exact: true }).click();
   await expect(page.getByLabel("タイトル")).toHaveCount(0);
 }
