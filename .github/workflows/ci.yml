@@ -167,18 +167,20 @@ jobs:
           version: latest
       # ADR 0011: e2e は本物の Supabase スタック + password sign-in でログインする。
       # auth は必要、studio / storage 等は不要なので最小構成で起動する。
-      - name: Start Supabase local stack
+      #
+      # Step 並列化: supabase start は image pull + container init で 2m+ かかる
+      # ので、background 起動 → npm ci / playwright install を overlap → 後段で
+      # 完了を待つ、の順にする。Supabase 起動 (~133s) > install (~30s) なので
+      # install のぶん丸ごと隠れる (期待 -30s)。
+      - name: Start Supabase local stack (background)
         run: |
-          supabase start \
-            -x studio,inbucket,storage-api,imgproxy,edge-runtime,logflare,vector,pgsodium,realtime
-      - name: Export Supabase keys into env
-        run: |
-          supabase status -o env > /tmp/sb.env
-          {
-            echo "NEXT_PUBLIC_SUPABASE_URL=$(grep '^API_URL=' /tmp/sb.env | cut -d= -f2- | tr -d '\"')"
-            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(grep '^ANON_KEY=' /tmp/sb.env | cut -d= -f2- | tr -d '\"')"
-            echo "SUPABASE_SERVICE_ROLE_KEY=$(grep '^SERVICE_ROLE_KEY=' /tmp/sb.env | cut -d= -f2- | tr -d '\"')"
-          } >> "$GITHUB_ENV"
+          rm -f /tmp/supabase-start.exit /tmp/supabase-start.log
+          nohup bash -c '
+            supabase start \
+              -x studio,inbucket,storage-api,imgproxy,edge-runtime,logflare,vector,pgsodium,realtime
+            echo "$?" > /tmp/supabase-start.exit
+          ' > /tmp/supabase-start.log 2>&1 &
+          echo $! > /tmp/supabase-start.pid
       - name: Install npm deps
         run: npm ci
       # Playwright の browser binary (~/.cache/ms-playwright) を Playwright の
@@ -203,6 +205,33 @@ jobs:
           else
             npx playwright install --with-deps chromium
           fi
+      # background の supabase start が完了するまで待つ。pid が消えたら exit
+      # code を読み、log を出力する (失敗時の診断)。
+      - name: Wait for Supabase to be ready
+        run: |
+          pid=$(cat /tmp/supabase-start.pid)
+          while kill -0 "$pid" 2>/dev/null; do
+            sleep 2
+          done
+          if [ ! -f /tmp/supabase-start.exit ]; then
+            echo "::error::supabase start did not record exit code"
+            cat /tmp/supabase-start.log || true
+            exit 1
+          fi
+          code=$(cat /tmp/supabase-start.exit)
+          cat /tmp/supabase-start.log
+          if [ "$code" -ne 0 ]; then
+            echo "::error::supabase start exited with code $code"
+            exit "$code"
+          fi
+      - name: Export Supabase keys into env
+        run: |
+          supabase status -o env > /tmp/sb.env
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$(grep '^API_URL=' /tmp/sb.env | cut -d= -f2- | tr -d '\"')"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(grep '^ANON_KEY=' /tmp/sb.env | cut -d= -f2- | tr -d '\"')"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$(grep '^SERVICE_ROLE_KEY=' /tmp/sb.env | cut -d= -f2- | tr -d '\"')"
+          } >> "$GITHUB_ENV"
       - name: Run Playwright
         env:
           E2E_TEST_USER_EMAIL: e2e@kozutsumi.local
