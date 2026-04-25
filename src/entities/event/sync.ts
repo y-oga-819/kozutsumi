@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CalendarSyncStateGateway } from "@/entities/calendar-sync/gateway";
 import { SupabaseCalendarSyncStateGateway } from "@/entities/calendar-sync/supabase-gateway";
 import {
+  GoogleApiError,
   GoogleApiUnauthorizedError,
   type GoogleCalendarEvent,
   type GoogleCalendarEventsListResponse,
@@ -26,9 +27,12 @@ import { SupabaseEventGateway } from "./supabase-gateway";
  * Google Calendar → events テーブル 同期本体 (ADR 0005 / 0006 / 0008 / 0010)。
  *
  * - 対象は primary カレンダーのみ (ADR 0008)
- * - 過去 7 日 〜 未来 30 日 を full sync
+ * - 同期方式 (ADR 0006):
+ *   - syncToken 未保存 → 過去 7 日 〜 未来 30 日を full sync。最終ページの nextSyncToken を保存
+ *   - syncToken 保存済み → 期間指定なし incremental sync。最終ページの nextSyncToken で更新
+ *   - 410 Gone (syncToken 失効) → syncToken を捨てて full sync に 1 度だけ fallback
  * - 2 回目以降も idempotent: `(source, external_id)` の unique 制約に upsert
- * - Google 側で cancelled になったものはローカルからも削除
+ * - Google 側で cancelled になったものはローカルからも削除 (incremental でも機能する)
  * - 401 を受けたら `refreshAccessToken` → 1 回だけ retry (ADR 0009)
  */
 
@@ -87,38 +91,67 @@ export async function syncGoogleCalendar(
     nowDate.getTime() + SYNC_WINDOW_FUTURE_DAYS * MS_PER_DAY,
   ).toISOString();
 
+  const initialState = await deps.syncStateGateway.get();
+  let activeSyncToken: string | undefined =
+    initialState?.syncToken ?? undefined;
+
   const initial = await deps.getValidAccessToken(supabase);
   let accessToken = initial.accessToken;
   let hasRetriedAuth = false;
+  let hasFallenBackFromGone = false;
 
-  const collected: GoogleCalendarEvent[] = [];
-  let pageToken: string | undefined;
+  let collected: GoogleCalendarEvent[] = [];
+  let nextSyncToken: string | undefined;
 
-  while (true) {
-    let page: GoogleCalendarEventsListResponse;
-    try {
-      page = await deps.listEvents({
-        accessToken,
-        calendarId: PRIMARY_CALENDAR_ID,
-        timeMin,
-        timeMax,
-        singleEvents: true,
-        orderBy: "startTime",
-        pageToken,
-      });
-    } catch (err) {
-      if (err instanceof GoogleApiUnauthorizedError && !hasRetriedAuth) {
-        hasRetriedAuth = true;
-        const refreshed = await deps.refreshAccessToken(supabase);
-        accessToken = refreshed.accessToken;
-        continue;
+  // 外側ループは 410 Gone fallback のリトライ。inner ループで最終ページまで到達したら break。
+  outer: while (true) {
+    collected = [];
+    nextSyncToken = undefined;
+    let pageToken: string | undefined;
+
+    while (true) {
+      let page: GoogleCalendarEventsListResponse;
+      try {
+        page = await deps.listEvents(
+          buildListParams({
+            accessToken,
+            syncToken: activeSyncToken,
+            timeMin,
+            timeMax,
+            pageToken,
+          }),
+        );
+      } catch (err) {
+        if (err instanceof GoogleApiUnauthorizedError && !hasRetriedAuth) {
+          hasRetriedAuth = true;
+          const refreshed = await deps.refreshAccessToken(supabase);
+          accessToken = refreshed.accessToken;
+          continue;
+        }
+        // 410 Gone: syncToken 失効 → token を捨てて full sync に 1 回だけ fallback
+        if (
+          err instanceof GoogleApiError &&
+          err.status === 410 &&
+          activeSyncToken !== undefined &&
+          !hasFallenBackFromGone
+        ) {
+          hasFallenBackFromGone = true;
+          activeSyncToken = undefined;
+          continue outer;
+        }
+        throw err;
       }
-      throw err;
+
+      collected.push(...(page.items ?? []));
+      pageToken = page.nextPageToken;
+      if (!pageToken) {
+        // 最終ページの nextSyncToken のみが次回の incremental に使える (中間ページのものは無効)。
+        nextSyncToken = page.nextSyncToken;
+        break;
+      }
     }
 
-    collected.push(...(page.items ?? []));
-    pageToken = page.nextPageToken;
-    if (!pageToken) break;
+    break;
   }
 
   const { upserts, cancelled } = partitionEvents(collected);
@@ -133,14 +166,50 @@ export async function syncGoogleCalendar(
   }
 
   const lastSyncedAt = nowDate.toISOString();
-  // 成功したときだけ記録する (listEvents/refresh が throw した経路では呼ばれない)。
-  // ADR 0007 の起動時 15 分閾値判定、ADR 0006 の syncToken 保持の両方をこの 1 行で繋ぐ。
-  await deps.syncStateGateway.upsertLastSyncedAt(lastSyncedAt);
+  // 成功したときだけ atomic に lastSyncedAt + syncToken を記録する。
+  // listEvents が最後まで throw した経路ではここに来ないので、stale な syncToken は上書きされない。
+  await deps.syncStateGateway.saveSyncState({
+    lastSyncedAt,
+    syncToken: nextSyncToken ?? null,
+  });
 
   return {
     synced,
     deleted,
     lastSyncedAt,
+  };
+}
+
+/**
+ * full / incremental の差分は Google API の制約 (syncToken 併用不可) を埋め込んだ params 構築に閉じる。
+ * - syncToken あり: timeMin / timeMax / orderBy は付けない
+ * - syncToken なし: 通常の full sync
+ */
+function buildListParams(args: {
+  accessToken: string;
+  syncToken: string | undefined;
+  timeMin: string;
+  timeMax: string;
+  pageToken: string | undefined;
+}): ListEventsParams {
+  if (args.syncToken) {
+    return {
+      accessToken: args.accessToken,
+      calendarId: PRIMARY_CALENDAR_ID,
+      syncToken: args.syncToken,
+      // singleEvents は full sync と同じ値でなければならない (Google API 仕様)
+      singleEvents: true,
+      pageToken: args.pageToken,
+    };
+  }
+  return {
+    accessToken: args.accessToken,
+    calendarId: PRIMARY_CALENDAR_ID,
+    timeMin: args.timeMin,
+    timeMax: args.timeMax,
+    singleEvents: true,
+    orderBy: "startTime",
+    pageToken: args.pageToken,
   };
 }
 
