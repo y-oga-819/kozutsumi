@@ -165,41 +165,12 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      # supabase start で pull する Docker image (postgres / kong / gotrue /
-      # postgrest / postgres-meta 等) を tar に固めて actions/cache に乗せる。
-      # 初回は MISS で 2m13s ぶん丸ごと払うが、2 回目以降は load + start で
-      # pull をスキップできる。key は config.toml の hash + 手動 reset 用 v1。
-      # supabase CLI が image version を bump した場合は cache stale になるが、
-      # そのときは v2 に bump するか CLI version を pin する。
-      - name: Restore Supabase Docker images cache
-        id: supabase-docker-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/supabase-docker-images.tar
-          key: supabase-docker-${{ runner.os }}-${{ hashFiles('supabase/config.toml') }}-v1
-      - name: Load cached Supabase Docker images
-        if: steps.supabase-docker-cache.outputs.cache-hit == 'true'
-        run: docker load -i ~/.cache/supabase-docker-images.tar
       # ADR 0011: e2e は本物の Supabase スタック + password sign-in でログインする。
       # auth は必要、studio / storage 等は不要なので最小構成で起動する。
       - name: Start Supabase local stack
         run: |
           supabase start \
             -x studio,inbucket,storage-api,imgproxy,edge-runtime,logflare,vector,pgsodium,realtime
-      # cache miss だった場合のみ、起動後の image set を tar 化して保存する。
-      # save 失敗が test を止めないよう continue-on-error。
-      - name: Save Supabase Docker images for cache
-        if: steps.supabase-docker-cache.outputs.cache-hit != 'true'
-        continue-on-error: true
-        run: |
-          mkdir -p ~/.cache
-          images=$(docker ps --format '{{.Image}}' | sort -u)
-          if [ -n "$images" ]; then
-            echo "Saving images:"
-            echo "$images"
-            docker save -o ~/.cache/supabase-docker-images.tar $images
-            ls -lh ~/.cache/supabase-docker-images.tar
-          fi
       - name: Export Supabase keys into env
         run: |
           supabase status -o env > /tmp/sb.env
