@@ -1,11 +1,7 @@
 import { EVENT_SOURCE, type Event } from "../../entities/event/types";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
-import {
-  fmtDuration,
-  formatClock,
-  minutesOfDay,
-} from "../../shared/lib/time";
+import { fmtDuration, formatClock, minutesOfDay } from "../../shared/lib/time";
 import { GoogleCalendarBadge } from "../../entities/event/GoogleCalendarBadge";
 
 type EventCardProps = {
@@ -22,9 +18,7 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
   const isPast = evEnd <= nowMin;
   const isNow = evStart <= nowMin && evEnd > nowMin;
   const isNext = isNextCandidate && !isNow;
-  const evColor = event.projectId
-    ? getProject(projectsById, event.projectId).color
-    : "#52525b";
+  const evColor = event.projectId ? getProject(projectsById, event.projectId).color : "#52525b";
   const hasAttachments = event.hasAttachments;
   const hasMeet = !!event.meetUrl;
   const meetLabel = event.meetUrl?.includes("zoom") ? "Zoom" : "Meet";
@@ -45,14 +39,10 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
         <span className="shrink-0 text-[10px] tabular-nums text-fg-weak">
           {formatClock(event.startTime)}–{formatClock(event.endTime)}
         </span>
-        <span className="shrink-0 text-[9px] text-fg-faint">
-          ({fmtDuration(evEnd - evStart)})
-        </span>
+        <span className="shrink-0 text-[9px] text-fg-faint">({fmtDuration(evEnd - evStart)})</span>
         <span
           className={`flex-1 truncate font-jp text-[11px] ${
-            isNow
-              ? "font-medium text-fg-emphasized"
-              : "font-normal text-fg-muted"
+            isNow ? "font-medium text-fg-emphasized" : "font-normal text-fg-muted"
           }`}
         >
           {event.title}
@@ -72,12 +62,7 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
               strokeWidth="1.2"
               strokeLinejoin="round"
             />
-            <path
-              d="M9 2V5H12"
-              stroke="#71717a"
-              strokeWidth="1.2"
-              strokeLinejoin="round"
-            />
+            <path d="M9 2V5H12" stroke="#71717a" strokeWidth="1.2" strokeLinejoin="round" />
           </svg>
         )}
         {hasMeet && !isNext && (
@@ -88,15 +73,7 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
             fill="none"
             className="shrink-0 opacity-50"
           >
-            <rect
-              x="1"
-              y="4"
-              width="10"
-              height="8"
-              rx="1"
-              stroke="#71717a"
-              strokeWidth="1.2"
-            />
+            <rect x="1" y="4" width="10" height="8" rx="1" stroke="#71717a" strokeWidth="1.2" />
             <path
               d="M11 7L15 5V11L11 9"
               stroke="#71717a"
@@ -149,9 +126,7 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
             </svg>
             {meetLabel}に参加
           </a>
-          {hasAttachments && (
-            <span className="font-jp text-[9px] text-fg-weak">資料あり</span>
-          )}
+          {hasAttachments && <span className="font-jp text-[9px] text-fg-weak">資料あり</span>}
         </div>
       )}
     </div>

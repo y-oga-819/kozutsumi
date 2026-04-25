@@ -6,13 +6,7 @@ import { CalendarSyncButton } from "./CalendarSyncButton";
 describe("CalendarSyncButton", () => {
   test("デフォルトではクリック可能でラベルは「同期」", () => {
     const onClick = vi.fn();
-    render(
-      <CalendarSyncButton
-        isPending={false}
-        lastSyncedAt={null}
-        onClick={onClick}
-      />,
-    );
+    render(<CalendarSyncButton isPending={false} lastSyncedAt={null} onClick={onClick} />);
 
     const button = screen.getByRole("button", {
       name: "カレンダーを同期",
@@ -26,13 +20,7 @@ describe("CalendarSyncButton", () => {
 
   test("isPending=true のときは disabled / スピナー表示で「同期中...」", () => {
     const onClick = vi.fn();
-    render(
-      <CalendarSyncButton
-        isPending={true}
-        lastSyncedAt={null}
-        onClick={onClick}
-      />,
-    );
+    render(<CalendarSyncButton isPending={true} lastSyncedAt={null} onClick={onClick} />);
 
     const button = screen.getByRole("button", {
       name: "カレンダーを同期",

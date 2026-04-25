@@ -16,7 +16,7 @@ export function ProjectLanes({ projectOrder }: ProjectLanesProps) {
       {projectOrder.map((pk, pi) => (
         <div
           key={pk}
-          className="pointer-events-none absolute top-0 bottom-0 z-[1] w-0.5 opacity-30"
+          className="pointer-events-none absolute bottom-0 top-0 z-[1] w-0.5 opacity-30"
           style={{
             left: laneLeftPx(pi),
             background: getProject(projectsById, pk).color,
@@ -28,10 +28,7 @@ export function ProjectLanes({ projectOrder }: ProjectLanesProps) {
           const p = getProject(projectsById, k);
           return (
             <div key={k} className="flex items-center gap-1">
-              <div
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: p.color }}
-              />
+              <div className="h-1.5 w-1.5 rounded-full" style={{ background: p.color }} />
               <span className="font-jp text-[9px] text-fg-weak">{p.name}</span>
             </div>
           );

@@ -5,10 +5,7 @@ import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
 import type { PauseReason } from "../../entities/task/time-entries";
 import type { Task } from "../../entities/task/types";
-import {
-  IMMINENT_THRESHOLD_MS,
-  formatRelativeTime,
-} from "../../shared/lib/time";
+import { IMMINENT_THRESHOLD_MS, formatRelativeTime } from "../../shared/lib/time";
 import { Grip } from "./Grip";
 import { pauseReasonLabel } from "./PauseReasonModal";
 import { formatElapsed } from "./useTaskTimer";
@@ -50,9 +47,7 @@ export function TopTaskCard({
 }: TopTaskCardProps) {
   const { projectsById } = useProjects();
   const proj = getProject(projectsById, task.projectId);
-  const dep = task.dependsOnEventId
-    ? events.find((e) => e.id === task.dependsOnEventId)
-    : null;
+  const dep = task.dependsOnEventId ? events.find((e) => e.id === task.dependsOnEventId) : null;
   // 24h 以内に迫っている依存はハイライト (背景濃度 + 太字) して着手判断のシグナルを強める。
   // now=0 (SSR placeholder) のときは判定スキップ。
   const depImminent =
@@ -74,10 +69,7 @@ export function TopTaskCard({
         border: `1px solid ${proj.color}40`,
       }}
     >
-      <div
-        className="absolute left-0 top-0 bottom-0 w-[3px]"
-        style={{ background: proj.color }}
-      />
+      <div className="absolute bottom-0 left-0 top-0 w-[3px]" style={{ background: proj.color }} />
       <div className="flex items-start gap-2.5">
         <div
           onPointerDown={(e) => {
@@ -90,19 +82,12 @@ export function TopTaskCard({
         </div>
         <div className="flex-1">
           <div className="mb-1 flex items-center gap-2">
-            <div
-              className="h-2 w-2 rounded-full"
-              style={{ background: proj.color }}
-            />
-            <span className="font-jp text-[9px] text-fg-subtle">
-              {proj.name}
-            </span>
+            <div className="h-2 w-2 rounded-full" style={{ background: proj.color }} />
+            <span className="font-jp text-[9px] text-fg-subtle">{proj.name}</span>
             {dep && (
               <span
                 className={`max-w-[180px] truncate rounded-[3px] px-1.5 py-px font-jp text-[8px] text-accent-amber ${
-                  depImminent
-                    ? "bg-[#E85D0440] font-semibold"
-                    : "bg-[#E85D0415]"
+                  depImminent ? "bg-[#E85D0440] font-semibold" : "bg-[#E85D0415]"
                 }`}
                 title={`${dep.title} (${formatRelativeTime(dep.startTime, new Date(now))})`}
               >
@@ -127,9 +112,7 @@ export function TopTaskCard({
             {task.title}
           </div>
           {preview && (
-            <div className="mt-1 truncate font-jp text-[10px] text-fg-weak">
-              {preview}
-            </div>
+            <div className="mt-1 truncate font-jp text-[10px] text-fg-weak">{preview}</div>
           )}
         </div>
         <TimerControls

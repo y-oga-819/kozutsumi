@@ -21,9 +21,7 @@ const headingSizeClass: Record<HeadingLevel, string> = {
   3: "text-[12px]",
 };
 
-export function renderMarkdown(
-  md: string | null | undefined,
-): ReactNode[] | null {
+export function renderMarkdown(md: string | null | undefined): ReactNode[] | null {
   if (!md) return null;
   const lines = md.split("\n");
   const elements: ReactNode[] = [];
@@ -79,9 +77,7 @@ export function renderMarkdown(
           key={key++}
           className="my-1.5 overflow-auto whitespace-pre rounded-md border border-bg-divider bg-bg-elevated px-3 py-2.5 text-[11px] leading-[1.5] text-fg-muted"
         >
-          {lang && (
-            <div className="mb-1 text-[9px] text-fg-weak">{lang}</div>
-          )}
+          {lang && <div className="mb-1 text-[9px] text-fg-weak">{lang}</div>}
           {codeLines.join("\n")}
         </pre>,
       );
@@ -107,9 +103,7 @@ export function renderMarkdown(
               }`}
             >
               <span className="shrink-0 text-fg-weak">•</span>
-              <span
-                dangerouslySetInnerHTML={{ __html: inlineStyle(it.text) }}
-              />
+              <span dangerouslySetInnerHTML={{ __html: inlineStyle(it.text) }} />
             </div>
           ))}
         </div>,
@@ -126,13 +120,8 @@ export function renderMarkdown(
       elements.push(
         <div key={key++} className="my-1">
           {items.map((it, j) => (
-            <div
-              key={j}
-              className="flex gap-1.5 py-0.5 font-jp text-[12px] text-fg-muted"
-            >
-              <span className="min-w-[16px] shrink-0 text-right text-fg-weak">
-                {j + 1}.
-              </span>
+            <div key={j} className="flex gap-1.5 py-0.5 font-jp text-[12px] text-fg-muted">
+              <span className="min-w-[16px] shrink-0 text-right text-fg-weak">{j + 1}.</span>
               <span dangerouslySetInnerHTML={{ __html: inlineStyle(it) }} />
             </div>
           ))}

@@ -36,15 +36,8 @@ export function GatewayProvider({
   value?: GatewayBundle;
   children: ReactNode;
 }) {
-  const resolved = useMemo(
-    () => value ?? createSupabaseGateways(),
-    [value],
-  );
-  return (
-    <GatewayContext.Provider value={resolved}>
-      {children}
-    </GatewayContext.Provider>
-  );
+  const resolved = useMemo(() => value ?? createSupabaseGateways(), [value]);
+  return <GatewayContext.Provider value={resolved}>{children}</GatewayContext.Provider>;
 }
 
 function useGatewayBundle(): GatewayBundle {

@@ -21,9 +21,7 @@ export default async function LoginPage() {
           <span className="text-accent-blue">kozu</span>
           <span className="text-fg-faint">tsumi</span>
         </div>
-        <p className="mt-3 text-[12px] text-fg-weak">
-          個人特化AI秘書システム
-        </p>
+        <p className="mt-3 text-[12px] text-fg-weak">個人特化AI秘書システム</p>
       </div>
       <LoginButton />
     </div>

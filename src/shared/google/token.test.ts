@@ -1,12 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  test,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
   getValidAccessToken,
@@ -73,9 +66,7 @@ describe("getValidAccessToken", () => {
 
   test("session が無ければ ProviderTokenMissingError", async () => {
     const supabase = makeSupabase(null);
-    await expect(getValidAccessToken(supabase)).rejects.toBeInstanceOf(
-      ProviderTokenMissingError,
-    );
+    await expect(getValidAccessToken(supabase)).rejects.toBeInstanceOf(ProviderTokenMissingError);
   });
 
   test("provider_token が無ければ ProviderTokenMissingError", async () => {
@@ -83,9 +74,7 @@ describe("getValidAccessToken", () => {
       provider_token: null,
       provider_refresh_token: "refresh-1",
     });
-    await expect(getValidAccessToken(supabase)).rejects.toBeInstanceOf(
-      ProviderTokenMissingError,
-    );
+    await expect(getValidAccessToken(supabase)).rejects.toBeInstanceOf(ProviderTokenMissingError);
   });
 
   test("provider_refresh_token が無ければ ProviderTokenMissingError", async () => {
@@ -93,9 +82,7 @@ describe("getValidAccessToken", () => {
       provider_token: "access-1",
       provider_refresh_token: null,
     });
-    await expect(getValidAccessToken(supabase)).rejects.toBeInstanceOf(
-      ProviderTokenMissingError,
-    );
+    await expect(getValidAccessToken(supabase)).rejects.toBeInstanceOf(ProviderTokenMissingError);
   });
 });
 
@@ -161,23 +148,16 @@ describe("refreshAccessToken", () => {
       provider_refresh_token: "refresh-1",
     });
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({ error: "invalid_grant" }),
-        { status: 400 },
-      ),
+      new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 }),
     );
 
-    await expect(refreshAccessToken(supabase)).rejects.toBeInstanceOf(
-      RefreshTokenExpiredError,
-    );
+    await expect(refreshAccessToken(supabase)).rejects.toBeInstanceOf(RefreshTokenExpiredError);
   });
 
   test("session が無ければ ProviderTokenMissingError で Google を叩かない", async () => {
     const supabase = makeSupabase(null);
 
-    await expect(refreshAccessToken(supabase)).rejects.toBeInstanceOf(
-      ProviderTokenMissingError,
-    );
+    await expect(refreshAccessToken(supabase)).rejects.toBeInstanceOf(ProviderTokenMissingError);
     expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
   });
 
@@ -187,9 +167,7 @@ describe("refreshAccessToken", () => {
       provider_refresh_token: null,
     });
 
-    await expect(refreshAccessToken(supabase)).rejects.toBeInstanceOf(
-      ProviderTokenMissingError,
-    );
+    await expect(refreshAccessToken(supabase)).rejects.toBeInstanceOf(ProviderTokenMissingError);
     expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
   });
 });

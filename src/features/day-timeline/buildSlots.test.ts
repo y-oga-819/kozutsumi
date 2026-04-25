@@ -52,9 +52,7 @@ describe("computeDayBounds", () => {
 describe("buildSlots", () => {
   test("イベント無しなら 1つの free スロット", () => {
     const slots = buildSlots([], 9 * 60, 18 * 60);
-    expect(slots).toEqual([
-      { type: "free", start: 9 * 60, end: 18 * 60, duration: 9 * 60 },
-    ]);
+    expect(slots).toEqual([{ type: "free", start: 9 * 60, end: 18 * 60, duration: 9 * 60 }]);
   });
 
   test("1つのイベントは free / event / free の3スロットに分割される", () => {
@@ -85,7 +83,9 @@ describe("buildSlots", () => {
   test("時刻順でない入力も開始時刻順にソートされる", () => {
     const events = [ev("e2", "14:00", "15:00"), ev("e1", "10:00", "11:00")];
     const slots = buildSlots(events, 9 * 60, 18 * 60);
-    const eventIds = slots.filter((s): s is import("./buildSlots").EventSlot => s.type === "event").map((s) => s.event.id);
+    const eventIds = slots
+      .filter((s): s is import("./buildSlots").EventSlot => s.type === "event")
+      .map((s) => s.event.id);
     expect(eventIds).toEqual(["e1", "e2"]);
   });
 

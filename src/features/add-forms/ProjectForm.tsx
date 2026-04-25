@@ -9,14 +9,7 @@ type ProjectFormProps = {
   onClose: () => void;
 };
 
-const DEFAULT_COLORS = [
-  "#E85D04",
-  "#0096C7",
-  "#2D9F45",
-  "#9B5DE5",
-  "#58A6FF",
-  "#EF4444",
-];
+const DEFAULT_COLORS = ["#E85D04", "#0096C7", "#2D9F45", "#9B5DE5", "#58A6FF", "#EF4444"];
 
 /**
  * Phase 1 仕様 Step 3「プロジェクト管理（名前、色、本業フラグ）」。

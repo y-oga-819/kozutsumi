@@ -78,8 +78,7 @@ export function formatRelativeTime(iso: string, now: Date = new Date()): string 
     const minutes = Math.round(diffMs / MS_PER_MIN);
     return `${minutes}分後`;
   }
-  const dayDiff =
-    Math.round((startOfLocalDay(target) - startOfLocalDay(now)) / MS_PER_DAY);
+  const dayDiff = Math.round((startOfLocalDay(target) - startOfLocalDay(now)) / MS_PER_DAY);
   const clock = formatClock(iso);
   if (dayDiff === 0) return `今日 ${clock}`;
   if (dayDiff === 1) return `明日 ${clock}`;

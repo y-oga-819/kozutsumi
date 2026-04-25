@@ -1,11 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-  formatDate,
-  formatRelativeTime,
-  fmtDuration,
-  fmtMin,
-  timeToMin,
-} from "./time";
+import { formatDate, formatRelativeTime, fmtDuration, fmtMin, timeToMin } from "./time";
 
 describe("formatDate", () => {
   test('"YYYY-MM-DD" を "M/D (曜)" 形式に整形する', () => {

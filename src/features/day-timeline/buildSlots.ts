@@ -22,29 +22,16 @@ export function computeDayBounds(
   events: readonly Event[],
   nowMin: number,
 ): { dayStart: number; dayEnd: number } {
-  const latestEnd = Math.max(
-    18 * 60,
-    nowMin,
-    ...events.map((e) => minutesOfDay(e.endTime)),
-  );
-  const earliestStart = Math.min(
-    9 * 60,
-    ...events.map((e) => minutesOfDay(e.startTime)),
-  );
+  const latestEnd = Math.max(18 * 60, nowMin, ...events.map((e) => minutesOfDay(e.endTime)));
+  const earliestStart = Math.min(9 * 60, ...events.map((e) => minutesOfDay(e.startTime)));
   return {
     dayStart: Math.floor(earliestStart / 60) * 60,
     dayEnd: Math.ceil(latestEnd / 60) * 60,
   };
 }
 
-export function buildSlots(
-  events: readonly Event[],
-  dayStart: number,
-  dayEnd: number,
-): Slot[] {
-  const sorted = [...events].sort(
-    (a, b) => minutesOfDay(a.startTime) - minutesOfDay(b.startTime),
-  );
+export function buildSlots(events: readonly Event[], dayStart: number, dayEnd: number): Slot[] {
+  const sorted = [...events].sort((a, b) => minutesOfDay(a.startTime) - minutesOfDay(b.startTime));
   const slots: Slot[] = [];
   let cursor = dayStart;
   sorted.forEach((ev) => {

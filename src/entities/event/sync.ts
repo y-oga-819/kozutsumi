@@ -17,10 +17,7 @@ import {
 } from "@/shared/google/token";
 import type { Database } from "@/shared/types/database";
 
-import type {
-  EventGateway,
-  UpsertGoogleCalendarEventInput,
-} from "./gateway";
+import type { EventGateway, UpsertGoogleCalendarEventInput } from "./gateway";
 import { SupabaseEventGateway } from "./supabase-gateway";
 
 /**
@@ -54,15 +51,9 @@ export type SyncResult = {
 export type SyncGoogleCalendarDeps = {
   gateway: EventGateway;
   syncStateGateway: CalendarSyncStateGateway;
-  listEvents: (
-    params: ListEventsParams,
-  ) => Promise<GoogleCalendarEventsListResponse>;
-  getValidAccessToken: (
-    supabase: SupabaseClient<Database>,
-  ) => Promise<GoogleProviderAccess>;
-  refreshAccessToken: (
-    supabase: SupabaseClient<Database>,
-  ) => Promise<GoogleProviderAccess>;
+  listEvents: (params: ListEventsParams) => Promise<GoogleCalendarEventsListResponse>;
+  getValidAccessToken: (supabase: SupabaseClient<Database>) => Promise<GoogleProviderAccess>;
+  refreshAccessToken: (supabase: SupabaseClient<Database>) => Promise<GoogleProviderAccess>;
   now: () => Date;
 };
 
@@ -72,28 +63,19 @@ export async function syncGoogleCalendar(
 ): Promise<SyncResult> {
   const deps: SyncGoogleCalendarDeps = {
     gateway: overrides.gateway ?? new SupabaseEventGateway(supabase),
-    syncStateGateway:
-      overrides.syncStateGateway ??
-      new SupabaseCalendarSyncStateGateway(supabase),
+    syncStateGateway: overrides.syncStateGateway ?? new SupabaseCalendarSyncStateGateway(supabase),
     listEvents: overrides.listEvents ?? defaultListEvents,
-    getValidAccessToken:
-      overrides.getValidAccessToken ?? defaultGetValidAccessToken,
-    refreshAccessToken:
-      overrides.refreshAccessToken ?? defaultRefreshAccessToken,
+    getValidAccessToken: overrides.getValidAccessToken ?? defaultGetValidAccessToken,
+    refreshAccessToken: overrides.refreshAccessToken ?? defaultRefreshAccessToken,
     now: overrides.now ?? (() => new Date()),
   };
 
   const nowDate = deps.now();
-  const timeMin = new Date(
-    nowDate.getTime() - SYNC_WINDOW_PAST_DAYS * MS_PER_DAY,
-  ).toISOString();
-  const timeMax = new Date(
-    nowDate.getTime() + SYNC_WINDOW_FUTURE_DAYS * MS_PER_DAY,
-  ).toISOString();
+  const timeMin = new Date(nowDate.getTime() - SYNC_WINDOW_PAST_DAYS * MS_PER_DAY).toISOString();
+  const timeMax = new Date(nowDate.getTime() + SYNC_WINDOW_FUTURE_DAYS * MS_PER_DAY).toISOString();
 
   const initialState = await deps.syncStateGateway.get();
-  let activeSyncToken: string | undefined =
-    initialState?.syncToken ?? undefined;
+  let activeSyncToken: string | undefined = initialState?.syncToken ?? undefined;
 
   const initial = await deps.getValidAccessToken(supabase);
   let accessToken = initial.accessToken;
@@ -242,8 +224,7 @@ export function mapGoogleEventToUpsertInput(
     startTime: times.start,
     endTime: times.end,
     meetUrl: extractMeetUrl(event),
-    hasAttachments:
-      Array.isArray(event.attachments) && event.attachments.length > 0,
+    hasAttachments: Array.isArray(event.attachments) && event.attachments.length > 0,
     description: event.description ?? "",
   };
 }

@@ -1,11 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type {
-  Database,
-  Tables,
-  TablesInsert,
-  TablesUpdate,
-} from "@/shared/types/database";
+import type { Database, Tables, TablesInsert, TablesUpdate } from "@/shared/types/database";
 
 import type { PauseReason, TimeEntry } from "./time-entries";
 import type { TaskTimeEntryGateway } from "./time-entry-gateway";
@@ -24,9 +19,7 @@ function fromRow(row: Tables<"task_time_entries">): TimeEntry {
 }
 
 function computeDurationSeconds(startedAt: string, pausedAt: string): number {
-  const delta = Math.floor(
-    (new Date(pausedAt).getTime() - new Date(startedAt).getTime()) / 1000,
-  );
+  const delta = Math.floor((new Date(pausedAt).getTime() - new Date(startedAt).getTime()) / 1000);
   return delta < 0 ? 0 : delta;
 }
 
@@ -56,10 +49,7 @@ export class SupabaseTaskTimeEntryGateway implements TaskTimeEntryGateway {
     return row ? fromRow(row) : null;
   }
 
-  async start(
-    taskId: string,
-    startedAt: string = new Date().toISOString(),
-  ): Promise<TimeEntry> {
+  async start(taskId: string, startedAt: string = new Date().toISOString()): Promise<TimeEntry> {
     const payload: TablesInsert<"task_time_entries"> = {
       task_id: taskId,
       started_at: startedAt,

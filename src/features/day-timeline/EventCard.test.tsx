@@ -21,36 +21,21 @@ const baseEvent: Event = {
 describe("EventCard", () => {
   test("タイトルを表示する", () => {
     const { getByText } = render(
-      <EventCard
-        event={baseEvent}
-        nowMin={0}
-        isNextCandidate={false}
-        onClick={() => {}}
-      />,
+      <EventCard event={baseEvent} nowMin={0} isNextCandidate={false} onClick={() => {}} />,
     );
     expect(getByText("Test Event")).toBeTruthy();
   });
 
   test("時刻レンジを表示する", () => {
     const { getByText } = render(
-      <EventCard
-        event={baseEvent}
-        nowMin={0}
-        isNextCandidate={false}
-        onClick={() => {}}
-      />,
+      <EventCard event={baseEvent} nowMin={0} isNextCandidate={false} onClick={() => {}} />,
     );
     expect(getByText("10:00–11:00")).toBeTruthy();
   });
 
   test("isNextCandidate=true かつイベント前なら NEXT バッジを表示", () => {
     const { getByText } = render(
-      <EventCard
-        event={baseEvent}
-        nowMin={9 * 60}
-        isNextCandidate={true}
-        onClick={() => {}}
-      />,
+      <EventCard event={baseEvent} nowMin={9 * 60} isNextCandidate={true} onClick={() => {}} />,
     );
     expect(getByText("NEXT")).toBeTruthy();
   });
@@ -69,12 +54,7 @@ describe("EventCard", () => {
 
   test("source=manual なら Google バッジは表示しない", () => {
     const { queryByTestId } = render(
-      <EventCard
-        event={baseEvent}
-        nowMin={0}
-        isNextCandidate={false}
-        onClick={() => {}}
-      />,
+      <EventCard event={baseEvent} nowMin={0} isNextCandidate={false} onClick={() => {}} />,
     );
     expect(queryByTestId("google-calendar-badge")).toBeNull();
   });

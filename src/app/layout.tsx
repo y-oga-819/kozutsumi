@@ -25,11 +25,7 @@ export const metadata: Metadata = {
   description: "個人特化AI秘書システム",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja" className={`${ibmPlexMono.variable} ${notoSansJp.variable}`}>
       <body className="mx-auto min-h-screen max-w-[480px] bg-bg-primary font-mono text-fg-default">

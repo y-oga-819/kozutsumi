@@ -1,11 +1,6 @@
 import type { Config } from "tailwindcss";
 
-import {
-  ACCENT_COLORS,
-  BG_COLORS,
-  FG_COLORS,
-  PROJECT_COLORS,
-} from "./src/shared/theme/tokens";
+import { ACCENT_COLORS, BG_COLORS, FG_COLORS, PROJECT_COLORS } from "./src/shared/theme/tokens";
 
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
@@ -37,12 +32,7 @@ const config: Config = {
         "panel-slide-up": "panel-slide-up 0.25s ease",
       },
       fontFamily: {
-        mono: [
-          "var(--font-mono)",
-          "ui-monospace",
-          "SFMono-Regular",
-          "monospace",
-        ],
+        mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
         jp: ["var(--font-jp)", "sans-serif"],
       },
     },

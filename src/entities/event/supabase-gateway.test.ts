@@ -85,9 +85,7 @@ function makeSupabase(opts: {
       return takeResult();
     };
     // delete().eq(...) はそのまま await されるので thenable にする
-    (builder as { then?: unknown }).then = (
-      onFulfilled: (value: unknown) => unknown,
-    ) => {
+    (builder as { then?: unknown }).then = (onFulfilled: (value: unknown) => unknown) => {
       record(table, "await", []);
       return Promise.resolve(takeResult()).then(onFulfilled);
     };
@@ -131,9 +129,7 @@ describe("SupabaseEventGateway.update", () => {
     expect(eventsCalls[0]).toMatchObject({ method: "select", args: ["source"] });
     expect(
       eventsCalls.some(
-        (c) =>
-          c.method === "update" &&
-          (c.args[0] as Record<string, unknown>).title === "Renamed",
+        (c) => c.method === "update" && (c.args[0] as Record<string, unknown>).title === "Renamed",
       ),
     ).toBe(true);
   });
@@ -187,9 +183,7 @@ describe("SupabaseEventGateway.update", () => {
         results: [{ data: { source: "google_calendar" } }],
       });
       const gw = new SupabaseEventGateway(supabase);
-      await expect(gw.update("g1", patch)).rejects.toThrow(
-        /google_calendar event is read-only/,
-      );
+      await expect(gw.update("g1", patch)).rejects.toThrow(/google_calendar event is read-only/);
     }
   });
 
@@ -199,9 +193,9 @@ describe("SupabaseEventGateway.update", () => {
     });
     const gw = new SupabaseEventGateway(supabase);
 
-    await expect(
-      gw.update("g1", { projectId: "slo", title: "x" }),
-    ).rejects.toThrow(/google_calendar event is read-only/);
+    await expect(gw.update("g1", { projectId: "slo", title: "x" })).rejects.toThrow(
+      /google_calendar event is read-only/,
+    );
   });
 });
 
@@ -229,8 +223,6 @@ describe("SupabaseEventGateway.delete", () => {
     });
     const gw = new SupabaseEventGateway(supabase);
 
-    await expect(gw.delete("g1")).rejects.toThrow(
-      /google_calendar event cannot be deleted/,
-    );
+    await expect(gw.delete("g1")).rejects.toThrow(/google_calendar event cannot be deleted/);
   });
 });

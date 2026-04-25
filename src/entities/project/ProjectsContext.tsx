@@ -23,11 +23,7 @@ export function ProjectsProvider({
     () => ({ projects, projectsById: indexProjectsById(projects) }),
     [projects],
   );
-  return (
-    <ProjectsContext.Provider value={value}>
-      {children}
-    </ProjectsContext.Provider>
-  );
+  return <ProjectsContext.Provider value={value}>{children}</ProjectsContext.Provider>;
 }
 
 /**

@@ -3,11 +3,7 @@ import type { Event } from "../../entities/event/types";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
-import {
-  IMMINENT_THRESHOLD_MS,
-  fmtDuration,
-  formatRelativeTime,
-} from "../../shared/lib/time";
+import { IMMINENT_THRESHOLD_MS, fmtDuration, formatRelativeTime } from "../../shared/lib/time";
 import { Grip } from "./Grip";
 
 type TaskRowProps = {
@@ -32,9 +28,7 @@ export function TaskRow({
 }: TaskRowProps) {
   const { projectsById } = useProjects();
   const proj = getProject(projectsById, task.projectId);
-  const dep = task.dependsOnEventId
-    ? events.find((e) => e.id === task.dependsOnEventId)
-    : null;
+  const dep = task.dependsOnEventId ? events.find((e) => e.id === task.dependsOnEventId) : null;
   const depImminent =
     dep !== null &&
     dep !== undefined &&
@@ -61,15 +55,11 @@ export function TaskRow({
         className="h-1.5 w-1.5 shrink-0 rounded-full opacity-70"
         style={{ background: proj.color }}
       />
-      <span className="flex-1 truncate font-jp text-[12px] text-fg-muted">
-        {task.title}
-      </span>
+      <span className="flex-1 truncate font-jp text-[12px] text-fg-muted">{task.title}</span>
       {dep && (
         <span
           className={`max-w-[140px] shrink-0 truncate rounded-[3px] px-1 py-px font-jp text-[8px] text-accent-amber ${
-            depImminent
-              ? "bg-[#E85D0440] font-semibold"
-              : "bg-[#E85D0415]"
+            depImminent ? "bg-[#E85D0440] font-semibold" : "bg-[#E85D0415]"
           }`}
           title={`${dep.title} (${formatRelativeTime(dep.startTime, new Date(now))})`}
         >

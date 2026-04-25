@@ -2,16 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database, TablesInsert } from "@/shared/types/database";
 
-import type {
-  CalendarSyncState,
-  CalendarSyncStateGateway,
-} from "./gateway";
+import type { CalendarSyncState, CalendarSyncStateGateway } from "./gateway";
 
 type Sb = SupabaseClient<Database>;
 
-export class SupabaseCalendarSyncStateGateway
-  implements CalendarSyncStateGateway
-{
+export class SupabaseCalendarSyncStateGateway implements CalendarSyncStateGateway {
   constructor(private readonly supabase: Sb) {}
 
   async get(): Promise<CalendarSyncState | null> {
@@ -33,10 +28,7 @@ export class SupabaseCalendarSyncStateGateway
     };
   }
 
-  async saveSyncState(input: {
-    lastSyncedAt: string;
-    syncToken: string | null;
-  }): Promise<void> {
+  async saveSyncState(input: { lastSyncedAt: string; syncToken: string | null }): Promise<void> {
     const {
       data: { user },
     } = await this.supabase.auth.getUser();

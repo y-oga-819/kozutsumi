@@ -1,17 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type {
-  Database,
-  Tables,
-  TablesInsert,
-  TablesUpdate,
-} from "@/shared/types/database";
+import type { Database, Tables, TablesInsert, TablesUpdate } from "@/shared/types/database";
 
-import type {
-  CreateProjectInput,
-  ProjectGateway,
-  UpdateProjectInput,
-} from "./gateway";
+import type { CreateProjectInput, ProjectGateway, UpdateProjectInput } from "./gateway";
 import type { Project } from "./types";
 
 type Sb = SupabaseClient<Database>;
@@ -79,19 +70,13 @@ export class SupabaseProjectGateway implements ProjectGateway {
   }
 
   async delete(id: string): Promise<void> {
-    const { error } = await this.supabase
-      .from("projects")
-      .delete()
-      .eq("id", id);
+    const { error } = await this.supabase.from("projects").delete().eq("id", id);
     if (error) throw error;
   }
 
   async deleteAllForCurrentUser(): Promise<void> {
     const uid = await getUserId(this.supabase);
-    const { error } = await this.supabase
-      .from("projects")
-      .delete()
-      .eq("user_id", uid);
+    const { error } = await this.supabase.from("projects").delete().eq("user_id", uid);
     if (error) throw error;
   }
 }

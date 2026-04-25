@@ -23,12 +23,7 @@ const events: Event[] = [
 describe("DayTimeline", () => {
   test("today を formatDate して表示する", () => {
     const { getByText } = render(
-      <DayTimeline
-        events={[]}
-        nowMin={10 * 60}
-        today="2026-04-11"
-        onOpenEvent={() => {}}
-      />,
+      <DayTimeline events={[]} nowMin={10 * 60} today="2026-04-11" onOpenEvent={() => {}} />,
     );
     expect(getByText("4/11 (土)")).toBeTruthy();
   });

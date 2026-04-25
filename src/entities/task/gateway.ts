@@ -31,9 +31,7 @@ export interface TaskGateway {
   list(): Promise<Task[]>;
   create(input: CreateTaskInput): Promise<Task>;
   update(id: string, patch: UpdateTaskInput): Promise<Task>;
-  reorder(
-    entries: readonly { id: string; stackOrder: number | null }[],
-  ): Promise<void>;
+  reorder(entries: readonly { id: string; stackOrder: number | null }[]): Promise<void>;
   delete(id: string): Promise<void>;
   deleteAllForCurrentUser(): Promise<void>;
 }

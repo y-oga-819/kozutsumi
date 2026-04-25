@@ -2,10 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-import type {
-  CalendarSyncState,
-  CalendarSyncStateGateway,
-} from "@/entities/calendar-sync/gateway";
+import type { CalendarSyncState, CalendarSyncStateGateway } from "@/entities/calendar-sync/gateway";
 import { SupabaseCalendarSyncStateGateway } from "@/entities/calendar-sync/supabase-gateway";
 import type { CalendarSyncTrigger } from "@/entities/action-log/types";
 import { createClient } from "@/shared/supabase/client";
@@ -29,10 +26,7 @@ export type UseLazyCalendarSyncOptions = {
  * 以上経過していれば `triggerSync('lazy')` をバックグラウンドで呼ぶ。
  * ref ガードで React.StrictMode の 2 重 fire と、親の再レンダリングによる再実行を防ぐ。
  */
-export function useLazyCalendarSync({
-  triggerSync,
-  deps,
-}: UseLazyCalendarSyncOptions): void {
+export function useLazyCalendarSync({ triggerSync, deps }: UseLazyCalendarSyncOptions): void {
   const hasRunRef = useRef(false);
 
   useEffect(() => {
@@ -56,10 +50,7 @@ export function useLazyCalendarSync({
   }, [triggerSync, deps]);
 }
 
-export function shouldTriggerLazy(
-  state: CalendarSyncState | null,
-  now: Date,
-): boolean {
+export function shouldTriggerLazy(state: CalendarSyncState | null, now: Date): boolean {
   if (!state) return true;
   const then = new Date(state.lastSyncedAt).getTime();
   if (Number.isNaN(then)) return true;
@@ -69,8 +60,6 @@ export function shouldTriggerLazy(
 
 async function defaultGetState(): Promise<CalendarSyncState | null> {
   const supabase = createClient();
-  const gateway: CalendarSyncStateGateway = new SupabaseCalendarSyncStateGateway(
-    supabase,
-  );
+  const gateway: CalendarSyncStateGateway = new SupabaseCalendarSyncStateGateway(supabase);
   return gateway.get();
 }

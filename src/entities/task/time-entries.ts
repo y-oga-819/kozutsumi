@@ -27,9 +27,7 @@ export function sumDurationSeconds(
       continue;
     }
     if (e.pausedAt == null) {
-      const delta = Math.floor(
-        (referenceTime - new Date(e.startedAt).getTime()) / 1000,
-      );
+      const delta = Math.floor((referenceTime - new Date(e.startedAt).getTime()) / 1000);
       total += delta < 0 ? 0 : delta;
     }
   }

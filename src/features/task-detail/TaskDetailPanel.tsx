@@ -43,22 +43,17 @@ export function TaskDetailPanel({
   const nowMs = now && now > 0 ? now : openedAt;
   const nowDate = useMemo(() => new Date(nowMs), [nowMs]);
   const proj = getProject(projectsById, task.projectId);
-  const dep = task.dependsOnEventId
-    ? events.find((e) => e.id === task.dependsOnEventId)
-    : null;
+  const dep = task.dependsOnEventId ? events.find((e) => e.id === task.dependsOnEventId) : null;
   const done = isDone(task);
 
   // 依存先候補は「未来のイベント + 現在選択中のイベント (過去でも保持表示)」。
   // 過去のイベントを新規依存先にしても意味がないが、既存の依存先を勝手に外すと混乱するため残す。
   const depCandidates = useMemo(() => {
-    const future = events.filter(
-      (ev) => new Date(ev.startTime).getTime() >= nowMs,
-    );
+    const future = events.filter((ev) => new Date(ev.startTime).getTime() >= nowMs);
     const includesCurrent = dep ? future.some((ev) => ev.id === dep.id) : true;
     const merged = includesCurrent && dep ? future : dep ? [dep, ...future] : future;
     return [...merged].sort(
-      (a, b) =>
-        new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
     );
   }, [events, dep, nowMs]);
 
@@ -69,10 +64,7 @@ export function TaskDetailPanel({
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col">
-      <div
-        onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-[4px]"
-      />
+      <div onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-[4px]" />
 
       <div
         className="relative mt-auto flex max-h-[85vh] animate-panel-slide-up flex-col rounded-t-2xl bg-bg-surface"
@@ -86,13 +78,8 @@ export function TaskDetailPanel({
 
         <div className="px-5 pb-3 pt-2">
           <div className="mb-2 flex items-center gap-2">
-            <div
-              className="h-2 w-2 rounded-full"
-              style={{ background: proj.color }}
-            />
-            <span className="font-jp text-[10px] text-fg-subtle">
-              {proj.name}
-            </span>
+            <div className="h-2 w-2 rounded-full" style={{ background: proj.color }} />
+            <span className="font-jp text-[10px] text-fg-subtle">{proj.name}</span>
             {task.estimatedMinutes !== null && (
               <span className="text-[9px] tabular-nums text-fg-faint">
                 {fmtDuration(task.estimatedMinutes)}
@@ -126,9 +113,7 @@ export function TaskDetailPanel({
         {onChangeDependency && (
           <div className="px-5 pb-2">
             <div className="flex items-center gap-2">
-              <span className="font-jp text-[10px] text-fg-weak">
-                依存イベント
-              </span>
+              <span className="font-jp text-[10px] text-fg-weak">依存イベント</span>
               {editingDep ? (
                 <select
                   autoFocus
@@ -144,7 +129,7 @@ export function TaskDetailPanel({
                   <option value="">なし</option>
                   {depCandidates.map((ev) => (
                     <option key={ev.id} value={ev.id}>
-                      {formatRelativeTime(ev.startTime, nowDate)}  {ev.title}
+                      {formatRelativeTime(ev.startTime, nowDate)} {ev.title}
                     </option>
                   ))}
                 </select>
@@ -154,9 +139,7 @@ export function TaskDetailPanel({
                   onClick={() => setEditingDep(true)}
                   className="cursor-pointer rounded-[4px] border border-bg-divider bg-transparent px-2 py-[3px] font-jp text-[10px] text-fg-subtle"
                 >
-                  {dep
-                    ? `${formatRelativeTime(dep.startTime, nowDate)} ${dep.title}`
-                    : "なし"}{" "}
+                  {dep ? `${formatRelativeTime(dep.startTime, nowDate)} ${dep.title}` : "なし"}{" "}
                   を変更
                 </button>
               )}

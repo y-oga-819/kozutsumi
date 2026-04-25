@@ -33,17 +33,12 @@ function makeWrapper() {
   });
   const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
   function Wrapper({ children }: { children: ReactNode }) {
-    return (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
+    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   }
   return { Wrapper, queryClient, invalidateSpy };
 }
 
-function mockFetchOnce(init: {
-  status: number;
-  body?: unknown;
-}): ReturnType<typeof vi.fn> {
+function mockFetchOnce(init: { status: number; body?: unknown }): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn<typeof fetch>(
     async () =>
       new Response(init.body ? JSON.stringify(init.body) : null, {

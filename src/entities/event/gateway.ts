@@ -46,9 +46,7 @@ export interface EventGateway {
    * `(source='google_calendar', external_id)` 単位で upsert。既存行の `project_id` は保持する。
    * @returns upsert された行数
    */
-  upsertFromGoogleCalendar(
-    inputs: UpsertGoogleCalendarEventInput[],
-  ): Promise<number>;
+  upsertFromGoogleCalendar(inputs: UpsertGoogleCalendarEventInput[]): Promise<number>;
   /**
    * Google 側で `status='cancelled'` になったイベントをローカルから削除する。
    * @returns 削除された行数

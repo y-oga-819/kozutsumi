@@ -41,12 +41,7 @@ describe("shouldTriggerLazy", () => {
   });
 
   test("lastSyncedAt が ISO として壊れている場合は stale 扱いで true (fail-open)", () => {
-    expect(
-      shouldTriggerLazy(
-        { lastSyncedAt: "garbage", syncToken: null },
-        FIXED_NOW,
-      ),
-    ).toBe(true);
+    expect(shouldTriggerLazy({ lastSyncedAt: "garbage", syncToken: null }, FIXED_NOW)).toBe(true);
   });
 });
 
@@ -55,9 +50,7 @@ describe("useLazyCalendarSync", () => {
     const triggerSync = vi.fn();
     const getState = vi.fn(async () => null);
 
-    renderHook(() =>
-      useLazyCalendarSync({ triggerSync, deps: { getState, now } }),
-    );
+    renderHook(() => useLazyCalendarSync({ triggerSync, deps: { getState, now } }));
 
     await waitFor(() => expect(triggerSync).toHaveBeenCalledTimes(1));
     expect(triggerSync).toHaveBeenCalledWith("lazy");
@@ -72,9 +65,7 @@ describe("useLazyCalendarSync", () => {
       }),
     );
 
-    renderHook(() =>
-      useLazyCalendarSync({ triggerSync, deps: { getState, now } }),
-    );
+    renderHook(() => useLazyCalendarSync({ triggerSync, deps: { getState, now } }));
 
     // 1 tick 待って triggerSync が呼ばれないことを確認
     await new Promise((r) => setTimeout(r, 0));
@@ -106,9 +97,7 @@ describe("useLazyCalendarSync", () => {
     });
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    renderHook(() =>
-      useLazyCalendarSync({ triggerSync, deps: { getState, now } }),
-    );
+    renderHook(() => useLazyCalendarSync({ triggerSync, deps: { getState, now } }));
 
     await waitFor(() => expect(errorSpy).toHaveBeenCalled());
     expect(triggerSync).not.toHaveBeenCalled();

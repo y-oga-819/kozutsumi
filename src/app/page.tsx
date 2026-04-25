@@ -22,8 +22,7 @@ export default async function Page() {
         initialView="stack"
         user={{
           email: user.email ?? null,
-          avatarUrl:
-            typeof meta.avatar_url === "string" ? meta.avatar_url : null,
+          avatarUrl: typeof meta.avatar_url === "string" ? meta.avatar_url : null,
         }}
       />
     </GatewayProvider>

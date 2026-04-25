@@ -10,10 +10,7 @@ vi.mock("@/entities/event/sync", () => ({
 }));
 
 import { syncGoogleCalendar } from "@/entities/event/sync";
-import {
-  ProviderTokenMissingError,
-  RefreshTokenExpiredError,
-} from "@/shared/google/token";
+import { ProviderTokenMissingError, RefreshTokenExpiredError } from "@/shared/google/token";
 import { createClient } from "@/shared/supabase/server";
 
 import { POST } from "./route";
@@ -59,9 +56,7 @@ describe("POST /api/calendar/sync", () => {
     vi.mocked(createClient).mockResolvedValue(
       makeSupabase({ provider_token: null, provider_refresh_token: null }),
     );
-    vi.mocked(syncGoogleCalendar).mockRejectedValue(
-      new ProviderTokenMissingError("no token"),
-    );
+    vi.mocked(syncGoogleCalendar).mockRejectedValue(new ProviderTokenMissingError("no token"));
 
     const response = await POST();
 
@@ -77,9 +72,7 @@ describe("POST /api/calendar/sync", () => {
         provider_refresh_token: "expired",
       }),
     );
-    vi.mocked(syncGoogleCalendar).mockRejectedValue(
-      new RefreshTokenExpiredError("refresh failed"),
-    );
+    vi.mocked(syncGoogleCalendar).mockRejectedValue(new RefreshTokenExpiredError("refresh failed"));
 
     const response = await POST();
 
@@ -120,9 +113,7 @@ describe("POST /api/calendar/sync", () => {
         provider_refresh_token: "refresh-1",
       }),
     );
-    vi.mocked(syncGoogleCalendar).mockRejectedValue(
-      new Error("unexpected failure"),
-    );
+    vi.mocked(syncGoogleCalendar).mockRejectedValue(new Error("unexpected failure"));
 
     const response = await POST();
 

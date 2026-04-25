@@ -4,16 +4,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ACTION_TYPES, log } from "@/entities/action-log/logger";
-import {
-  type PauseReason,
-  sumDurationSeconds,
-  type TimeEntry,
-} from "@/entities/task/time-entries";
+import { type PauseReason, sumDurationSeconds, type TimeEntry } from "@/entities/task/time-entries";
 import type { Task } from "@/entities/task/types";
-import {
-  useTaskGateway,
-  useTaskTimeEntryGateway,
-} from "@/shared/gateway/GatewayContext";
+import { useTaskGateway, useTaskTimeEntryGateway } from "@/shared/gateway/GatewayContext";
 
 export const TASKS_QUERY_KEY = ["tasks"] as const;
 
@@ -53,16 +46,12 @@ export function useTaskTimer(task: Task | null): TaskTimerApi {
 
   const entriesQuery = useQuery({
     queryKey: taskId ? timeEntriesKey(taskId) : ["time-entries", "none"],
-    queryFn: () =>
-      taskId ? taskTimeEntryGateway.list(taskId) : Promise.resolve([]),
+    queryFn: () => (taskId ? taskTimeEntryGateway.list(taskId) : Promise.resolve([])),
     enabled: taskId !== null,
   });
 
   const entries = useMemo(() => entriesQuery.data ?? [], [entriesQuery.data]);
-  const openEntry = useMemo(
-    () => entries.find((e) => e.pausedAt === null) ?? null,
-    [entries],
-  );
+  const openEntry = useMemo(() => entries.find((e) => e.pausedAt === null) ?? null, [entries]);
 
   const isActive = task?.status === "active";
   const isPaused = task?.status === "paused";
@@ -76,10 +65,7 @@ export function useTaskTimer(task: Task | null): TaskTimerApi {
     return () => window.clearInterval(id);
   }, [isRunning]);
 
-  const elapsedSeconds = useMemo(
-    () => sumDurationSeconds(entries, tickMs),
-    [entries, tickMs],
-  );
+  const elapsedSeconds = useMemo(() => sumDurationSeconds(entries, tickMs), [entries, tickMs]);
 
   const pauseReason = useMemo<PauseReason | null>(() => {
     if (!isPaused) return null;
@@ -114,8 +100,7 @@ export function useTaskTimer(task: Task | null): TaskTimerApi {
   const pause = useCallback(
     async (reason: PauseReason) => {
       if (!task) return;
-      const open =
-        openEntry ?? (await taskTimeEntryGateway.getOpen(task.id));
+      const open = openEntry ?? (await taskTimeEntryGateway.getOpen(task.id));
       if (open) {
         await taskTimeEntryGateway.close(open, reason);
       }
@@ -139,8 +124,7 @@ export function useTaskTimer(task: Task | null): TaskTimerApi {
 
   const complete = useCallback(async () => {
     if (!task) return;
-    const open =
-      openEntry ?? (await taskTimeEntryGateway.getOpen(task.id));
+    const open = openEntry ?? (await taskTimeEntryGateway.getOpen(task.id));
     if (open) {
       // 完了時の close は pause ではないので pause_reason = null
       await taskTimeEntryGateway.close(open, null);
