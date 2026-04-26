@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { formatDate, formatRelativeTime, fmtDuration, fmtMin, timeToMin } from "./time";
+import {
+  formatDate,
+  formatRelativeTime,
+  fmtDuration,
+  fmtMin,
+  timeToMin,
+  toDateTimeLocalInput,
+} from "./time";
 
 describe("formatDate", () => {
   test('"YYYY-MM-DD" を "M/D (曜)" 形式に整形する', () => {
@@ -74,5 +81,19 @@ describe("formatRelativeTime", () => {
   test("2日以上先は「M/D HH:MM」", () => {
     expect(formatRelativeTime("2026-04-15T10:00:00", now)).toBe("4/15 10:00");
     expect(formatRelativeTime("2026-05-02T18:30:00", now)).toBe("5/2 18:30");
+  });
+});
+
+describe("toDateTimeLocalInput", () => {
+  test("ISO 8601 (tz なし) を datetime-local の YYYY-MM-DDTHH:MM 形式で返す", () => {
+    expect(toDateTimeLocalInput("2026-04-11T09:05:00")).toBe("2026-04-11T09:05");
+  });
+
+  test("月 / 日 / 時 / 分は 2 桁ゼロ埋め", () => {
+    expect(toDateTimeLocalInput("2026-01-02T03:04:00")).toBe("2026-01-02T03:04");
+  });
+
+  test("秒は落とす (datetime-local は分単位)", () => {
+    expect(toDateTimeLocalInput("2026-04-11T10:00:45")).toBe("2026-04-11T10:00");
   });
 });

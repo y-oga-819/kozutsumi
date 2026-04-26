@@ -53,17 +53,19 @@ test.describe("google_calendar イベントの編集制約 (ADR 0010)", () => {
     // EventCard は role を持たない div だが、表示テキストに event.title が含まれる。
     await page.getByText(eventTitle).first().click();
 
-    // EventDetailPanel が開く (role=dialog は付いていない)。
-    // 手がかりとして、GCal 由来であることを示すバッジ + 由来説明文の存在を踏む。
-    await expect(page.getByTestId("google-calendar-badge").first()).toBeVisible();
+    // EventDetailPanel が開く (Issue #76 で role="dialog" + aria-label="イベント詳細"
+    // を付与済み)。GCal 由来であることを示すバッジ + 由来説明文の存在を踏む。
+    const detailDialog = page.getByRole("dialog", { name: "イベント詳細" });
+    await expect(detailDialog).toBeVisible();
+    await expect(detailDialog.getByTestId("google-calendar-badge").first()).toBeVisible();
     await expect(
-      page.getByText("Google Calendar で編集した内容は次回同期で反映されます"),
+      detailDialog.getByText("Google Calendar で編集した内容は次回同期で反映されます"),
     ).toBeVisible();
 
-    // --- 削除ボタンが出ない (ADR 0010) ---------------------------------------
-    // 注意: TaskDetailPanel など他 panel の「削除」と区別するため、現在開いて
-    // いるのが EventDetailPanel であることは GoogleCalendarBadge の存在で担保。
-    await expect(page.getByRole("button", { name: "削除" })).toHaveCount(0);
+    // --- 削除ボタン / 編集ボタンが出ない (ADR 0010) -------------------------
+    // dialog 内に絞ることで TaskDetailPanel など他 panel との誤検知を防ぐ。
+    await expect(detailDialog.getByRole("button", { name: "削除" })).toHaveCount(0);
+    await expect(detailDialog.getByRole("button", { name: "編集" })).toHaveCount(0);
 
     // --- title は h2 表示 / 編集 input は無い -------------------------------
     // h2 element が title を持つ (EventDetailPanel.tsx L61-63)。
