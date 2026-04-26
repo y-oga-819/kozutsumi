@@ -32,7 +32,11 @@ export function ProjectLanes({ projectOrder }: ProjectLanesProps) {
           const p = getProject(projectsById, k);
           return (
             <li key={k} className="flex items-center gap-1">
-              <div aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: p.color }} />
+              <div
+                aria-hidden="true"
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: p.color }}
+              />
               <span className="font-jp text-[9px] text-fg-weak">{p.name}</span>
             </li>
           );

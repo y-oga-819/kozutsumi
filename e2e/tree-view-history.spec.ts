@@ -44,7 +44,9 @@ test("Tree View renders mock history grouped by date with project legend", async
   // DateGroup の <ul> は aria-label="<date> の履歴"。日付スコープで listitem を取れる。
   const apr5 = treeView.getByRole("list", { name: "4/5 (日) の履歴" });
   await expect(apr5.getByRole("listitem")).toHaveCount(2);
-  await expect(apr5.getByRole("listitem").filter({ hasText: "転職ドラフト応募完了" })).toBeVisible();
+  await expect(
+    apr5.getByRole("listitem").filter({ hasText: "転職ドラフト応募完了" }),
+  ).toBeVisible();
   await expect(apr5.getByRole("listitem").filter({ hasText: "SLI候補の洗い出し" })).toBeVisible();
 
   const apr10 = treeView.getByRole("list", { name: "4/10 (金) の履歴" });
@@ -52,7 +54,9 @@ test("Tree View renders mock history grouped by date with project legend", async
   await expect(
     apr10.getByRole("listitem").filter({ hasText: "エラーバジェットポリシー草案" }),
   ).toBeVisible();
-  await expect(apr10.getByRole("listitem").filter({ hasText: "ECS Fargate構成設計" })).toBeVisible();
+  await expect(
+    apr10.getByRole("listitem").filter({ hasText: "ECS Fargate構成設計" }),
+  ).toBeVisible();
 
   // --- 全 11 件の網羅的な確認 -----------------------------------------------
   // legend (4) + 履歴エントリ (11) = 15 listitem が treeView 配下に存在するはず。

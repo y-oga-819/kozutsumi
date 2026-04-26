@@ -25,11 +25,7 @@ export function DateGroup({ date, items, projectOrder }: DateGroupProps) {
         <h3 className="m-0 text-[10px] font-normal text-fg-weak">{dateLabel}</h3>
         <div aria-hidden="true" className="ml-2 h-px flex-1 bg-bg-elevated" />
       </div>
-      <ul
-        role="list"
-        aria-label={`${dateLabel} の履歴`}
-        className="m-0 list-none p-0"
-      >
+      <ul role="list" aria-label={`${dateLabel} の履歴`} className="m-0 list-none p-0">
         {items.map((task) => {
           const pi = projectOrder.indexOf(task.projectId);
           const nodeLeft = nodeCenterPx(pi);
