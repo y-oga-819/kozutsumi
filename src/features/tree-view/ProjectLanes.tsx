@@ -23,17 +23,25 @@ export function ProjectLanes({ projectOrder }: ProjectLanesProps) {
           }}
         />
       ))}
-      <div className="relative z-[2] flex gap-3 px-4 pb-1.5 pt-3.5">
+      <ul
+        role="list"
+        aria-label="プロジェクト凡例"
+        className="relative z-[2] m-0 flex list-none gap-3 px-4 pb-1.5 pt-3.5"
+      >
         {projectOrder.map((k) => {
           const p = getProject(projectsById, k);
           return (
-            <div key={k} className="flex items-center gap-1">
-              <div className="h-1.5 w-1.5 rounded-full" style={{ background: p.color }} />
+            <li key={k} className="flex items-center gap-1">
+              <div
+                aria-hidden="true"
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: p.color }}
+              />
               <span className="font-jp text-[9px] text-fg-weak">{p.name}</span>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </>
   );
 }

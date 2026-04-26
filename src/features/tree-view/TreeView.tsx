@@ -16,13 +16,13 @@ export function TreeView({ historyData, projectOrder }: TreeViewProps) {
   const dateGroups = groupByDateDesc(historyData);
 
   return (
-    <div className="relative pb-10">
+    <section aria-label="作業履歴" className="relative pb-10">
       <ProjectLanes projectOrder={projectOrder} />
       <div className="relative z-[2]">
         {dateGroups.map(([date, items]) => (
           <DateGroup key={date} date={date} items={items} projectOrder={projectOrder} />
         ))}
       </div>
-    </div>
+    </section>
   );
 }
