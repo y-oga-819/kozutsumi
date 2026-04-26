@@ -6,6 +6,7 @@ import {
   CompleteButton,
   DepBadge,
   EstimateBadge,
+  ParallelogramProgress,
   ProjectDot,
   ProjectName,
   StackHeader,
@@ -15,15 +16,16 @@ import {
 } from "./shared";
 
 /**
- * Variant E: ハイブリッド (子フラット + Top に Goal 行 + 子へ親 dep 継承)。
+ * Variant E: ハイブリッド (子フラット + Top に Goal box + 子へ親 dep 継承
+ * + 平行四辺形プログレス)。
  *
  * 採用理由は `docs/open-questions.md`「Stack View カードの情報設計」表に対応:
  * 1. 親 (=ゴール) を Top の Goal 行で見せる
- * 2. 完了境界 (M/N) を Top と各行に出す
- * 3. 親 dep event を子へ継承して amber pill で表示 (D の弱点解消)
+ * 2. 完了境界 (M/N) は数字併記をやめ、平行四辺形プログレスで集約表現
+ * 3. 親 dep event を子へ継承 (imminent のみ amber pill で強調)
  * 4. 親グループの合計時間を Top に出す
  * 5. Top カードを視覚的に強く (情報量 + 高さ + 枠)
- * 6. 行カードは情報絞り込み (project dot + title + 親短縮 + dep + estimate + check)
+ * 6. 行カードは 2 行構成にしてタイトルに広い領域を確保 (省略を防ぐ)
  * 7. 同親グループの縦線は出さない (DnD 分断対策)
  *
  * Stack 行は子のまま (linearity 維持)。
@@ -36,7 +38,7 @@ type Row =
       child: SampleChild;
       indexInParent: number; // 1-based
       siblingTotal: number;
-      doneInParent: number; // 親グループ内の done 数 (動的に計算)
+      doneInParent: number;
     }
   | { kind: "leaf-parent"; parent: SampleParent };
 
@@ -77,12 +79,12 @@ export function VariantE() {
         Variant E: ハイブリッド
       </h2>
       <VariantNote
-        philosophy="Stack 行 = 子のまま (linearity 維持)。Top カードに「Goal 行 (親 · M/N · 合計)」を集約。子は親 dep event を継承してデッドラインが消えない。行カードは情報を絞る。"
+        philosophy="Stack 行 = 子のまま。Top カードは「Goal box (親 + 進捗バー + 合計)」を集約。子は親 dep を継承。行カードは 2 行構成でタイトル単独行を確保し、メタ (親 / dep / 進捗) は薄い 2 行目に置く。"
         tradeoffs={[
-          "Top カードと行カードで情報量を意図的に変える (Top 重視)",
-          "親グループの縦線は無し → DnD 並び替えで分断されても破綻しない",
-          "親由来 dep event を子に継承するので「いつまでに何個全部やる?」が分かる",
-          "Top カードが他より高くなる ぶん、スクロール 1 視野の情報量がやや減る",
+          "進捗を数字 (M/N + 残り N/N) ではなく平行四辺形プログレスで集約 → 数字の重複を解消",
+          "行カードが 2 行になるぶん縦に伸びる → スクロール 1 視野の件数は減る",
+          "親由来 dep event は imminent のみ pill 表示 (常時表示は情報過多)",
+          "親グループの縦線は出さない → DnD 並び替えで破綻しない",
         ]}
       />
       <StackHeader count={rows.length} />
@@ -110,6 +112,7 @@ export function VariantE() {
                     child={row.child}
                     indexInParent={row.indexInParent}
                     siblingTotal={row.siblingTotal}
+                    doneInParent={row.doneInParent}
                     done={isDone}
                     onToggle={() => done.toggle(id)}
                   />
@@ -160,7 +163,6 @@ function ChildTopCard({
   onToggle: () => void;
 }) {
   const proj = SAMPLE_PROJECTS[parent.projectId];
-  const remaining = siblingTotal - doneInParent;
   const total = totalMinutes(parent);
   return (
     <div
@@ -178,16 +180,13 @@ function ChildTopCard({
             <ProjectDot projectId={parent.projectId} />
             <ProjectName projectId={parent.projectId} />
             {parent.depEvent && <DepBadge dep={parent.depEvent} />}
-            <span className="rounded-[3px] bg-fg-weak/15 px-1.5 py-px font-jp text-[8px] tabular-nums text-fg-muted">
-              {indexInParent}/{siblingTotal}
-            </span>
           </div>
           <div className="font-jp text-[15px] font-semibold leading-[1.4] text-fg-strong">
             {child.title}
           </div>
           <div
             aria-label="ゴール情報"
-            className="mt-1.5 rounded-[6px] border border-bg-border/70 px-2 py-1.5"
+            className="mt-2 rounded-[6px] border border-bg-border/70 px-2 py-1.5"
           >
             <div className="flex items-center gap-1 font-jp text-[9px] text-fg-subtle">
               <span className="font-semibold uppercase tracking-[0.06em]">Goal</span>
@@ -196,12 +195,17 @@ function ChildTopCard({
                 {parent.title}
               </span>
             </div>
-            <div className="mt-0.5 flex items-center gap-2 font-jp text-[10px] text-fg-muted">
-              <span className="tabular-nums">
-                残り {remaining}/{siblingTotal}
+            <div className="mt-1.5 flex items-center gap-2">
+              <ParallelogramProgress
+                total={siblingTotal}
+                doneCount={doneInParent}
+                currentIndex={indexInParent}
+                color={proj?.color ?? "#52525b"}
+                size="md"
+              />
+              <span className="font-jp text-[10px] tabular-nums text-fg-muted">
+                合計 {fmtMinutes(total)}
               </span>
-              <span aria-hidden="true">·</span>
-              <span className="tabular-nums">合計 {fmtMinutes(total)}</span>
             </div>
           </div>
         </div>
@@ -219,6 +223,7 @@ function ChildRow({
   child,
   indexInParent,
   siblingTotal,
+  doneInParent,
   done,
   onToggle,
 }: {
@@ -226,33 +231,44 @@ function ChildRow({
   child: SampleChild;
   indexInParent: number;
   siblingTotal: number;
+  doneInParent: number;
   done: boolean;
   onToggle: () => void;
 }) {
   const proj = SAMPLE_PROJECTS[parent.projectId];
-  const ParentBadge = (
-    <span
-      className="max-w-[120px] truncate rounded-[3px] px-1.5 py-px font-jp text-[8px] tabular-nums"
-      style={{ background: `${proj?.color}20`, color: proj?.color }}
-      title={`親: ${parent.title}`}
-    >
-      ⤷ {parent.title} ({indexInParent}/{siblingTotal})
-    </span>
-  );
   return (
-    <div className="mx-4 flex items-center gap-2 border-b border-bg-elevated px-2.5 py-2">
-      <ProjectDot projectId={parent.projectId} size={6} />
-      <span
-        className={`flex-1 truncate font-jp text-[12px] ${
-          done ? "text-fg-faint line-through" : "text-fg-muted"
-        }`}
-      >
-        {child.title}
-      </span>
-      {ParentBadge}
-      {parent.depEvent?.imminent && <DepBadge dep={parent.depEvent} />}
-      <EstimateBadge minutes={child.estimatedMinutes} />
-      <CompleteButton done={done} onToggle={onToggle} label={child.title} />
+    <div className="mx-4 border-b border-bg-elevated px-2.5 py-2">
+      {/* 1 行目: タイトルが主役。親メタは下に押し出してタイトル省略を防ぐ */}
+      <div className="flex items-center gap-2">
+        <ProjectDot projectId={parent.projectId} size={6} />
+        <span
+          className={`flex-1 truncate font-jp text-[12px] ${
+            done ? "text-fg-faint line-through" : "text-fg-default"
+          }`}
+        >
+          {child.title}
+        </span>
+        <EstimateBadge minutes={child.estimatedMinutes} />
+        <CompleteButton done={done} onToggle={onToggle} label={child.title} />
+      </div>
+      {/* 2 行目: 親 + (imminent dep) + 平行四辺形プログレス */}
+      <div className="ml-[14px] mt-1 flex items-center gap-2">
+        <span
+          className="min-w-0 flex-1 truncate font-jp text-[9px]"
+          style={{ color: `${proj?.color ?? "#52525b"}cc` }}
+          title={`親: ${parent.title}`}
+        >
+          ⤷ {parent.title}
+        </span>
+        {parent.depEvent?.imminent && <DepBadge dep={parent.depEvent} />}
+        <ParallelogramProgress
+          total={siblingTotal}
+          doneCount={doneInParent}
+          currentIndex={indexInParent}
+          color={proj?.color ?? "#52525b"}
+          size="sm"
+        />
+      </div>
     </div>
   );
 }
@@ -311,13 +327,23 @@ function ParentRow({
   onToggle: () => void;
 }) {
   return (
-    <div className="mx-4 flex items-center gap-2 border-b border-bg-elevated px-2.5 py-2">
-      <ProjectDot projectId={parent.projectId} size={6} />
-      <span className="flex-1 truncate font-jp text-[12px] text-fg-muted">{parent.title}</span>
-      {parent.depEvent && <DepBadge dep={parent.depEvent} />}
-      <StatusPill status={parent.decomposeStatus} />
-      <EstimateBadge minutes={parent.estimatedMinutes} />
-      <CompleteButton done={done} onToggle={onToggle} label={parent.title} />
+    <div className="mx-4 border-b border-bg-elevated px-2.5 py-2">
+      <div className="flex items-center gap-2">
+        <ProjectDot projectId={parent.projectId} size={6} />
+        <span
+          className={`flex-1 truncate font-jp text-[12px] ${
+            done ? "text-fg-faint line-through" : "text-fg-default"
+          }`}
+        >
+          {parent.title}
+        </span>
+        <EstimateBadge minutes={parent.estimatedMinutes} />
+        <CompleteButton done={done} onToggle={onToggle} label={parent.title} />
+      </div>
+      <div className="ml-[14px] mt-1 flex items-center gap-2">
+        {parent.depEvent && <DepBadge dep={parent.depEvent} />}
+        <StatusPill status={parent.decomposeStatus} />
+      </div>
     </div>
   );
 }
