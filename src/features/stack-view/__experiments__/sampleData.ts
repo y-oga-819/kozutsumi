@@ -52,10 +52,14 @@ export const SAMPLE_PARENTS: SampleParent[] = [
     estimatedMinutes: 45,
     decomposeStatus: "decomposed",
     depEvent: { title: "Dirbato 最終面接", relative: "明日 14:00", imminent: true },
+    // 子に固有順序は無い。Stack 出現順 (= ここの配列順) で
+    // ParallelogramProgress の「現在=自分のセグメント」が決まる。
+    // ここでは「A → 逆質問 → B」の順にして、逆質問が真ん中、B が右端で
+    // 光るデモにする (元は A → B → 逆質問)。
     children: [
       { id: "p1c1", title: "志望動機パターンA作成", estimatedMinutes: 15 },
-      { id: "p1c2", title: "志望動機パターンB作成", estimatedMinutes: 15 },
       { id: "p1c3", title: "逆質問リスト整理", estimatedMinutes: 15 },
+      { id: "p1c2", title: "志望動機パターンB作成", estimatedMinutes: 15 },
     ],
   },
   {
@@ -107,6 +111,59 @@ export const SAMPLE_PARENTS: SampleParent[] = [
     decomposeStatus: "none",
     children: [],
   },
+  // 4 子で 3 完了のシナリオ (進行中の親)。
+  // Variant E の初期 done set で p8c1 / p8c2 / p8c3 を done にしている。
+  {
+    id: "p8",
+    projectId: "tasuki",
+    title: "PR レビュー: AnalyzerContract trait",
+    estimatedMinutes: 60,
+    decomposeStatus: "decomposed",
+    children: [
+      { id: "p8c1", title: "コメント拾い読み", estimatedMinutes: 10 },
+      { id: "p8c2", title: "テスト追加要件まとめ", estimatedMinutes: 15 },
+      { id: "p8c3", title: "リプライ作成", estimatedMinutes: 15 },
+      { id: "p8c4", title: "再 push 後の CI 確認", estimatedMinutes: 20 },
+    ],
+  },
+  // 10 子のシナリオ (大きく分解された親)。
+  // Variant E の初期 done set で 4 個 done (4/10 完了)。
+  {
+    id: "p7",
+    projectId: "loadtest",
+    title: "Locust 詳細実装 (10 ステップ)",
+    estimatedMinutes: 200,
+    decomposeStatus: "decomposed",
+    children: [
+      { id: "p7c1", title: "ピーク負荷シナリオ定義", estimatedMinutes: 20 },
+      { id: "p7c2", title: "ramp-up curve 設定", estimatedMinutes: 15 },
+      { id: "p7c3", title: "ECS タスク数の試算", estimatedMinutes: 20 },
+      { id: "p7c4", title: "stub サーバ立ち上げ", estimatedMinutes: 15 },
+      { id: "p7c5", title: "正常系 / 429 / 500ms ミックス定義", estimatedMinutes: 25 },
+      { id: "p7c6", title: "メトリクス閾値設定", estimatedMinutes: 20 },
+      { id: "p7c7", title: "ローカルで dry-run", estimatedMinutes: 20 },
+      { id: "p7c8", title: "GitHub Actions ワークフロー", estimatedMinutes: 20 },
+      { id: "p7c9", title: "実環境向けパラメータ調整", estimatedMinutes: 25 },
+      { id: "p7c10", title: "結果レポート整形", estimatedMinutes: 20 },
+    ],
+  },
+];
+
+/**
+ * Variant E の初期 done set。「3/4 完了」「4/10 完了」のシナリオを
+ * 開いた瞬間に確認できるようにする (プロトタイプ用)。
+ * 他の variant では使わない (`useDoneSet()` は引数なしで呼ばれる)。
+ */
+export const SAMPLE_INITIAL_DONE: readonly string[] = [
+  // p8: 4 子のうち 3 完了 (4 番目だけ未完了)
+  "p8c1",
+  "p8c2",
+  "p8c3",
+  // p7: 10 子のうち 4 完了 (どれが done かはバラバラに)
+  "p7c1",
+  "p7c2",
+  "p7c4",
+  "p7c6",
 ];
 
 export function fmtMinutes(m: number): string {

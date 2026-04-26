@@ -1,6 +1,11 @@
 "use client";
 
-import { fmtMinutes, SAMPLE_PARENTS, SAMPLE_PROJECTS } from "./sampleData";
+import {
+  fmtMinutes,
+  SAMPLE_INITIAL_DONE,
+  SAMPLE_PARENTS,
+  SAMPLE_PROJECTS,
+} from "./sampleData";
 import type { SampleChild, SampleParent } from "./sampleData";
 import {
   CompleteButton,
@@ -70,7 +75,8 @@ function totalMinutes(parent: SampleParent): number {
 }
 
 export function VariantE() {
-  const done = useDoneSet();
+  // 初期 done set で「3/4 完了」「4/10 完了」のシナリオが開いた瞬間に見える。
+  const done = useDoneSet(SAMPLE_INITIAL_DONE);
   const rows = flatten(SAMPLE_PARENTS, done.isDone);
 
   return (
@@ -79,12 +85,15 @@ export function VariantE() {
         Variant E: ハイブリッド
       </h2>
       <VariantNote
-        philosophy="Stack 行 = 子のまま。Top カードは「Goal box (親 + 進捗バー + 合計)」を集約。子は親 dep を継承。行カードは 2 行構成でタイトル単独行を確保し、メタ (親 / dep / 進捗) は薄い 2 行目に置く。"
+        philosophy="Stack 行 = 子のまま。Top カードは「Goal box (親 + 進捗バー + 合計)」を集約。子は親 dep を継承。行カードは 2 行構成でタイトル単独行を確保し、メタ (親 / dep / 進捗) は薄い 2 行目に置く。子に固有順序は無く、進捗バーの「光るセグメント」は Stack 上での自分の出現順を表す。"
         tradeoffs={[
           "進捗を数字 (M/N + 残り N/N) ではなく平行四辺形プログレスで集約 → 数字の重複を解消",
+          "セグメント幅は子数に応じて自動縮小 (~5 / ~9 / 10+ の 3 段階) → 10 子でも 480px に収まる",
+          "並び替えで Stack 順を変えると、光るセグメント位置も変わる (子に固有順なし)",
           "行カードが 2 行になるぶん縦に伸びる → スクロール 1 視野の件数は減る",
           "親由来 dep event は imminent のみ pill 表示 (常時表示は情報過多)",
           "親グループの縦線は出さない → DnD 並び替えで破綻しない",
+          "デモシナリオ: p1 (3 子, A→逆質問→B 順 / 0 完了) / p8 (4 子, 3 完了) / p7 (10 子, 4 完了)",
         ]}
       />
       <StackHeader count={rows.length} />

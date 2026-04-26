@@ -6,11 +6,11 @@ import { fmtMinutes, SAMPLE_PROJECTS } from "./sampleData";
 import type { DecomposeStatus, SampleParent } from "./sampleData";
 
 /** 各 variant が独立に done を持つ。比較中に「他 variant の操作が混じる」誤読を防ぐ。 */
-export function useDoneSet(): {
+export function useDoneSet(initial?: Iterable<string>): {
   isDone: (id: string) => boolean;
   toggle: (id: string) => void;
 } {
-  const [done, setDone] = useState<ReadonlySet<string>>(() => new Set());
+  const [done, setDone] = useState<ReadonlySet<string>>(() => new Set(initial ?? []));
   return {
     isDone: (id) => done.has(id),
     toggle: (id) => {
@@ -171,6 +171,18 @@ export function VariantNote({
   );
 }
 
+function segmentSize(total: number, size: "md" | "sm"): { w: number; h: number } {
+  // 子数によって段階的に縮小する。3 段階で十分 (5 まで / 9 まで / 10+)
+  if (size === "md") {
+    if (total <= 5) return { w: 16, h: 9 };
+    if (total <= 9) return { w: 12, h: 8 };
+    return { w: 9, h: 7 };
+  }
+  if (total <= 5) return { w: 10, h: 6 };
+  if (total <= 9) return { w: 8, h: 5 };
+  return { w: 6, h: 4 };
+}
+
 /**
  * 平行四辺形セグメント (skewX) で進捗を可視化する。
  * - 完了: 親色で塗り
@@ -194,8 +206,9 @@ export function ParallelogramProgress({
   color: string;
   size?: "md" | "sm";
 }) {
-  const segHeight = size === "md" ? 9 : 6;
-  const segWidth = size === "md" ? 16 : 10;
+  // total に応じてセグメント寸法を縮小する。10+ 子でも 480px 幅に収まるように。
+  // 子に固有順序は無いので「current=自分の Stack 上の出現順」のハイライトだけが意味を持つ。
+  const { w: segWidth, h: segHeight } = segmentSize(total, size);
   return (
     <div
       role="progressbar"
