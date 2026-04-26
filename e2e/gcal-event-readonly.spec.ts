@@ -1,0 +1,157 @@
+import { createAdminClient, getEventByTitle, getProjectByName } from "./db";
+import { expect, test } from "./fixtures";
+
+/**
+ * Issue #67 🟨 10 / ADR 0010:
+ *   `source='google_calendar'` のイベントに対する編集制約を踏む。
+ *
+ * ADR 0010 の挙動:
+ *   - title / start_time / end_time / meet_url / description は kozutsumi 側で
+ *     編集不可 (Google 側が正)
+ *   - project_id だけ kozutsumi 側で書き換えできる
+ *   - 削除ボタンも出さない (Google 側で削除すれば次回同期で消える)
+ *
+ * UI 経由で `source='google_calendar'` のイベントを作る正規ルートは Google
+ * Calendar 同期 (OAuth) しか無いので、e2e では service_role で events 行を
+ * 直接 insert して再現する。
+ */
+test.describe("google_calendar イベントの編集制約 (ADR 0010)", () => {
+  test("title / 時刻 / meetUrl / description は read-only、削除ボタンも出ない", async ({
+    signedInPage: page,
+    testUserId: userId,
+  }) => {
+    const eventTitle = "GCal 由来の MTG";
+    const meetUrl = "https://meet.google.com/gcal-readonly-e2e";
+    const description = "## 議題\n- read-only テスト用";
+
+    const admin = createAdminClient();
+
+    // --- service_role で GCal イベントを 1 件 insert -------------------------
+    // start_time は今日のローカル 14:00 とし、DayTimeline に確実に出すために
+    // 必ず "minutesOfDay" の範囲内に収まる時間帯を選ぶ。
+    const start = todayAt(14, 0);
+    const end = todayAt(15, 0);
+    const { error: insertErr } = await admin.from("events").insert({
+      user_id: userId,
+      title: eventTitle,
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      project_id: null,
+      meet_url: meetUrl,
+      has_attachments: false,
+      description,
+      source: "google_calendar",
+      external_id: "gcal-readonly-e2e",
+    });
+    if (insertErr) throw new Error(`[e2e] insert gcal event failed: ${insertErr.message}`);
+
+    // events query は AppShell の `["events"]` キーで管理されるので、page.reload
+    // で再 fetch させて DayTimeline に GCal イベントを出す。
+    await page.reload();
+
+    // --- DayTimeline の EventCard をクリックして詳細を開く -------------------
+    // EventCard は role を持たない div だが、表示テキストに event.title が含まれる。
+    await page.getByText(eventTitle).first().click();
+
+    // EventDetailPanel が開く (role=dialog は付いていない)。
+    // 手がかりとして、GCal 由来であることを示すバッジ + 由来説明文の存在を踏む。
+    await expect(page.getByTestId("google-calendar-badge").first()).toBeVisible();
+    await expect(
+      page.getByText("Google Calendar で編集した内容は次回同期で反映されます"),
+    ).toBeVisible();
+
+    // --- 削除ボタンが出ない (ADR 0010) ---------------------------------------
+    // 注意: TaskDetailPanel など他 panel の「削除」と区別するため、現在開いて
+    // いるのが EventDetailPanel であることは GoogleCalendarBadge の存在で担保。
+    await expect(page.getByRole("button", { name: "削除" })).toHaveCount(0);
+
+    // --- title は h2 表示 / 編集 input は無い -------------------------------
+    // h2 element が title を持つ (EventDetailPanel.tsx L61-63)。
+    const titleHeading = page.getByRole("heading", { level: 2, name: eventTitle });
+    await expect(titleHeading).toBeVisible();
+    // title 用の <input> や <textarea> は無い。
+    await expect(page.locator("input[type='text']")).toHaveCount(0);
+    await expect(page.locator("textarea")).toHaveCount(0);
+
+    // --- 時刻は表示テキスト (anchor / button では無い) -----------------------
+    // 編集用の datetime-local input が紛れ込んでいないことを確認する。
+    await expect(page.locator("input[type='datetime-local']")).toHaveCount(0);
+
+    // --- meet_url は anchor 表示 (リンクとしてだけ機能、編集不可) ------------
+    const meetAnchor = page.getByRole("link", {
+      name: /Google Meetに参加|Zoomに参加|会議リンクに参加/,
+    });
+    await expect(meetAnchor).toBeVisible();
+    await expect(meetAnchor).toHaveAttribute("href", meetUrl);
+
+    // --- description は markdown render (input/textarea ではない) -----------
+    // renderMarkdown は h2 / li 等を生成する。本文の "議題" が見える時点で
+    // 「テキスト表示」されていることが取れる。
+    await expect(page.getByText("議題", { exact: false })).toBeVisible();
+
+    // 補強: DB 側の制約も並走している (ADR 0010)。e2e から直接 update を投げると
+    // SupabaseEventGateway.update が touchesGoogleOwned を見て弾く: ここでは UI の
+    // 観測責務に留め、gateway 単体テスト (supabase-gateway.test.ts) と分担する。
+  });
+
+  test("project_id だけは編集可能で、events.project_id が DB に反映される", async ({
+    signedInPageWithProject: page,
+    projectName,
+    testUserId: userId,
+  }) => {
+    const eventTitle = "GCal 由来のプロジェクト紐付けテスト";
+
+    const admin = createAdminClient();
+    const project = await getProjectByName(admin, userId, projectName);
+
+    // --- GCal イベントを project_id=null で insert ---------------------------
+    const start = todayAt(15, 0);
+    const end = todayAt(16, 0);
+    const { error: insertErr } = await admin.from("events").insert({
+      user_id: userId,
+      title: eventTitle,
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      project_id: null,
+      meet_url: null,
+      has_attachments: false,
+      description: "",
+      source: "google_calendar",
+      external_id: "gcal-project-edit-e2e",
+    });
+    if (insertErr) throw new Error(`[e2e] insert gcal event failed: ${insertErr.message}`);
+
+    await page.reload();
+
+    // --- DayTimeline → 詳細を開く -------------------------------------------
+    await page.getByText(eventTitle).first().click();
+    await expect(page.getByTestId("google-calendar-badge").first()).toBeVisible();
+
+    // --- 「未設定 を変更」 → select 表示 → プロジェクトを選ぶ ----------------
+    await page.getByRole("button", { name: /未設定\s+を変更/ }).click();
+    // ADR 0010: option の value は project.id。DB 値で選ぶことで relative 表記に
+    // 依存しない。
+    await page.locator("select").first().selectOption({ value: project.id });
+
+    // --- DB: events.project_id 反映 -----------------------------------------
+    await expect
+      .poll(async () => (await getEventByTitle(admin, userId, eventTitle)).project_id, {
+        message: "events.project_id should be updated for google_calendar source",
+        timeout: 5_000,
+      })
+      .toBe(project.id);
+
+    // --- title / 時刻 等は触っていないので変わっていない (regression check) -
+    const after = await getEventByTitle(admin, userId, eventTitle);
+    expect(after.title).toBe(eventTitle);
+    expect(after.source).toBe("google_calendar");
+    expect(after.external_id).toBe("gcal-project-edit-e2e");
+  });
+});
+
+/** 今日のローカル時刻を H/M で組み立てた Date を返す。 */
+function todayAt(hour: number, minute: number): Date {
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
