@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ACTION_TYPES, log } from "@/entities/action-log/logger";
 import type { CreateEventInput } from "@/entities/event/gateway";
 import type { Event } from "@/entities/event/types";
-import type { CreateProjectInput } from "@/entities/project/gateway";
+import type { CreateProjectInput, UpdateProjectInput } from "@/entities/project/gateway";
 import { ProjectsProvider } from "@/entities/project/ProjectsContext";
 import type { Project } from "@/entities/project/types";
 import type { CreateTaskInput } from "@/entities/task/gateway";
@@ -16,6 +16,7 @@ import { AddButton } from "@/features/add-forms/AddButton";
 import { AddPanel } from "@/features/add-forms/AddPanel";
 import { DayTimeline } from "@/features/day-timeline/DayTimeline";
 import { EventDetailPanel } from "@/features/event-detail/EventDetailPanel";
+import { ProjectDetailPanel } from "@/features/project-detail/ProjectDetailPanel";
 import { CalendarSyncButton } from "@/features/sync/CalendarSyncButton";
 import { ReauthBanner } from "@/features/sync/ReauthBanner";
 import { useCalendarSync } from "@/features/sync/useCalendarSync";
@@ -88,6 +89,7 @@ export function AppShell({ initialView, user }: AppShellProps) {
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [eventDetailId, setEventDetailId] = useState<string | null>(null);
+  const [projectDetailId, setProjectDetailId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   // ms 表現の「今」。SSR は 0 placeholder で hydration mismatch を回避し、
   // mount 後に実時刻へ差し替える。nowMin (タイムライン用) と依存イベント比較用に共用する。
@@ -281,6 +283,47 @@ export function AppShell({ initialView, user }: AppShellProps) {
     },
   });
 
+  const updateProjectMutation = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateProjectInput }) =>
+      projectGateway.update(id, patch),
+    onMutate: async ({ id, patch }) => {
+      await queryClient.cancelQueries({ queryKey: keys.projects });
+      const previous = queryClient.getQueryData<Project[]>(keys.projects);
+      queryClient.setQueryData<Project[]>(keys.projects, (prev) =>
+        (prev ?? []).map((p) => (p.id === id ? { ...p, ...patch } : p)),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(keys.projects, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: keys.projects });
+    },
+  });
+
+  // schema 上 `ON DELETE SET NULL` で tasks.project_id / events.project_id が
+  // null 化される。UI 側はそれを反映するため tasks / events も invalidate する。
+  const deleteProjectMutation = useMutation({
+    mutationFn: (id: string) => projectGateway.delete(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: keys.projects });
+      const previous = queryClient.getQueryData<Project[]>(keys.projects);
+      queryClient.setQueryData<Project[]>(keys.projects, (prev) =>
+        (prev ?? []).filter((p) => p.id !== id),
+      );
+      return { previous };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(keys.projects, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: keys.projects });
+      queryClient.invalidateQueries({ queryKey: keys.tasks });
+      queryClient.invalidateQueries({ queryKey: keys.events });
+    },
+  });
+
   // タスク削除は TASK_DELETED action_log も記録する (SupabaseTaskGateway.delete 内)。
   const deleteTaskMutation = useMutation({
     mutationFn: (id: string) => taskGateway.delete(id),
@@ -366,6 +409,9 @@ export function AppShell({ initialView, user }: AppShellProps) {
   const pendingTasks = useMemo(() => tasks.filter((t) => !isDone(t)), [tasks]);
   const doneTasks = useMemo(() => tasks.filter((t) => isDone(t)), [tasks]);
   const detailTask = detailId ? tasks.find((t) => t.id === detailId) : null;
+  const projectDetail = projectDetailId
+    ? (projects.find((p) => p.id === projectDetailId) ?? null)
+    : null;
 
   // タスクスタックのトップタスク = タイマー対象。
   // pendingTasks は stack_order 昇順なので [0] がトップ。
@@ -523,8 +569,22 @@ export function AppShell({ initialView, user }: AppShellProps) {
             onCreateProject={async (input) => {
               await createProjectMutation.mutateAsync(input);
             }}
+            onOpenProject={setProjectDetailId}
           />
         ) : null}
+
+        {projectDetail && (
+          <ProjectDetailPanel
+            project={projectDetail}
+            onClose={() => setProjectDetailId(null)}
+            onUpdate={async (id, patch) => {
+              await updateProjectMutation.mutateAsync({ id, patch });
+            }}
+            onDelete={async (id) => {
+              await deleteProjectMutation.mutateAsync(id);
+            }}
+          />
+        )}
 
         {pauseModalOpen ? (
           <PauseReasonModal onSelect={handlePauseSelect} onClose={() => setPauseModalOpen(false)} />
