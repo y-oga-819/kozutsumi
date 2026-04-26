@@ -151,11 +151,19 @@ jobs:
         run: supabase stop --no-backup || true
 
   e2e:
-    name: E2E (Playwright)
+    # B (sharding): e2e tests を 2 shard に分割し別 runner で並走させる。
+    # 各 shard は独自に Supabase を立てる (140s) ため起動コストは shard 数だけ
+    # 払うが、test 実行 (51s) が半分に減るので wall は -30s 程度短縮できる。
+    # public repo なので分課金は無料。
+    name: E2E (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     needs: changes
     if: needs.changes.outputs.node == 'true' || needs.changes.outputs.supabase == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -165,6 +173,15 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
+      # D-(1): docker daemon の layer 並列 DL を 3 → 20 に bump。
+      # postgres image は layer が多く、標準の 3 並列だと pull が支配的になる。
+      # daemon 設定を上書き → restart して supabase start 前に効かせる。
+      - name: Bump docker daemon parallel pull
+        run: |
+          sudo mkdir -p /etc/docker
+          echo '{"max-concurrent-downloads": 20, "max-concurrent-uploads": 20}' \
+            | sudo tee /etc/docker/daemon.json
+          sudo systemctl restart docker
       # ADR 0011: e2e は本物の Supabase スタック + password sign-in でログインする。
       # auth は必要、studio / storage 等は不要なので最小構成で起動する。
       #
@@ -236,12 +253,13 @@ jobs:
         env:
           E2E_TEST_USER_EMAIL: e2e@kozutsumi.local
           E2E_TEST_USER_PASSWORD: e2e-ci-password
-        run: npm run test:e2e
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          # shard ごとに別 artifact 名で upload する (同名は upload-artifact@v4 で衝突)。
+          name: playwright-report-shard-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 7
           if-no-files-found: ignore
