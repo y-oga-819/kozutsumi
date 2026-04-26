@@ -7,6 +7,7 @@ import { VariantA } from "./VariantA";
 import { VariantB } from "./VariantB";
 import { VariantC } from "./VariantC";
 import { VariantD } from "./VariantD";
+import { VariantE } from "./VariantE";
 
 /**
  * ADR 0016 用の体験比較プレイグラウンド。
@@ -74,6 +75,7 @@ export function Playground({ initialKey = "A" }: { initialKey?: VariantKey }) {
         {active === "B" && <VariantB />}
         {active === "C" && <VariantC />}
         {active === "D" && <VariantD />}
+        {active === "E" && <VariantE />}
       </div>
     </div>
   );

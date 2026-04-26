@@ -7,6 +7,7 @@ export const VARIANTS = [
   { key: "B", label: "B: フラット+バッジ" },
   { key: "C", label: "C: 折りたたみ" },
   { key: "D", label: "D: breadcrumb" },
+  { key: "E", label: "E: ハイブリッド" },
 ] as const;
 
 export type VariantKey = (typeof VARIANTS)[number]["key"];
