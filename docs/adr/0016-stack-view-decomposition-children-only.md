@@ -1,8 +1,10 @@
 # ADR 0016: Stack View は AI 分解後の子のみを並べ、親は Tree View で保持する
 
-- **Status**: Accepted
+- **Status**: Proposed
 - **Date**: 2026-04-26
 - **Related**: `docs/design/vision.md` / `docs/design/architecture.md` §1.7 / §1.9 / §2.4 / [ADR 0013](./0013-ai-as-augmentation-only.md) / [ADR 0017](./0017-ai-task-decomposition-async.md) / [ADR 0018](./0018-keep-parent-task-id-for-ai-decomposition.md)
+
+> **Note (2026-04-26 後)**: 一度 Accepted にしたが、Vercel preview でプロトタイプを実際に触った結果、A の「親子関係 / 完了境界が見えない」弱点が想定より重く、C / D の長所を取り込むハイブリッド案 (E) を作って再検討する判断にした。Status を Proposed に戻して再議論中。情報設計の論点は `docs/open-questions.md` の「Stack View カード情報設計」を参照。
 
 ## Context
 
