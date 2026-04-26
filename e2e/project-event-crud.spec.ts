@@ -161,10 +161,9 @@ test.describe("プロジェクト削除 (cascade SET NULL)", () => {
     const taskTitle = "E2E 削除前のタスク";
     await page.getByRole("button", { name: "新規追加" }).click();
     let addDialog = page.getByRole("dialog", { name: "追加メニュー" });
+    await addDialog.getByRole("tab", { name: "タスク" }).click();
     await addDialog.getByLabel("タイトル").fill(taskTitle);
-    await addDialog
-      .getByLabel("プロジェクト", { exact: true })
-      .selectOption({ label: projectName });
+    await addDialog.getByLabel("プロジェクト").selectOption({ label: projectName });
     await addDialog.getByRole("button", { name: "追加" }).click();
     await expect(addDialog).toHaveCount(0);
 
