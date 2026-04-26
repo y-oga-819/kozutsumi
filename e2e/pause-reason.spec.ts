@@ -4,9 +4,7 @@ import {
   assertTimeEntriesInvariants,
   createAdminClient,
   expectTaskStatus,
-  findTestUserId,
   getTaskByTitle,
-  requiredEnv,
   waitForActionLog,
   waitForTimeEntries,
 } from "./db";
@@ -37,11 +35,10 @@ test.describe("中断理由の網羅 (action_log.pause_reason / time_entries.pau
     test(`pause_reason=${c.reason} で中断すると DB に同じ値が入る`, async ({
       signedInPageWithProject: page,
       projectName,
+      testUserId: userId,
     }) => {
       const taskTitle = `中断理由テスト (${c.reason})`;
       const admin = createAdminClient();
-      const userId = await findTestUserId(admin, requiredEnv("E2E_TEST_USER_EMAIL"));
-      if (!userId) throw new Error("[e2e] test user must exist (created by global-setup)");
 
       await createTask(page, taskTitle, projectName);
       const task = await getTaskByTitle(admin, userId, taskTitle);

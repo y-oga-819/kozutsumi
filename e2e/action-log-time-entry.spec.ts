@@ -2,11 +2,9 @@ import {
   assertTimeEntriesInvariants,
   createAdminClient,
   expectTaskStatus,
-  findTestUserId,
   getActionLogs,
   getTaskByTitle,
   getTimeEntries,
-  requiredEnv,
   waitForActionLog,
   waitForTimeEntries,
 } from "./db";
@@ -27,13 +25,12 @@ import { expect, test } from "./fixtures";
 test.describe("行動データ整合 (action_logs / task_time_entries / tasks.status)", () => {
   test("start → pause → resume → complete で DB が ADR 通りに更新される", async ({
     signedInPage: page,
+    testUserId: userId,
   }) => {
     const projectName = "行動ログ検証プロジェクト";
     const taskTitle = "行動ログ検証タスク";
 
     const admin = createAdminClient();
-    const userId = await findTestUserId(admin, requiredEnv("E2E_TEST_USER_EMAIL"));
-    if (!userId) throw new Error("[e2e] test user must exist (created by global-setup)");
 
     // --- セットアップ: プロジェクト + タスク 1 件を UI から作る ---------------
     await page.getByRole("button", { name: "新規追加" }).click();

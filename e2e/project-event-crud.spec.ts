@@ -1,10 +1,4 @@
-import {
-  createAdminClient,
-  findTestUserId,
-  getEventByTitle,
-  getProjectByName,
-  requiredEnv,
-} from "./db";
+import { createAdminClient, getEventByTitle, getProjectByName } from "./db";
 import { expect, test } from "./fixtures";
 
 /**
@@ -23,13 +17,14 @@ import { expect, test } from "./fixtures";
  *   実装が入った段階で本 spec を拡張する。
  */
 test.describe("プロジェクト作成 (projects 行整合)", () => {
-  test("名前 / 色 / 本業フラグ が projects 行に正しく落ちる", async ({ signedInPage: page }) => {
+  test("名前 / 色 / 本業フラグ が projects 行に正しく落ちる", async ({
+    signedInPage: page,
+    testUserId: userId,
+  }) => {
     const projectName = "本業プロジェクト";
     const projectColor = "#0096C7"; // ProjectForm DEFAULT_COLORS の 2 番目
 
     const admin = createAdminClient();
-    const userId = await findTestUserId(admin, requiredEnv("E2E_TEST_USER_EMAIL"));
-    if (!userId) throw new Error("[e2e] test user must exist (created by global-setup)");
 
     await page.getByRole("button", { name: "新規追加" }).click();
     const addDialog = page.getByRole("dialog", { name: "追加メニュー" });
@@ -53,6 +48,7 @@ test.describe("manual イベント作成 (events 行整合)", () => {
   test("title / start_time / end_time / meet_url / project / source=manual で events 行に落ちる", async ({
     signedInPageWithProject: page,
     projectName,
+    testUserId: userId,
   }) => {
     const eventTitle = "E2E SLO レビュー MTG";
     const startLocal = "2030-06-15T13:00";
@@ -60,8 +56,6 @@ test.describe("manual イベント作成 (events 行整合)", () => {
     const meetUrl = "https://meet.google.com/e2e-slo-review";
 
     const admin = createAdminClient();
-    const userId = await findTestUserId(admin, requiredEnv("E2E_TEST_USER_EMAIL"));
-    if (!userId) throw new Error("[e2e] test user must exist (created by global-setup)");
 
     const project = await getProjectByName(admin, userId, projectName);
 
@@ -95,14 +89,13 @@ test.describe("manual イベント作成 (events 行整合)", () => {
 
   test("プロジェクト / 会議URL を空のままでも events 行が作れる", async ({
     signedInPage: page,
+    testUserId: userId,
   }) => {
     const eventTitle = "E2E 任意項目なしイベント";
     const startLocal = "2030-07-01T09:00";
     const endLocal = "2030-07-01T10:00";
 
     const admin = createAdminClient();
-    const userId = await findTestUserId(admin, requiredEnv("E2E_TEST_USER_EMAIL"));
-    if (!userId) throw new Error("[e2e] test user must exist (created by global-setup)");
 
     await page.getByRole("button", { name: "新規追加" }).click();
     const addDialog = page.getByRole("dialog", { name: "追加メニュー" });

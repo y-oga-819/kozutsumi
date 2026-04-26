@@ -151,11 +151,19 @@ jobs:
         run: supabase stop --no-backup || true
 
   e2e:
-    name: E2E (Playwright)
+    # B (sharding): e2e tests を 2 shard に分割し別 runner で並走させる。
+    # 各 shard は独自に Supabase を立てる (140s) ため起動コストは shard 数だけ
+    # 払うが、test 実行 (51s) が半分に減るので wall は -30s 程度短縮できる。
+    # public repo なので分課金は無料。
+    name: E2E (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     needs: changes
     if: needs.changes.outputs.node == 'true' || needs.changes.outputs.supabase == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -165,12 +173,74 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
+      # D-(1): docker daemon の layer 並列 DL を 3 → 20 に bump。
+      # postgres image は layer が多く、標準の 3 並列だと pull が支配的になる。
+      # daemon 設定を上書き → restart して supabase start 前に効かせる。
+      - name: Bump docker daemon parallel pull
+        run: |
+          sudo mkdir -p /etc/docker
+          echo '{"max-concurrent-downloads": 20, "max-concurrent-uploads": 20}' \
+            | sudo tee /etc/docker/daemon.json
+          sudo systemctl restart docker
       # ADR 0011: e2e は本物の Supabase スタック + password sign-in でログインする。
       # auth は必要、studio / storage 等は不要なので最小構成で起動する。
-      - name: Start Supabase local stack
+      #
+      # Step 並列化: supabase start は image pull + container init で 2m+ かかる
+      # ので、background 起動 → npm ci / playwright install を overlap → 後段で
+      # 完了を待つ、の順にする。Supabase 起動 (~133s) > install (~30s) なので
+      # install のぶん丸ごと隠れる (期待 -30s)。
+      - name: Start Supabase local stack (background)
         run: |
-          supabase start \
-            -x studio,inbucket,storage-api,imgproxy,edge-runtime,logflare,vector,pgsodium,realtime
+          rm -f /tmp/supabase-start.exit /tmp/supabase-start.log
+          nohup bash -c '
+            supabase start \
+              -x studio,inbucket,storage-api,imgproxy,edge-runtime,logflare,vector,pgsodium,realtime
+            echo "$?" > /tmp/supabase-start.exit
+          ' > /tmp/supabase-start.log 2>&1 &
+          echo $! > /tmp/supabase-start.pid
+      - name: Install npm deps
+        run: npm ci
+      # Playwright の browser binary (~/.cache/ms-playwright) を Playwright の
+      # version で key 付けして cache する。version が変わったら自動で miss する。
+      # cache hit でも system deps (apt) は別途 install-deps で入れる必要がある
+      # (apt 部分は数秒なので browser DL の 25s と比べると誤差)。
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: |
+          version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+      - name: Install Playwright browsers
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
+      # background の supabase start が完了するまで待つ。pid が消えたら exit
+      # code を読み、log を出力する (失敗時の診断)。
+      - name: Wait for Supabase to be ready
+        run: |
+          pid=$(cat /tmp/supabase-start.pid)
+          while kill -0 "$pid" 2>/dev/null; do
+            sleep 2
+          done
+          if [ ! -f /tmp/supabase-start.exit ]; then
+            echo "::error::supabase start did not record exit code"
+            cat /tmp/supabase-start.log || true
+            exit 1
+          fi
+          code=$(cat /tmp/supabase-start.exit)
+          cat /tmp/supabase-start.log
+          if [ "$code" -ne 0 ]; then
+            echo "::error::supabase start exited with code $code"
+            exit "$code"
+          fi
       - name: Export Supabase keys into env
         run: |
           supabase status -o env > /tmp/sb.env
@@ -179,20 +249,17 @@ jobs:
             echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(grep '^ANON_KEY=' /tmp/sb.env | cut -d= -f2- | tr -d '\"')"
             echo "SUPABASE_SERVICE_ROLE_KEY=$(grep '^SERVICE_ROLE_KEY=' /tmp/sb.env | cut -d= -f2- | tr -d '\"')"
           } >> "$GITHUB_ENV"
-      - name: Install npm deps
-        run: npm ci
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
       - name: Run Playwright
         env:
           E2E_TEST_USER_EMAIL: e2e@kozutsumi.local
           E2E_TEST_USER_PASSWORD: e2e-ci-password
-        run: npm run test:e2e
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          # shard ごとに別 artifact 名で upload する (同名は upload-artifact@v4 で衝突)。
+          name: playwright-report-shard-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 7
           if-no-files-found: ignore

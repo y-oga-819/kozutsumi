@@ -1,11 +1,9 @@
 import {
   createAdminClient,
-  findTestUserId,
   getActionLogs,
   getProjectByName,
   getTaskByTitle,
   getTimeEntries,
-  requiredEnv,
   waitForActionLog,
 } from "./db";
 import { expect, test } from "./fixtures";
@@ -24,13 +22,12 @@ test.describe("タスク作成 (tasks 行整合)", () => {
   test("title / project / 見積もり時間 が tasks 行に正しく落ちる", async ({
     signedInPageWithProject: page,
     projectName,
+    testUserId: userId,
   }) => {
     const taskTitle = "見積もり付きタスク";
     const estimatedMinutes = 45;
 
     const admin = createAdminClient();
-    const userId = await findTestUserId(admin, requiredEnv("E2E_TEST_USER_EMAIL"));
-    if (!userId) throw new Error("[e2e] test user must exist (created by global-setup)");
 
     const project = await getProjectByName(admin, userId, projectName);
 
@@ -76,13 +73,12 @@ test.describe("タスク編集 (TaskDetailPanel body)", () => {
   test("body を編集して保存すると tasks.body が更新される", async ({
     signedInPageWithProject: page,
     projectName,
+    testUserId: userId,
   }) => {
     const taskTitle = "詳細を書くタスク";
     const newBody = "## 準備\n- 資料を集める\n- アジェンダを書く";
 
     const admin = createAdminClient();
-    const userId = await findTestUserId(admin, requiredEnv("E2E_TEST_USER_EMAIL"));
-    if (!userId) throw new Error("[e2e] test user must exist (created by global-setup)");
 
     await page.getByRole("button", { name: "新規追加" }).click();
     const addDialog = page.getByRole("dialog", { name: "追加メニュー" });
@@ -138,12 +134,11 @@ test.describe("タスク削除 (task_deleted + cascade)", () => {
   test("削除すると task_time_entries が cascade で消え、task_deleted ログが残る", async ({
     signedInPageWithProject: page,
     projectName,
+    testUserId: userId,
   }) => {
     const taskTitle = "削除されるタスク";
 
     const admin = createAdminClient();
-    const userId = await findTestUserId(admin, requiredEnv("E2E_TEST_USER_EMAIL"));
-    if (!userId) throw new Error("[e2e] test user must exist (created by global-setup)");
 
     // --- タスク追加 ----------------------------------------------------------
     await page.getByRole("button", { name: "新規追加" }).click();
