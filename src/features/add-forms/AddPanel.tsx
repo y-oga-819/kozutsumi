@@ -22,6 +22,11 @@ type AddPanelProps = {
   onCreateTask: (input: CreateTaskInput) => Promise<void>;
   onCreateEvent: (input: CreateEventInput) => Promise<void>;
   onCreateProject: (input: CreateProjectInput) => Promise<void>;
+  /**
+   * 既存プロジェクト行クリック時のハンドラ。Issue #75 で編集 / 削除導線として追加。
+   * 未指定なら一覧は read-only 表示として描画する (テスト等での省略可)。
+   */
+  onOpenProject?: (id: string) => void;
 };
 
 /**
@@ -35,6 +40,7 @@ export function AddPanel({
   onCreateTask,
   onCreateEvent,
   onCreateProject,
+  onOpenProject,
 }: AddPanelProps) {
   const [tab, setTab] = useState<Tab>(initialTab);
 
@@ -95,9 +101,56 @@ export function AddPanel({
           {tab === "event" ? (
             <EventForm projects={projects} onSubmit={onCreateEvent} onClose={onClose} />
           ) : null}
-          {tab === "project" ? <ProjectForm onSubmit={onCreateProject} onClose={onClose} /> : null}
+          {tab === "project" ? (
+            <div className="flex flex-col gap-4">
+              {projects.length > 0 ? (
+                <ProjectList projects={projects} onOpen={onOpenProject} />
+              ) : null}
+              <div className="flex flex-col gap-2">
+                {projects.length > 0 ? (
+                  <span className="font-jp text-[10px] text-fg-weak">新しいプロジェクト</span>
+                ) : null}
+                <ProjectForm onSubmit={onCreateProject} onClose={onClose} />
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ProjectList({
+  projects,
+  onOpen,
+}: {
+  projects: readonly Project[];
+  onOpen: ((id: string) => void) | undefined;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="font-jp text-[10px] text-fg-weak">既存プロジェクト</span>
+      <ul className="flex flex-col gap-1">
+        {projects.map((p) => (
+          <li key={p.id}>
+            <button
+              type="button"
+              onClick={() => onOpen?.(p.id)}
+              disabled={!onOpen}
+              aria-label={`${p.name} を編集`}
+              className="flex w-full items-center gap-2 rounded border border-bg-divider bg-bg-elevated px-3 py-2 text-left transition-colors hover:bg-bg-divider disabled:cursor-default disabled:hover:bg-bg-elevated"
+            >
+              <span className="h-2 w-2 rounded-full" style={{ background: p.color }} />
+              <span className="flex-1 font-jp text-[12px] text-fg-default">{p.name}</span>
+              {p.isPrimary ? (
+                <span className="rounded bg-bg-divider px-1.5 py-px font-jp text-[9px] text-fg-muted">
+                  本業
+                </span>
+              ) : null}
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
