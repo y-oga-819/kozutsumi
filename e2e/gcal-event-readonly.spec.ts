@@ -50,8 +50,12 @@ test.describe("google_calendar イベントの編集制約 (ADR 0010)", () => {
     await page.reload();
 
     // --- DayTimeline の EventCard をクリックして詳細を開く -------------------
-    // EventCard は role を持たない div だが、表示テキストに event.title が含まれる。
-    await page.getByText(eventTitle).first().click();
+    // Issue #77 で立てた a11y 構造 (region 配下の listitem) で scope する。
+    // 上部の "<title>中" インジケータ (`isNow` 時の <span>) と衝突しないよう
+    // listitem に絞る (`getByText(...).first()` だと CI 実行時刻が event 範囲に
+    // 被ったとき indicator span を拾って flake する)。
+    const timeline = page.getByRole("region", { name: "本日のタイムライン" });
+    await timeline.getByRole("listitem").filter({ hasText: eventTitle }).click();
 
     // EventDetailPanel が開く (Issue #76 で role="dialog" + aria-label="イベント詳細"
     // を付与済み)。GCal 由来であることを示すバッジ + 由来説明文の存在を踏む。
@@ -126,7 +130,9 @@ test.describe("google_calendar イベントの編集制約 (ADR 0010)", () => {
     await page.reload();
 
     // --- DayTimeline → 詳細を開く -------------------------------------------
-    await page.getByText(eventTitle).first().click();
+    // listitem scope で indicator span (`isNow` 時の `<title>中`) との衝突を回避。
+    const timeline = page.getByRole("region", { name: "本日のタイムライン" });
+    await timeline.getByRole("listitem").filter({ hasText: eventTitle }).click();
     await expect(page.getByTestId("google-calendar-badge").first()).toBeVisible();
 
     // --- 「未設定 を変更」 → select 表示 → プロジェクトを選ぶ ----------------

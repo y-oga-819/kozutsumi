@@ -26,9 +26,12 @@ export function DayTimeline({ events, nowMin, today, onOpenEvent }: DayTimelineP
   const firstFutureIdx = sortedEvents.findIndex((e) => minutesOfDay(e.startTime) > nowMin);
 
   return (
-    <div className="px-4 pb-1 pt-3.5">
+    <section aria-label="本日のタイムライン" className="px-4 pb-1 pt-3.5">
       <div className="mb-2.5 flex items-baseline gap-2">
-        <div className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent-green" />
+        <div
+          aria-hidden="true"
+          className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent-green"
+        />
         <span className="font-jp text-[11px] text-fg-subtle">{formatDate(today)}</span>
         <span className="text-[11px] tabular-nums text-fg-emphasized">{fmtMin(nowMin)}</span>
         {currentSlot?.type === "free" && (
@@ -43,17 +46,22 @@ export function DayTimeline({ events, nowMin, today, onOpenEvent }: DayTimelineP
 
       <TimelineBar slots={slots} nowMin={nowMin} dayStart={dayStart} dayEnd={dayEnd} />
 
-      <div className="mt-2 flex flex-col gap-1">
+      <ul
+        role="list"
+        aria-label="本日のイベント"
+        className="m-0 mt-2 flex list-none flex-col gap-1 p-0"
+      >
         {sortedEvents.map((ev, i) => (
-          <EventCard
-            key={ev.id}
-            event={ev}
-            nowMin={nowMin}
-            isNextCandidate={i === firstFutureIdx}
-            onClick={() => onOpenEvent(ev.id)}
-          />
+          <li key={ev.id}>
+            <EventCard
+              event={ev}
+              nowMin={nowMin}
+              isNextCandidate={i === firstFutureIdx}
+              onClick={() => onOpenEvent(ev.id)}
+            />
+          </li>
         ))}
-      </div>
-    </div>
+      </ul>
+    </section>
   );
 }

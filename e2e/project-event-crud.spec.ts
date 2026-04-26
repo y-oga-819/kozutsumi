@@ -149,7 +149,12 @@ test.describe("manual イベント編集 (events 行整合, Issue #76)", () => {
     expect(created.description).toBe("");
 
     // --- open EventDetailPanel: DayTimeline 上の event card をクリック ---
-    await page.getByText(initialTitle).first().click();
+    // region scope の listitem で取る (Issue #77 で立てた a11y 構造)。
+    // 上部の "<title>中" インジケータ (`isNow` 時の <span>) と衝突しないように
+    // listitem に絞って取る (`getByText(...).first()` だと CI 実行時刻が
+    // event 範囲に被ったとき indicator span を拾って flake する)。
+    const timeline = page.getByRole("region", { name: "本日のタイムライン" });
+    await timeline.getByRole("listitem").filter({ hasText: initialTitle }).click();
     const detailDialog = page.getByRole("dialog", { name: "イベント詳細" });
     await expect(detailDialog).toBeVisible();
 
@@ -210,7 +215,9 @@ test.describe("manual イベント削除 (events 行消滅, Issue #76)", () => {
     const created = await getEventByTitle(admin, userId, eventTitle);
 
     // --- open detail → 削除 (confirm を accept) ---
-    await page.getByText(eventTitle).first().click();
+    // listitem scope で indicator span (`isNow` 時の `<title>中`) との衝突を回避。
+    const timeline = page.getByRole("region", { name: "本日のタイムライン" });
+    await timeline.getByRole("listitem").filter({ hasText: eventTitle }).click();
     const detailDialog = page.getByRole("dialog", { name: "イベント詳細" });
     await expect(detailDialog).toBeVisible();
 
@@ -252,7 +259,9 @@ test.describe("manual イベント削除 (events 行消滅, Issue #76)", () => {
 
     const created = await getEventByTitle(admin, userId, eventTitle);
 
-    await page.getByText(eventTitle).first().click();
+    // listitem scope で indicator span (`isNow` 時の `<title>中`) との衝突を回避。
+    const timeline = page.getByRole("region", { name: "本日のタイムライン" });
+    await timeline.getByRole("listitem").filter({ hasText: eventTitle }).click();
     const detailDialog = page.getByRole("dialog", { name: "イベント詳細" });
     await expect(detailDialog).toBeVisible();
 
