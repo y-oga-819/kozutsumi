@@ -1,10 +1,16 @@
 import { useState } from "react";
 
+import type { UpdateEventInput } from "../../entities/event/gateway";
 import { EVENT_SOURCE, type Event } from "../../entities/event/types";
 import { GoogleCalendarBadge } from "../../entities/event/GoogleCalendarBadge";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
-import { fmtDuration, formatClock, minutesOfDay } from "../../shared/lib/time";
+import {
+  fmtDuration,
+  formatClock,
+  minutesOfDay,
+  toDateTimeLocalInput,
+} from "../../shared/lib/time";
 import { renderMarkdown } from "../../shared/lib/markdown";
 
 type EventDetailPanelProps = {
@@ -15,9 +21,29 @@ type EventDetailPanelProps = {
    * 未指定なら project_id 編集 UI も表示しない (省略可で既存呼び出しを壊さない)。
    */
   onChangeProject?: (id: string, projectId: string | null) => void;
+  /**
+   * `source === 'manual'` のイベントを編集する時に呼ぶ。`UpdateEventInput` 全体を渡す。
+   * 未指定なら manual イベントの編集 UI も表示しない (テストや特殊呼び出しで省略可)。
+   * ADR 0010 により google_calendar イベントは Google 側属性 read-only なので、
+   * 本コールバックは manual のみで使用する。
+   */
+  onUpdate?: (id: string, patch: UpdateEventInput) => Promise<void> | void;
+  /**
+   * `source === 'manual'` のイベントを削除する時に呼ぶ。
+   * 未指定なら削除ボタンを表示しない。
+   * ADR 0010 により google_calendar イベントは UI から削除不可なので、本コール
+   * バックを渡しても source='google_calendar' では削除ボタンを表示しない。
+   */
+  onDelete?: (id: string) => Promise<void> | void;
 };
 
-export function EventDetailPanel({ event, onClose, onChangeProject }: EventDetailPanelProps) {
+export function EventDetailPanel({
+  event,
+  onClose,
+  onChangeProject,
+  onUpdate,
+  onDelete,
+}: EventDetailPanelProps) {
   const { projects, projectsById } = useProjects();
   const proj = event.projectId ? getProject(projectsById, event.projectId) : null;
   const evColor = proj ? proj.color : "#52525b";
@@ -31,13 +57,98 @@ export function EventDetailPanel({ event, onClose, onChangeProject }: EventDetai
       ? "Google Meet"
       : "会議リンク";
   const isGoogleCalendar = event.source === EVENT_SOURCE.GOOGLE_CALENDAR;
+  const isManual = event.source === EVENT_SOURCE.MANUAL;
   // ADR 0010: google_calendar イベントは project_id だけ kozutsumi 側で編集可。
   // onChangeProject が渡されている時のみ編集 UI を出す (テストや特殊呼び出しで省略可)。
   const canEditProject = isGoogleCalendar && !!onChangeProject;
+  // ADR 0010: manual イベントだけが全フィールド編集 / 削除可。
+  const canEdit = isManual && !!onUpdate;
+  const canDelete = isManual && !!onDelete;
   const [editingProject, setEditingProject] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // 編集フォームの draft 値。編集モードに入る時に event 値で初期化する。
+  const [draftTitle, setDraftTitle] = useState(event.title);
+  const [draftStart, setDraftStart] = useState(toDateTimeLocalInput(event.startTime));
+  const [draftEnd, setDraftEnd] = useState(toDateTimeLocalInput(event.endTime));
+  const [draftProjectId, setDraftProjectId] = useState(event.projectId ?? "");
+  const [draftMeetUrl, setDraftMeetUrl] = useState(event.meetUrl ?? "");
+  const [draftBody, setDraftBody] = useState(event.description ?? "");
+
+  const startEdit = () => {
+    setDraftTitle(event.title);
+    setDraftStart(toDateTimeLocalInput(event.startTime));
+    setDraftEnd(toDateTimeLocalInput(event.endTime));
+    setDraftProjectId(event.projectId ?? "");
+    setDraftMeetUrl(event.meetUrl ?? "");
+    setDraftBody(event.description ?? "");
+    setError(null);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setError(null);
+  };
+
+  const submitEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pending || !onUpdate) return;
+    if (!draftTitle.trim()) {
+      setError("タイトルは必須です");
+      return;
+    }
+    if (!draftStart || !draftEnd) {
+      setError("開始/終了時刻は必須です");
+      return;
+    }
+    if (new Date(draftEnd).getTime() <= new Date(draftStart).getTime()) {
+      setError("終了時刻は開始時刻より後にしてください");
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      await onUpdate(event.id, {
+        title: draftTitle.trim(),
+        // datetime-local はローカル tz-naive 値。EventForm と揃えて `:00` を補完する。
+        startTime: `${draftStart}:00`,
+        endTime: `${draftEnd}:00`,
+        projectId: draftProjectId || null,
+        meetUrl: draftMeetUrl.trim() || null,
+        description: draftBody,
+      });
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存に失敗しました");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (pending || !onDelete) return;
+    if (!window.confirm(`イベント「${event.title}」を削除しますか?`)) return;
+    setPending(true);
+    setError(null);
+    try {
+      await onDelete(event.id);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "削除に失敗しました");
+      setPending(false);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="イベント詳細"
+      className="fixed inset-0 z-[200] flex flex-col"
+    >
       <div onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-[4px]" />
       <div
         className="relative mt-auto flex max-h-[85vh] animate-panel-slide-up flex-col rounded-t-2xl bg-bg-surface"
@@ -49,123 +160,262 @@ export function EventDetailPanel({ event, onClose, onChangeProject }: EventDetai
           <div className="h-[3px] w-8 rounded-[2px] bg-bg-divider" />
         </div>
 
-        <div className="px-5 pb-3 pt-2">
-          <div className="mb-2 flex items-center gap-2">
-            {proj && <div className="h-2 w-2 rounded-full" style={{ background: evColor }} />}
-            {proj && <span className="font-jp text-[10px] text-fg-subtle">{proj.name}</span>}
-            <span className="text-[10px] tabular-nums text-fg-weak">
-              {formatClock(event.startTime)}–{formatClock(event.endTime)} ({fmtDuration(duration)})
-            </span>
-            {isGoogleCalendar && <GoogleCalendarBadge size="md" />}
-          </div>
-          <h2 className="m-0 font-jp text-[16px] font-bold leading-[1.4] text-fg-strong">
-            {event.title}
-          </h2>
-        </div>
-
-        {event.meetUrl && (
-          <div className="px-5 pb-2">
-            <a
-              href={event.meetUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-jp text-[11px] no-underline ${
-                isZoom
-                  ? "border border-[#2D8CFF30] bg-[#2D8CFF20] text-accent-zoomFg"
-                  : "border border-[#00AC4730] bg-[#00AC4720] text-accent-meetFg"
-              }`}
-            >
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path
-                  d="M10 2H14V6"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path d="M14 2L8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                <path
-                  d="M6 3H3V13H13V10"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              {meetLabel}に参加
-            </a>
-          </div>
-        )}
-
-        {event.hasAttachments && (
-          <div className="px-5 pb-2">
-            <div className="flex items-center gap-1.5 rounded-[5px] bg-bg-elevated px-2.5 py-[5px] font-jp text-[11px] text-fg-muted">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path
-                  d="M9 2H4V14H12V5L9 2Z"
-                  stroke="#52525b"
-                  strokeWidth="1.2"
-                  strokeLinejoin="round"
-                />
-                <path d="M9 2V5H12" stroke="#52525b" strokeWidth="1.2" strokeLinejoin="round" />
-              </svg>
-              添付資料あり
+        {!editing ? (
+          <>
+            <div className="px-5 pb-3 pt-2">
+              <div className="mb-2 flex items-center gap-2">
+                {proj && <div className="h-2 w-2 rounded-full" style={{ background: evColor }} />}
+                {proj && <span className="font-jp text-[10px] text-fg-subtle">{proj.name}</span>}
+                <span className="text-[10px] tabular-nums text-fg-weak">
+                  {formatClock(event.startTime)}–{formatClock(event.endTime)} (
+                  {fmtDuration(duration)})
+                </span>
+                {isGoogleCalendar && <GoogleCalendarBadge size="md" />}
+                <div className="flex-1" />
+                {canDelete ? (
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={pending}
+                    className="rounded-[4px] border border-accent-red/40 bg-transparent px-2.5 py-[3px] font-jp text-[10px] text-accent-red disabled:opacity-60"
+                  >
+                    削除
+                  </button>
+                ) : null}
+                {canEdit ? (
+                  <button
+                    type="button"
+                    onClick={startEdit}
+                    disabled={pending}
+                    className="rounded-[4px] border border-bg-divider bg-transparent px-2.5 py-[3px] font-jp text-[10px] text-fg-subtle disabled:opacity-60"
+                  >
+                    編集
+                  </button>
+                ) : null}
+              </div>
+              <h2 className="m-0 font-jp text-[16px] font-bold leading-[1.4] text-fg-strong">
+                {event.title}
+              </h2>
             </div>
-          </div>
-        )}
 
-        {canEditProject && (
-          <div className="px-5 pb-2">
-            <div className="flex items-center gap-2">
-              <span className="font-jp text-[10px] text-fg-weak">プロジェクト</span>
-              {editingProject ? (
-                <select
-                  autoFocus
-                  value={event.projectId ?? ""}
-                  onChange={(e) => {
-                    const next = e.target.value === "" ? null : e.target.value;
-                    onChangeProject!(event.id, next);
-                    setEditingProject(false);
-                  }}
-                  onBlur={() => setEditingProject(false)}
-                  className="flex-1 rounded border border-bg-divider bg-bg-elevated px-2 py-1 text-[11px] text-fg-default outline-none focus:border-accent-blue"
+            {event.meetUrl && (
+              <div className="px-5 pb-2">
+                <a
+                  href={event.meetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-jp text-[11px] no-underline ${
+                    isZoom
+                      ? "border border-[#2D8CFF30] bg-[#2D8CFF20] text-accent-zoomFg"
+                      : "border border-[#00AC4730] bg-[#00AC4720] text-accent-meetFg"
+                  }`}
                 >
-                  <option value="">なし</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                    <path
+                      d="M10 2H14V6"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M14 2L8 8"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M6 3H3V13H13V10"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  {meetLabel}に参加
+                </a>
+              </div>
+            )}
+
+            {event.hasAttachments && (
+              <div className="px-5 pb-2">
+                <div className="flex items-center gap-1.5 rounded-[5px] bg-bg-elevated px-2.5 py-[5px] font-jp text-[11px] text-fg-muted">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                    <path
+                      d="M9 2H4V14H12V5L9 2Z"
+                      stroke="#52525b"
+                      strokeWidth="1.2"
+                      strokeLinejoin="round"
+                    />
+                    <path d="M9 2V5H12" stroke="#52525b" strokeWidth="1.2" strokeLinejoin="round" />
+                  </svg>
+                  添付資料あり
+                </div>
+              </div>
+            )}
+
+            {canEditProject && (
+              <div className="px-5 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-jp text-[10px] text-fg-weak">プロジェクト</span>
+                  {editingProject ? (
+                    <select
+                      autoFocus
+                      value={event.projectId ?? ""}
+                      onChange={(e) => {
+                        const next = e.target.value === "" ? null : e.target.value;
+                        onChangeProject!(event.id, next);
+                        setEditingProject(false);
+                      }}
+                      onBlur={() => setEditingProject(false)}
+                      className="flex-1 rounded border border-bg-divider bg-bg-elevated px-2 py-1 text-[11px] text-fg-default outline-none focus:border-accent-blue"
+                    >
+                      <option value="">なし</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setEditingProject(true)}
+                      className="cursor-pointer rounded-[4px] border border-bg-divider bg-transparent px-2 py-[3px] font-jp text-[10px] text-fg-subtle"
+                    >
+                      {proj ? proj.name : "未設定"} を変更
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {error ? (
+              <div className="px-5 pb-2">
+                <div
+                  role="alert"
+                  className="rounded bg-[#ef444420] px-2 py-1.5 text-[11px] text-accent-red"
+                >
+                  {error}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mx-5 h-px bg-bg-border" />
+
+            <div className="flex-1 overflow-auto px-5 pb-6 pt-3">
+              {event.description ? (
+                <div>{renderMarkdown(event.description)}</div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setEditingProject(true)}
-                  className="cursor-pointer rounded-[4px] border border-bg-divider bg-transparent px-2 py-[3px] font-jp text-[10px] text-fg-subtle"
-                >
-                  {proj ? proj.name : "未設定"} を変更
-                </button>
+                <div className="py-5 text-center font-jp text-[12px] italic text-fg-faint">
+                  詳細なし
+                </div>
+              )}
+              {isGoogleCalendar && (
+                <div className="mt-4 font-jp text-[10px] leading-[1.6] text-fg-faint">
+                  Google Calendar で編集した内容は次回同期で反映されます
+                </div>
               )}
             </div>
-          </div>
+          </>
+        ) : (
+          <form onSubmit={submitEdit} className="flex flex-col gap-3 px-5 pb-6 pt-2">
+            <label className="flex flex-col gap-1">
+              <span className="font-jp text-[10px] text-fg-weak">タイトル</span>
+              <input
+                type="text"
+                value={draftTitle}
+                onChange={(e) => setDraftTitle(e.target.value)}
+                autoFocus
+                className="rounded border border-bg-divider bg-bg-elevated px-3 py-2 text-[13px] text-fg-default outline-none focus:border-accent-blue"
+              />
+            </label>
+
+            <div className="flex gap-2">
+              <label className="flex flex-1 flex-col gap-1">
+                <span className="font-jp text-[10px] text-fg-weak">開始</span>
+                <input
+                  type="datetime-local"
+                  value={draftStart}
+                  onChange={(e) => setDraftStart(e.target.value)}
+                  className="rounded border border-bg-divider bg-bg-elevated px-3 py-2 text-[13px] text-fg-default outline-none focus:border-accent-blue"
+                />
+              </label>
+              <label className="flex flex-1 flex-col gap-1">
+                <span className="font-jp text-[10px] text-fg-weak">終了</span>
+                <input
+                  type="datetime-local"
+                  value={draftEnd}
+                  onChange={(e) => setDraftEnd(e.target.value)}
+                  className="rounded border border-bg-divider bg-bg-elevated px-3 py-2 text-[13px] text-fg-default outline-none focus:border-accent-blue"
+                />
+              </label>
+            </div>
+
+            <label className="flex flex-col gap-1">
+              <span className="font-jp text-[10px] text-fg-weak">プロジェクト (任意)</span>
+              <select
+                value={draftProjectId}
+                onChange={(e) => setDraftProjectId(e.target.value)}
+                className="rounded border border-bg-divider bg-bg-elevated px-3 py-2 text-[13px] text-fg-default outline-none focus:border-accent-blue"
+              >
+                <option value="">なし</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="font-jp text-[10px] text-fg-weak">会議URL (任意)</span>
+              <input
+                type="url"
+                value={draftMeetUrl}
+                onChange={(e) => setDraftMeetUrl(e.target.value)}
+                className="rounded border border-bg-divider bg-bg-elevated px-3 py-2 text-[13px] text-fg-default outline-none focus:border-accent-blue"
+                placeholder="https://meet.google.com/..."
+              />
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="font-jp text-[10px] text-fg-weak">本文 (任意, Markdown)</span>
+              <textarea
+                value={draftBody}
+                onChange={(e) => setDraftBody(e.target.value)}
+                className="min-h-[120px] resize-y rounded border border-bg-divider bg-bg-elevated p-3 font-mono text-[12px] leading-[1.6] text-fg-default outline-none focus:border-accent-blue"
+                placeholder="Markdownで詳細を入力..."
+              />
+            </label>
+
+            {error ? (
+              <div
+                role="alert"
+                className="rounded bg-[#ef444420] px-2 py-1.5 text-[11px] text-accent-red"
+              >
+                {error}
+              </div>
+            ) : null}
+
+            <div className="mt-1 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="rounded border border-bg-divider bg-transparent px-3 py-1.5 font-jp text-[11px] text-fg-subtle"
+              >
+                キャンセル
+              </button>
+              <button
+                type="submit"
+                disabled={pending}
+                className="rounded bg-accent-blue px-4 py-1.5 font-jp text-[11px] font-semibold text-fg-invert disabled:opacity-60"
+              >
+                {pending ? "保存中..." : "保存"}
+              </button>
+            </div>
+          </form>
         )}
-
-        <div className="mx-5 h-px bg-bg-border" />
-
-        <div className="flex-1 overflow-auto px-5 pb-6 pt-3">
-          {event.description ? (
-            <div>{renderMarkdown(event.description)}</div>
-          ) : (
-            <div className="py-5 text-center font-jp text-[12px] italic text-fg-faint">
-              詳細なし
-            </div>
-          )}
-          {isGoogleCalendar && (
-            <div className="mt-4 font-jp text-[10px] leading-[1.6] text-fg-faint">
-              Google Calendar で編集した内容は次回同期で反映されます
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

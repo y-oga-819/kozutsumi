@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ACTION_TYPES, log } from "@/entities/action-log/logger";
-import type { CreateEventInput } from "@/entities/event/gateway";
+import type { CreateEventInput, UpdateEventInput } from "@/entities/event/gateway";
 import type { Event } from "@/entities/event/types";
 import type { CreateProjectInput, UpdateProjectInput } from "@/entities/project/gateway";
 import { ProjectsProvider } from "@/entities/project/ProjectsContext";
@@ -269,6 +269,65 @@ export function AppShell({ initialView, user }: AppShellProps) {
       return { previous };
     },
     onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(keys.events, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: keys.events });
+    },
+  });
+
+  // ADR 0010: manual イベントの全フィールド編集 (title / start_time / end_time /
+  // meet_url / project_id / description)。optimistic に反映し、失敗したら roll
+  // back する。SupabaseEventGateway.update 側で source='google_calendar' の行は
+  // Google 側属性を弾くので、UI が誤ってここに google_calendar を流しても DB
+  // 書き込みは守られる (ADR 0010 の defense in depth)。
+  const updateEventMutation = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateEventInput }) =>
+      eventGateway.update(id, patch),
+    onMutate: async ({ id, patch }) => {
+      await queryClient.cancelQueries({ queryKey: keys.events });
+      const previous = queryClient.getQueryData<Event[]>(keys.events);
+      queryClient.setQueryData<Event[]>(keys.events, (prev) =>
+        (prev ?? []).map((e) =>
+          e.id === id
+            ? {
+                ...e,
+                ...(patch.title !== undefined ? { title: patch.title } : {}),
+                ...(patch.startTime !== undefined ? { startTime: patch.startTime } : {}),
+                ...(patch.endTime !== undefined ? { endTime: patch.endTime } : {}),
+                ...(patch.projectId !== undefined ? { projectId: patch.projectId } : {}),
+                ...(patch.meetUrl !== undefined ? { meetUrl: patch.meetUrl } : {}),
+                ...(patch.hasAttachments !== undefined
+                  ? { hasAttachments: patch.hasAttachments }
+                  : {}),
+                ...(patch.description !== undefined ? { description: patch.description } : {}),
+              }
+            : e,
+        ),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(keys.events, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: keys.events });
+    },
+  });
+
+  // ADR 0010: manual イベントだけが UI から削除可能。google_calendar は
+  // SupabaseEventGateway.delete が source を見て弾く。
+  const deleteEventMutation = useMutation({
+    mutationFn: (id: string) => eventGateway.delete(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: keys.events });
+      const previous = queryClient.getQueryData<Event[]>(keys.events);
+      queryClient.setQueryData<Event[]>(keys.events, (prev) =>
+        (prev ?? []).filter((e) => e.id !== id),
+      );
+      return { previous };
+    },
+    onError: (_err, _id, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(keys.events, ctx.previous);
     },
     onSettled: () => {
@@ -547,6 +606,12 @@ export function AppShell({ initialView, user }: AppShellProps) {
                 onChangeProject={(id, projectId) =>
                   updateEventProjectMutation.mutate({ id, projectId })
                 }
+                onUpdate={async (id, patch) => {
+                  await updateEventMutation.mutateAsync({ id, patch });
+                }}
+                onDelete={async (id) => {
+                  await deleteEventMutation.mutateAsync(id);
+                }}
               />
             ) : null;
           })()}

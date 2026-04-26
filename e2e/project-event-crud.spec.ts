@@ -2,8 +2,8 @@ import { createAdminClient, getEventByTitle, getProjectByName, getTaskByTitle } 
 import { expect, test } from "./fixtures";
 
 /**
- * Issue #67 🟧:
- *   プロジェクト / manual イベント作成の DB 整合。
+ * Issue #67 🟧 / Issue #76:
+ *   プロジェクト / manual イベントの create / edit / delete DB 整合。
  *
  * golden-path / 他の spec はプロジェクトを使う側にしか居ないため、
  * `projects` / `events (source='manual')` 行が UI 入力通りに落ちることを
@@ -12,11 +12,9 @@ import { expect, test } from "./fixtures";
  * Issue #75 で追加: プロジェクト編集 / 削除 + cascade (tasks.project_id /
  * events.project_id が `ON DELETE SET NULL` で null 化) も同 spec で踏む。
  *
- * **スコープアウト** (現状コードに UI が無い):
- *   - manual イベントの編集 / 削除 UI (EventDetailPanel に未実装、
- *     EventDetailPanel.test の「どの source でも『削除』ボタンは表示されない」
- *     と整合)。
- *   実装が入った段階で本 spec を拡張する。
+ * Issue #76 で追加: manual イベントの編集 / 削除 UI (`EventDetailPanel`)。
+ * google_calendar 側の read-only 制約 (ADR 0010) は `gcal-event-readonly.spec.ts`
+ * 側で踏んでいる。
  */
 test.describe("プロジェクト作成 (projects 行整合)", () => {
   test("名前 / 色 / 本業フラグ が projects 行に正しく落ちる", async ({
@@ -115,6 +113,160 @@ test.describe("manual イベント作成 (events 行整合)", () => {
   });
 });
 
+test.describe("manual イベント編集 (events 行整合, Issue #76)", () => {
+  test("title / 時刻 / プロジェクト / Meet URL / 本文 を編集すると events 行に反映される", async ({
+    signedInPageWithProject: page,
+    projectName,
+    testUserId: userId,
+  }) => {
+    const initialTitle = "E2E 編集前 MTG";
+    const newTitle = "E2E 編集後 MTG";
+    const newBody = "## 議題\n- 編集テスト";
+    const newMeetUrl = "https://meet.google.com/edited-e2e";
+    // DayTimeline は「今日」のイベントしか描画しないので、開始日付は今日にする。
+    const todayLocal = todayDateStr();
+    const startLocal = `${todayLocal}T13:00`;
+    const endLocal = `${todayLocal}T14:00`;
+    const editedStartLocal = `${todayLocal}T15:00`;
+    const editedEndLocal = `${todayLocal}T16:30`;
+
+    const admin = createAdminClient();
+    const project = await getProjectByName(admin, userId, projectName);
+
+    // --- create: AddPanel から initialTitle / project なし / Meet URL なしで ---
+    await page.getByRole("button", { name: "新規追加" }).click();
+    let addDialog = page.getByRole("dialog", { name: "追加メニュー" });
+    await addDialog.getByRole("tab", { name: "イベント" }).click();
+    await addDialog.getByLabel("タイトル").fill(initialTitle);
+    await addDialog.getByLabel("開始").fill(startLocal);
+    await addDialog.getByLabel("終了").fill(endLocal);
+    await addDialog.getByRole("button", { name: "追加" }).click();
+    await expect(addDialog).toHaveCount(0);
+
+    const created = await getEventByTitle(admin, userId, initialTitle);
+    expect(created.project_id).toBeNull();
+    expect(created.meet_url).toBeNull();
+    expect(created.description).toBe("");
+
+    // --- open EventDetailPanel: DayTimeline 上の event card をクリック ---
+    await page.getByText(initialTitle).first().click();
+    const detailDialog = page.getByRole("dialog", { name: "イベント詳細" });
+    await expect(detailDialog).toBeVisible();
+
+    // --- edit: 「編集」 → form 表示 → 全フィールド書き換え → 保存 ---
+    await detailDialog.getByRole("button", { name: "編集" }).click();
+    await detailDialog.getByLabel("タイトル").fill(newTitle);
+    await detailDialog.getByLabel("開始").fill(editedStartLocal);
+    await detailDialog.getByLabel("終了").fill(editedEndLocal);
+    await detailDialog.getByLabel("プロジェクト (任意)").selectOption({ label: projectName });
+    await detailDialog.getByLabel("会議URL (任意)").fill(newMeetUrl);
+    await detailDialog.getByLabel("本文 (任意, Markdown)").fill(newBody);
+    await detailDialog.getByRole("button", { name: "保存" }).click();
+
+    // --- 保存後はパネルが view モードに戻る (form input が消える) ---
+    await expect(detailDialog.getByLabel("タイトル")).toHaveCount(0);
+
+    // --- DB 検証 ---
+    // title が変わっているので getEventByTitle(newTitle) で取り直す。
+    await expect
+      .poll(async () => (await getEventByTitle(admin, userId, newTitle)).title, {
+        message: "events.title should be updated",
+        timeout: 5_000,
+      })
+      .toBe(newTitle);
+    const after = await getEventByTitle(admin, userId, newTitle);
+    expect(after.id).toBe(created.id);
+    expect(after.source).toBe("manual");
+    expect(after.project_id).toBe(project.id);
+    expect(after.meet_url).toBe(newMeetUrl);
+    expect(after.description).toBe(newBody);
+    expect(new Date(after.start_time).getTime()).toBe(new Date(`${editedStartLocal}:00`).getTime());
+    expect(new Date(after.end_time).getTime()).toBe(new Date(`${editedEndLocal}:00`).getTime());
+  });
+});
+
+test.describe("manual イベント削除 (events 行消滅, Issue #76)", () => {
+  test("削除ボタン → 確認 OK で events 行が消える", async ({
+    signedInPage: page,
+    testUserId: userId,
+  }) => {
+    const eventTitle = "E2E 削除対象イベント";
+    const todayLocal = todayDateStr();
+    const startLocal = `${todayLocal}T11:00`;
+    const endLocal = `${todayLocal}T12:00`;
+
+    const admin = createAdminClient();
+
+    // --- create ---
+    await page.getByRole("button", { name: "新規追加" }).click();
+    const addDialog = page.getByRole("dialog", { name: "追加メニュー" });
+    await addDialog.getByRole("tab", { name: "イベント" }).click();
+    await addDialog.getByLabel("タイトル").fill(eventTitle);
+    await addDialog.getByLabel("開始").fill(startLocal);
+    await addDialog.getByLabel("終了").fill(endLocal);
+    await addDialog.getByRole("button", { name: "追加" }).click();
+    await expect(addDialog).toHaveCount(0);
+
+    const created = await getEventByTitle(admin, userId, eventTitle);
+
+    // --- open detail → 削除 (confirm を accept) ---
+    await page.getByText(eventTitle).first().click();
+    const detailDialog = page.getByRole("dialog", { name: "イベント詳細" });
+    await expect(detailDialog).toBeVisible();
+
+    page.once("dialog", (dialog) => dialog.accept());
+    await detailDialog.getByRole("button", { name: "削除" }).click();
+    await expect(detailDialog).toHaveCount(0);
+
+    // --- DB: events 行が消えている ---
+    await expect
+      .poll(
+        async () => {
+          const { data } = await admin.from("events").select("id").eq("id", created.id);
+          return data?.length ?? -1;
+        },
+        { message: "events row should be deleted", timeout: 5_000 },
+      )
+      .toBe(0);
+  });
+
+  test("確認ダイアログをキャンセルすると events 行は残る", async ({
+    signedInPage: page,
+    testUserId: userId,
+  }) => {
+    const eventTitle = "E2E 削除キャンセル対象";
+    const todayLocal = todayDateStr();
+    const startLocal = `${todayLocal}T08:00`;
+    const endLocal = `${todayLocal}T09:00`;
+
+    const admin = createAdminClient();
+
+    await page.getByRole("button", { name: "新規追加" }).click();
+    const addDialog = page.getByRole("dialog", { name: "追加メニュー" });
+    await addDialog.getByRole("tab", { name: "イベント" }).click();
+    await addDialog.getByLabel("タイトル").fill(eventTitle);
+    await addDialog.getByLabel("開始").fill(startLocal);
+    await addDialog.getByLabel("終了").fill(endLocal);
+    await addDialog.getByRole("button", { name: "追加" }).click();
+    await expect(addDialog).toHaveCount(0);
+
+    const created = await getEventByTitle(admin, userId, eventTitle);
+
+    await page.getByText(eventTitle).first().click();
+    const detailDialog = page.getByRole("dialog", { name: "イベント詳細" });
+    await expect(detailDialog).toBeVisible();
+
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await detailDialog.getByRole("button", { name: "削除" }).click();
+    // キャンセル時は detail panel が開いたまま (削除も close も走らない)。
+    await expect(detailDialog).toBeVisible();
+
+    // DB の行は残っている。
+    const after = await getEventByTitle(admin, userId, eventTitle);
+    expect(after.id).toBe(created.id);
+  });
+});
+
 test.describe("プロジェクト編集 (projects 行整合)", () => {
   test("名前 / 色 / 本業フラグ を編集すると projects 行に反映される", async ({
     signedInPageWithProject: page,
@@ -210,3 +362,16 @@ test.describe("プロジェクト削除 (cascade SET NULL)", () => {
     expect(ev.project_id).toBeNull();
   });
 });
+
+/**
+ * DayTimeline は「今日」のローカル日付のイベントだけ描画する。e2e で
+ * EventDetailPanel を開く動線（DayTimeline 上の event card クリック）を踏む
+ * ためには、開始日付を実行日のローカルに合わせる必要がある。
+ */
+function todayDateStr(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
