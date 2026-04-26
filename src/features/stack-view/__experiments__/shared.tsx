@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 
+import { Grip } from "../../task-stack/Grip";
 import { fmtMinutes, SAMPLE_PROJECTS } from "./sampleData";
 import type { DecomposeStatus, SampleParent } from "./sampleData";
+
+export { Grip };
 
 /** 各 variant が独立に done を持つ。比較中に「他 variant の操作が混じる」誤読を防ぐ。 */
 export function useDoneSet(initial?: Iterable<string>): {
