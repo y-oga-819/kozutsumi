@@ -86,6 +86,20 @@ export function ProjectDetailPanel({
           <div className="h-[3px] w-8 rounded-[2px] bg-bg-divider" />
         </div>
 
+        <div className="flex justify-end px-5 pt-1">
+          {/* 削除はパネル下端ではなく上部に置く。下端は Next.js dev mode の
+              ビルドインジケータ (<nextjs-portal>) と重なって e2e の click が
+              吸われるのと、TaskDetailPanel と整合させる目的。 */}
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={pending}
+            className="rounded border border-accent-red/40 bg-transparent px-3 py-1 font-jp text-[10px] text-accent-red disabled:opacity-60"
+          >
+            削除
+          </button>
+        </div>
+
         <form onSubmit={submit} className="flex flex-col gap-3 px-5 pb-6 pt-2">
           <label className="flex flex-col gap-1">
             <span className="font-jp text-[10px] text-fg-weak">名前</span>
@@ -142,31 +156,21 @@ export function ProjectDetailPanel({
             </div>
           ) : null}
 
-          <div className="mt-1 flex items-center justify-between gap-2">
+          <div className="mt-1 flex justify-end gap-2">
             <button
               type="button"
-              onClick={handleDelete}
-              disabled={pending}
-              className="rounded border border-accent-red/40 bg-transparent px-3 py-1.5 font-jp text-[11px] text-accent-red disabled:opacity-60"
+              onClick={onClose}
+              className="rounded border border-bg-divider bg-transparent px-3 py-1.5 font-jp text-[11px] text-fg-subtle"
             >
-              削除
+              キャンセル
             </button>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded border border-bg-divider bg-transparent px-3 py-1.5 font-jp text-[11px] text-fg-subtle"
-              >
-                キャンセル
-              </button>
-              <button
-                type="submit"
-                disabled={pending}
-                className="rounded bg-accent-blue px-4 py-1.5 font-jp text-[11px] font-semibold text-fg-invert disabled:opacity-60"
-              >
-                {pending ? "保存中..." : "保存"}
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={pending}
+              className="rounded bg-accent-blue px-4 py-1.5 font-jp text-[11px] font-semibold text-fg-invert disabled:opacity-60"
+            >
+              {pending ? "保存中..." : "保存"}
+            </button>
           </div>
         </form>
       </div>
