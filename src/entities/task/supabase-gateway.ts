@@ -61,9 +61,7 @@ export class SupabaseTaskGateway implements TaskGateway {
       is_interruption: input.isInterruption ?? false,
       parent_task_id: input.parentTaskId ?? null,
       task_category: input.taskCategory ?? null,
-      ...(input.decomposeStatus !== undefined
-        ? { decompose_status: input.decomposeStatus }
-        : {}),
+      ...(input.decomposeStatus !== undefined ? { decompose_status: input.decomposeStatus } : {}),
     };
     const { data, error } = await this.supabase.from("tasks").insert(payload).select("*").single();
     if (error) throw error;
