@@ -1,3 +1,5 @@
+import type { TaskCategoryValue } from "@/shared/types/database";
+
 export type TaskStatus = "idle" | "active" | "paused" | "done";
 
 /**
@@ -10,6 +12,13 @@ export type TaskStatus = "idle" | "active" | "paused" | "done";
  * Stack View (ADR 0016 Variant E) は decomposed の親を出さず、子だけを並べる。
  */
 export type DecomposeStatus = "none" | "decomposing" | "decomposed" | "skipped";
+
+/**
+ * タスク種別 (ADR 0015 / #87)。
+ * AI が初期ラベル、人間は override で暗黙的フィードバックを残す。
+ * AI ラベリング失敗時 / 既存タスクは null。
+ */
+export type TaskCategory = TaskCategoryValue;
 
 /**
  * DB スキーマ (supabase/migrations/..._initial_schema.sql の tasks) と 1:1 対応。
@@ -28,6 +37,7 @@ export type Task = {
   isInterruption: boolean;
   parentTaskId: string | null;
   decomposeStatus: DecomposeStatus;
+  taskCategory: TaskCategory | null;
   createdAt: string;
   completedAt: string | null;
 };

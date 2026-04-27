@@ -11,6 +11,13 @@
  */
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
+/**
+ * tasks.task_category の値域 (#87, ADR 0015)。
+ * DB 側は text + CHECK 制約 (supabase/migrations/20260427000000_task_category.sql)。
+ * 値の追加・名称変更は ADR の supersede ではなく migration + ここの更新で行う。
+ */
+export type TaskCategoryValue = "coding" | "doc" | "research" | "admin" | "other";
+
 export type Database = {
   public: {
     Tables: {
@@ -55,6 +62,7 @@ export type Database = {
           is_interruption: boolean;
           parent_task_id: string | null;
           decompose_status: Database["public"]["Enums"]["decompose_status"];
+          task_category: TaskCategoryValue | null;
           created_at: string;
           completed_at: string | null;
         };
@@ -71,6 +79,7 @@ export type Database = {
           is_interruption?: boolean;
           parent_task_id?: string | null;
           decompose_status?: Database["public"]["Enums"]["decompose_status"];
+          task_category?: TaskCategoryValue | null;
           created_at?: string;
           completed_at?: string | null;
         };
@@ -87,6 +96,7 @@ export type Database = {
           is_interruption?: boolean;
           parent_task_id?: string | null;
           decompose_status?: Database["public"]["Enums"]["decompose_status"];
+          task_category?: TaskCategoryValue | null;
           created_at?: string;
           completed_at?: string | null;
         };

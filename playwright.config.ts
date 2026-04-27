@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Playwright e2e 設定 (ADR 0011)。
+ * Playwright e2e 設定 (ADR 0011 / 0014)。
  *
  * 想定環境変数 (CI / ローカル両方):
  *   NEXT_PUBLIC_SUPABASE_URL       — supabase status の API URL
@@ -12,6 +12,8 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * webServer は dev サーバーを起動する。NEXT_PUBLIC_E2E_TEST_AUTH=true を渡して
  * login page にテスト用フォームを描画させる。
+ * AI_ENABLED=false で `/api/ai/*` を全面バイパス (ADR 0014)。Gemini quota を消費せず、
+ * LLM の非決定性を踏まない。core 機能が AI 抜きで成立することを e2e で踏む。
  */
 const PORT = 3000;
 const BASE_URL = `http://localhost:${PORT}`;
@@ -45,6 +47,7 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     env: {
       NEXT_PUBLIC_E2E_TEST_AUTH: "true",
+      AI_ENABLED: "false",
     },
   },
 });

@@ -12,6 +12,7 @@ export function buildInitialTasks(): Task[] {
     isInterruption: false,
     parentTaskId: null,
     decomposeStatus: "none" as const,
+    taskCategory: null,
     createdAt: now,
     completedAt: null,
   };

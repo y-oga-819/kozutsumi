@@ -6,6 +6,7 @@ export type ActionType =
   | "task_reordered"
   | "task_deleted"
   | "task_title_changed"
+  | "task_category_changed"
   | "task_dependency_set"
   | "task_dependency_cleared"
   | "interruption_pushed"
@@ -58,6 +59,14 @@ export type ActionMetadataMap = {
     task_id: string;
     old_title: string;
     new_title: string;
+  };
+  // Phase 3 #87 / ADR 0015: 人間が AI 初期ラベル / 既存値を override した時に記録。
+  // Phase 4 のラベリング精度改善ループの暗黙フィードバック源。
+  // from は AI ラベリング失敗 / 既存タスクで null になり得る。to は user 選択値で必ず存在する。
+  task_category_changed: {
+    task_id: string;
+    from: string | null;
+    to: string;
   };
   // Phase 2 #53: 依存イベントの設定 / 解除。Phase 4 で「依存設定が着手順に効いたか」の分析データに使う。
   task_dependency_set: {
