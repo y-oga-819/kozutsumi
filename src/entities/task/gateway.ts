@@ -1,4 +1,4 @@
-import type { Task } from "./types";
+import type { DecomposeStatus, Task } from "./types";
 
 export type CreateTaskInput = {
   projectId: string;
@@ -9,6 +9,7 @@ export type CreateTaskInput = {
   dependsOnEventId?: string | null;
   isInterruption?: boolean;
   parentTaskId?: string | null;
+  decomposeStatus?: DecomposeStatus;
 };
 
 export type UpdateTaskInput = {
@@ -20,6 +21,7 @@ export type UpdateTaskInput = {
   stackOrder?: number | null;
   dependsOnEventId?: string | null;
   isInterruption?: boolean;
+  decomposeStatus?: DecomposeStatus;
   completedAt?: string | null;
 };
 
