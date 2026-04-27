@@ -121,8 +121,9 @@ export function VariantE() {
         Variant E: ハイブリッド (DnD + Top-only complete + Done list)
       </h2>
       <VariantNote
-        philosophy="Stack 行 = 子のまま。Top カードに Goal box を集約。子は親 dep を継承。行カードは 2 行構成でタイトル単独行を確保。完了は Top のみ (上から消化の原則)、完了タスクは Done リストへ。並び替えは DnD で。"
+        philosophy="Stack 行 = 子のまま。Top カードに Goal box を集約。子は親 dep を継承。行カードは 3 行構成 (タイトル + 見積 / dep / 親 + ステータス) でタイトル省略を防ぐ。完了は Top のみ (上から消化の原則)、完了タスクは Done リストへ。並び替えは DnD で。"
         tradeoffs={[
+          "行カード右下のスロットは「親の AI 分解状態」を表現: 未分解 / 分解中 / 分解不要 / 分解済み (= 進捗バー) の状態遷移として統一",
           "DnD で Stack 順を変えると、進捗バーの current 位置も動的に変わる",
           "currentIndex = doneCount + (Stack 残中の同親子における自分の位置) → 自分のセグメントは done 群の直後にずれていく",
           "完了は Top カードのみ (行カードから check を外し Grip に置換)",
@@ -345,12 +346,20 @@ function ChildRow({
         isBeingDragged ? "opacity-30" : "opacity-100"
       }`}
     >
+      {/* 1 行目: タイトル (左詰め) + 見積もり (右詰め) */}
       <div className="flex items-center gap-2">
         <DragHandle onPointerDown={onPointerDown} />
         <ProjectDot projectId={parent.projectId} size={6} />
         <span className="flex-1 truncate font-jp text-[12px] text-fg-default">{child.title}</span>
         <EstimateBadge minutes={child.estimatedMinutes} />
       </div>
+      {/* 2 行目: 親由来の dep event (右詰め)。imminent は DepBadge 側で濃色に差分表示 */}
+      {parent.depEvent && (
+        <div className="ml-[26px] mt-1 flex items-center justify-end gap-2">
+          <DepBadge dep={parent.depEvent} />
+        </div>
+      )}
+      {/* 3 行目: 親タスク名 (左詰め) + ステータスバー (= 親の AI 分解状態スロット, 右詰め) */}
       <div className="ml-[26px] mt-1 flex items-center gap-2">
         <span
           className="min-w-0 flex-1 truncate font-jp text-[9px]"
@@ -359,7 +368,6 @@ function ChildRow({
         >
           ⤷ {parent.title}
         </span>
-        {parent.depEvent?.imminent && <DepBadge dep={parent.depEvent} />}
         <ParallelogramProgress
           total={progress.total}
           doneCount={progress.doneCount}
@@ -435,14 +443,22 @@ function ParentRow({
         isBeingDragged ? "opacity-30" : "opacity-100"
       }`}
     >
+      {/* 1 行目: タイトル (左詰め) + 見積もり (右詰め) */}
       <div className="flex items-center gap-2">
         <DragHandle onPointerDown={onPointerDown} />
         <ProjectDot projectId={parent.projectId} size={6} />
         <span className="flex-1 truncate font-jp text-[12px] text-fg-default">{parent.title}</span>
         <EstimateBadge minutes={parent.estimatedMinutes} />
       </div>
-      <div className="ml-[26px] mt-1 flex items-center gap-2">
-        {parent.depEvent && <DepBadge dep={parent.depEvent} />}
+      {/* 2 行目: dep event (右詰め)。imminent は DepBadge 側で濃色に差分表示 */}
+      {parent.depEvent && (
+        <div className="ml-[26px] mt-1 flex items-center justify-end gap-2">
+          <DepBadge dep={parent.depEvent} />
+        </div>
+      )}
+      {/* 3 行目: AI 分解状態 (右詰め)。子の進捗バーと同じスロットに置いて、
+                 「未分解 / 分解中 / 分解不要 / 分解済み (= progress bar)」の状態遷移を統一表現 */}
+      <div className="ml-[26px] mt-1 flex items-center justify-end gap-2">
         <StatusPill status={parent.decomposeStatus} />
       </div>
     </div>
