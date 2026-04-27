@@ -36,6 +36,7 @@ const baseTask: Task = {
   dependsOnEventId: null,
   isInterruption: false,
   parentTaskId: null,
+  taskCategory: null,
   createdAt: "2026-04-11T00:00:00",
   completedAt: null,
 };

@@ -20,6 +20,7 @@ function fromRow(row: Tables<"tasks">): Task {
     dependsOnEventId: row.depends_on_event_id,
     isInterruption: row.is_interruption,
     parentTaskId: row.parent_task_id,
+    taskCategory: row.task_category,
     createdAt: row.created_at,
     completedAt: row.completed_at,
   };
@@ -58,6 +59,7 @@ export class SupabaseTaskGateway implements TaskGateway {
       depends_on_event_id: input.dependsOnEventId ?? null,
       is_interruption: input.isInterruption ?? false,
       parent_task_id: input.parentTaskId ?? null,
+      task_category: input.taskCategory ?? null,
     };
     const { data, error } = await this.supabase.from("tasks").insert(payload).select("*").single();
     if (error) throw error;
@@ -74,6 +76,7 @@ export class SupabaseTaskGateway implements TaskGateway {
     if (patch.stackOrder !== undefined) update.stack_order = patch.stackOrder;
     if (patch.dependsOnEventId !== undefined) update.depends_on_event_id = patch.dependsOnEventId;
     if (patch.isInterruption !== undefined) update.is_interruption = patch.isInterruption;
+    if (patch.taskCategory !== undefined) update.task_category = patch.taskCategory;
     if (patch.completedAt !== undefined) update.completed_at = patch.completedAt;
     const { data, error } = await this.supabase
       .from("tasks")
