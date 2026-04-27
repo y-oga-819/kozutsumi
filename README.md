@@ -34,6 +34,36 @@ supabase db reset
 
 Phase 2 の Google Calendar 連携で OAuth トークンを再利用するため、`calendar.readonly` scope を先行付与する。Google Cloud Console で OAuth 2.0 Client を作り、Client ID / Secret を `.env.local` の `SUPABASE_AUTH_GOOGLE_CLIENT_ID` / `SUPABASE_AUTH_GOOGLE_SECRET` に設定する。
 
+### AI (Gemini) — Phase 3 / P3-1 以降
+
+`/api/ai/*` は ADR 0012 / 0013 / 0014 に基づく kill-switch 付きで動く。
+
+- `AI_ENABLED`: `"true"` のときだけ AI 経路を通す。未設定 / その他は off。
+- `GEMINI_API_KEY`: server-only。`NEXT_PUBLIC_` prefix を付けない。
+
+各環境のデフォルト:
+
+| 環境 | `AI_ENABLED` | `GEMINI_API_KEY` |
+|---|---|---|
+| dev (普段) | `false` | 空でよい |
+| dev (AI 動作確認時) | `true` に手動切り替え | https://aistudio.google.com/apikey から取得して設定 |
+| e2e (`npm run test:e2e`) | `false` を `playwright.config.ts` が強制 (ADR 0014) | 不要 |
+| Vercel preview | `false` (既定) | 不要 |
+| Vercel production | `true` を明示的に設定 | 設定 |
+
+`AI_ENABLED=true` でも `GEMINI_API_KEY` が無ければ AI 経路は止まる (fail-soft、ADR 0013)。設定漏れでユーザー操作が止まることはない。
+
+dev で疎通確認したい場合:
+
+```sh
+# `.env.local` で AI_ENABLED=true / GEMINI_API_KEY=... を設定したあと
+npm run dev
+# ログイン後、別ターミナルから
+curl -X POST http://localhost:3000/api/ai/ping --cookie "<auth cookie>"
+# → { "ok": true, "text": "pong" } 形式が返れば疎通 OK
+# AI_ENABLED=false なら → { "skipped": true, "reason": "ai_disabled" }
+```
+
 ### よく使うコマンド
 
 ```sh
