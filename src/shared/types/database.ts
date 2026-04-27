@@ -61,6 +61,7 @@ export type Database = {
           depends_on_event_id: string | null;
           is_interruption: boolean;
           parent_task_id: string | null;
+          decompose_status: Database["public"]["Enums"]["decompose_status"];
           task_category: TaskCategoryValue | null;
           created_at: string;
           completed_at: string | null;
@@ -77,6 +78,7 @@ export type Database = {
           depends_on_event_id?: string | null;
           is_interruption?: boolean;
           parent_task_id?: string | null;
+          decompose_status?: Database["public"]["Enums"]["decompose_status"];
           task_category?: TaskCategoryValue | null;
           created_at?: string;
           completed_at?: string | null;
@@ -93,6 +95,7 @@ export type Database = {
           depends_on_event_id?: string | null;
           is_interruption?: boolean;
           parent_task_id?: string | null;
+          decompose_status?: Database["public"]["Enums"]["decompose_status"];
           task_category?: TaskCategoryValue | null;
           created_at?: string;
           completed_at?: string | null;
@@ -226,6 +229,7 @@ export type Database = {
       task_status: "idle" | "active" | "paused" | "done";
       event_source: "manual" | "google_calendar";
       pause_reason: "meeting" | "interruption" | "voluntary";
+      decompose_status: "none" | "decomposing" | "decomposed" | "skipped";
     };
   };
 };

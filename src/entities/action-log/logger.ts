@@ -32,6 +32,8 @@ export const ACTION_TYPES = Object.freeze({
   STACK_PROPOSED: "stack_proposed",
   STACK_PROPOSAL_ACCEPTED: "stack_proposal_accepted",
   CALENDAR_SYNCED: "calendar_synced",
+  TASK_DECOMPOSED: "task_decomposed",
+  DECOMPOSITION_MODIFIED: "decomposition_modified",
 }) satisfies Readonly<Record<string, ActionType>>;
 
 const KNOWN_TYPES = new Set<ActionType>(Object.values(ACTION_TYPES));
@@ -68,7 +70,13 @@ function getClient(): SupabaseClientLike | null {
  * それ以外: metadata.task_id があればそれを column 値にする。
  */
 function extractTaskId(actionType: ActionType, metadata: Record<string, unknown>): string | null {
-  if (actionType === "task_deleted") return null;
+  // task_deleted と同じく、対象 task が削除されている可能性があるものは
+  // FK 違反を避けるため column 値を null にし、metadata.task_id を一次の真実とする。
+  // decomposition_modified.kind が child_deleted / parent_merged の時は
+  // task_id が削除済みなので、kind に依らず一律 null にしておく方が安全。
+  if (actionType === "task_deleted" || actionType === "decomposition_modified") {
+    return null;
+  }
   const v = metadata["task_id"];
   return typeof v === "string" ? v : null;
 }

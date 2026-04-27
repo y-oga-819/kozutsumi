@@ -156,7 +156,7 @@ describe("clearLog()", () => {
 });
 
 describe("ACTION_TYPES", () => {
-  test("Phase 1 / Phase 2 の action_type をすべて含む", () => {
+  test("Phase 1 / Phase 2 / Phase 3 の action_type をすべて含む", () => {
     expect(ACTION_TYPES).toEqual({
       TASK_STARTED: "task_started",
       TASK_PAUSED: "task_paused",
@@ -173,6 +173,69 @@ describe("ACTION_TYPES", () => {
       STACK_PROPOSED: "stack_proposed",
       STACK_PROPOSAL_ACCEPTED: "stack_proposal_accepted",
       CALENDAR_SYNCED: "calendar_synced",
+      TASK_DECOMPOSED: "task_decomposed",
+      DECOMPOSITION_MODIFIED: "decomposition_modified",
+    });
+  });
+});
+
+describe("log(task_decomposed)", () => {
+  beforeEach(() => {
+    clearLog();
+    __resetLoggerClientForTest();
+    insertMock.mockClear();
+    fromMock.mockClear();
+    getUserMock.mockClear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("親の task_id を column に書き、metadata に child_ids を含める", async () => {
+    log(ACTION_TYPES.TASK_DECOMPOSED, {
+      task_id: "parent-1",
+      child_ids: ["child-a", "child-b"],
+    });
+    await flushMicrotasks();
+    expect(insertMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      action_type: "task_decomposed",
+      task_id: "parent-1",
+      metadata: { task_id: "parent-1", child_ids: ["child-a", "child-b"] },
+    });
+  });
+});
+
+describe("log(decomposition_modified)", () => {
+  beforeEach(() => {
+    clearLog();
+    __resetLoggerClientForTest();
+    insertMock.mockClear();
+    fromMock.mockClear();
+    getUserMock.mockClear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // 対象 task は削除済みのケース (child_deleted / parent_merged) があるので
+  // FK 違反を避けて column.task_id は null にする。metadata 側に親子両方を残す。
+  test("column.task_id は null、metadata に task_id / parent_id / kind を含める", async () => {
+    log(ACTION_TYPES.DECOMPOSITION_MODIFIED, {
+      task_id: "child-a",
+      parent_id: "parent-1",
+      kind: "child_deleted",
+    });
+    await flushMicrotasks();
+    expect(insertMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      action_type: "decomposition_modified",
+      task_id: null,
+      metadata: { task_id: "child-a", parent_id: "parent-1", kind: "child_deleted" },
     });
   });
 });

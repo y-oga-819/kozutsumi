@@ -30,6 +30,7 @@ function makeRow(overrides: Partial<Tables<"tasks">> = {}): Tables<"tasks"> {
     depends_on_event_id: null,
     is_interruption: false,
     parent_task_id: null,
+    decompose_status: "none",
     task_category: null,
     created_at: "2026-04-27T00:00:00.000Z",
     completed_at: null,
