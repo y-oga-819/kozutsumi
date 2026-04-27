@@ -24,6 +24,8 @@ export type SampleChild = {
   id: string;
   title: string;
   estimatedMinutes: number;
+  /** body preview (markdown 1 行目相当の短い説明) */
+  body?: string;
 };
 
 export type SampleParent = {
@@ -34,6 +36,8 @@ export type SampleParent = {
   decomposeStatus: DecomposeStatus;
   /** 依存イベントのヒント (Stack View の amber バッジを再現するためのみ) */
   depEvent?: { title: string; relative: string; imminent?: boolean };
+  /** body preview (子が無い親が Top に来る時用) */
+  body?: string;
   children: SampleChild[];
 };
 
@@ -57,9 +61,24 @@ export const SAMPLE_PARENTS: SampleParent[] = [
     // ここでは「A → 逆質問 → B」の順にして、逆質問が真ん中、B が右端で
     // 光るデモにする (元は A → B → 逆質問)。
     children: [
-      { id: "p1c1", title: "志望動機パターンA作成", estimatedMinutes: 15 },
-      { id: "p1c3", title: "逆質問リスト整理", estimatedMinutes: 15 },
-      { id: "p1c2", title: "志望動機パターンB作成", estimatedMinutes: 15 },
+      {
+        id: "p1c1",
+        title: "志望動機パターンA作成",
+        estimatedMinutes: 15,
+        body: "DDD / Clean Architecture の経験を 3 つの軸で整理する",
+      },
+      {
+        id: "p1c3",
+        title: "逆質問リスト整理",
+        estimatedMinutes: 15,
+        body: "上流工程・チーム運営・スキル開発の 3 軸で 3 つずつ用意",
+      },
+      {
+        id: "p1c2",
+        title: "志望動機パターンB作成",
+        estimatedMinutes: 15,
+        body: "前職での具体例を交えて、技術以外の意欲も伝える",
+      },
     ],
   },
   {
@@ -69,6 +88,7 @@ export const SAMPLE_PARENTS: SampleParent[] = [
     estimatedMinutes: 40,
     decomposeStatus: "decomposing",
     depEvent: { title: "SRE 定例", relative: "金 11:00" },
+    body: "Web Cart の availability / latency を New Relic のメトリクスに揃える",
     children: [],
   },
   {
@@ -78,9 +98,14 @@ export const SAMPLE_PARENTS: SampleParent[] = [
     estimatedMinutes: 35,
     decomposeStatus: "decomposed",
     children: [
-      { id: "p3c1", title: "正常系 stub", estimatedMinutes: 10 },
-      { id: "p3c2", title: "429 stub", estimatedMinutes: 10 },
-      { id: "p3c3", title: "500ms 遅延 stub", estimatedMinutes: 15 },
+      { id: "p3c1", title: "正常系 stub", estimatedMinutes: 10, body: "/api/v1/orders 200 を返す" },
+      { id: "p3c2", title: "429 stub", estimatedMinutes: 10, body: "rate limit 越えのレスポンス" },
+      {
+        id: "p3c3",
+        title: "500ms 遅延 stub",
+        estimatedMinutes: 15,
+        body: "/api/v1/payments の遅延シミュレート",
+      },
     ],
   },
   {
@@ -89,6 +114,7 @@ export const SAMPLE_PARENTS: SampleParent[] = [
     title: "職務経歴書PDF最終版を送付",
     estimatedMinutes: 15,
     decomposeStatus: "skipped",
+    body: "最終版PDFを浅野さんにメール送付。誤字脱字 / 在籍期間 確認済",
     children: [],
   },
   {
@@ -98,9 +124,24 @@ export const SAMPLE_PARENTS: SampleParent[] = [
     estimatedMinutes: 90,
     decomposeStatus: "decomposed",
     children: [
-      { id: "p5c1", title: "既存実装の調査メモ", estimatedMinutes: 20 },
-      { id: "p5c2", title: "trait シグネチャ草案", estimatedMinutes: 30 },
-      { id: "p5c3", title: "Rust 実装ドラフト", estimatedMinutes: 40 },
+      {
+        id: "p5c1",
+        title: "既存実装の調査メモ",
+        estimatedMinutes: 20,
+        body: "code-inspector の既存抽象化レイヤを読み解く",
+      },
+      {
+        id: "p5c2",
+        title: "trait シグネチャ草案",
+        estimatedMinutes: 30,
+        body: "AnalyzerContract に必要なメソッドを 3 つ列挙",
+      },
+      {
+        id: "p5c3",
+        title: "Rust 実装ドラフト",
+        estimatedMinutes: 40,
+        body: "php-parser / tree-sitter の両対応を意識した skeleton",
+      },
     ],
   },
   {
@@ -109,6 +150,7 @@ export const SAMPLE_PARENTS: SampleParent[] = [
     title: "Locustシナリオ実装",
     estimatedMinutes: 120,
     decomposeStatus: "none",
+    body: "ピーク負荷パターン (500 RPS / 10 分) を分散モードで",
     children: [],
   },
   // 4 子で 3 完了のシナリオ (進行中の親)。

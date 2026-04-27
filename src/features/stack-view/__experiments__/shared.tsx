@@ -8,6 +8,24 @@ import type { DecomposeStatus, SampleParent } from "./sampleData";
 
 export { Grip };
 
+/** "MM:SS" or "HH:MM:SS" 表記 (useTaskTimer.formatElapsed と同じロジック) */
+export function formatElapsedSeconds(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(sec).padStart(2, "0");
+  if (h > 0) return `${h}:${mm}:${ss}`;
+  return `${mm}:${ss}`;
+}
+
+/** body の最初の非見出し行を取り出す (TopTaskCard.tsx の bodyPreview と同じ) */
+export function bodyPreview(body?: string): string {
+  if (!body) return "";
+  return body.split("\n").find((l) => l.trim() && !l.startsWith("#")) ?? "";
+}
+
 /** 各 variant が独立に done を持つ。比較中に「他 variant の操作が混じる」誤読を防ぐ。 */
 export function useDoneSet(initial?: Iterable<string>): {
   isDone: (id: string) => boolean;
