@@ -83,7 +83,7 @@ export function VariantC() {
                     const proj = SAMPLE_PROJECTS[parent.projectId];
                     return (
                       <li key={child.id}>
-                        <div className="relative mx-4 flex items-center gap-2 pl-7 pr-2.5 py-1.5">
+                        <div className="relative mx-4 flex items-center gap-2 py-1.5 pl-7 pr-2.5">
                           <div
                             aria-hidden="true"
                             className="absolute bottom-2 left-3 top-0 w-[2px]"
@@ -161,7 +161,10 @@ function ParentCard({
         height="10"
         viewBox="0 0 10 10"
         fill="none"
-        style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
+        style={{
+          transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+          transition: "transform 0.15s",
+        }}
       >
         <polyline
           points="3,2 7,5 3,8"

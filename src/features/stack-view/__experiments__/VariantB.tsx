@@ -185,7 +185,7 @@ function ChildRow({
   }
 
   return (
-    <div className="relative mx-4 flex items-center gap-2 border-b border-bg-elevated pl-3 pr-2.5 py-2">
+    <div className="relative mx-4 flex items-center gap-2 border-b border-bg-elevated py-2 pl-3 pr-2.5">
       <GroupLine color={proj?.color ?? "#52525b"} top={groupStart} bottom={groupEnd} />
       <ProjectDot projectId={parent.projectId} size={6} />
       <span className="flex-1 truncate font-jp text-[12px] text-fg-muted">{child.title}</span>

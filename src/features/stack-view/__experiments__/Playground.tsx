@@ -32,9 +32,7 @@ export function Playground({ initialKey = "A" }: { initialKey?: VariantKey }) {
   return (
     <div className="pb-16">
       <header className="px-5 pb-4 pt-5">
-        <div className="font-jp text-[16px] font-semibold text-fg-strong">
-          ADR 0016 prototype
-        </div>
+        <div className="font-jp text-[16px] font-semibold text-fg-strong">ADR 0016 prototype</div>
         <p className="mt-1 font-jp text-[11px] leading-relaxed text-fg-muted">
           AI が親タスクを分解した結果を Stack View にどう表現するか、4 案を体験比較する。
           上のタブで切り替え。チェックは variant ごとに独立。

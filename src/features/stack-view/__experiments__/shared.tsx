@@ -61,11 +61,7 @@ export function ProjectName({ projectId }: { projectId: string }) {
   return <span className="font-jp text-[9px] text-fg-subtle">{proj?.name ?? "—"}</span>;
 }
 
-export function DepBadge({
-  dep,
-}: {
-  dep: NonNullable<SampleParent["depEvent"]>;
-}) {
+export function DepBadge({ dep }: { dep: NonNullable<SampleParent["depEvent"]> }) {
   return (
     <span
       className={`max-w-[180px] truncate rounded-[3px] px-1.5 py-px font-jp text-[8px] text-accent-amber ${
@@ -78,9 +74,7 @@ export function DepBadge({
 }
 
 export function EstimateBadge({ minutes }: { minutes: number }) {
-  return (
-    <span className="text-[9px] tabular-nums text-fg-faint">{fmtMinutes(minutes)}</span>
-  );
+  return <span className="text-[9px] tabular-nums text-fg-faint">{fmtMinutes(minutes)}</span>;
 }
 
 /** AI 分解の進行中を示す pill。aria-live で読み上げ。 */
@@ -180,7 +174,7 @@ export function VariantNote({
         philosophy
       </div>
       <p className="font-jp text-[11px] leading-relaxed text-fg-default">{philosophy}</p>
-      <div className="mt-2 mb-1 font-jp text-[10px] font-semibold uppercase tracking-[0.08em] text-fg-subtle">
+      <div className="mb-1 mt-2 font-jp text-[10px] font-semibold uppercase tracking-[0.08em] text-fg-subtle">
         観察ポイント
       </div>
       <ul className="m-0 list-none space-y-0.5 p-0 font-jp text-[10px] leading-relaxed text-fg-muted">

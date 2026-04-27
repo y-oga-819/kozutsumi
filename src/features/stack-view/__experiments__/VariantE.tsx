@@ -3,12 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useStackDnD } from "../../task-stack/useStackDnD";
-import {
-  fmtMinutes,
-  SAMPLE_INITIAL_DONE,
-  SAMPLE_PARENTS,
-  SAMPLE_PROJECTS,
-} from "./sampleData";
+import { fmtMinutes, SAMPLE_INITIAL_DONE, SAMPLE_PARENTS, SAMPLE_PROJECTS } from "./sampleData";
 import type { SampleChild, SampleParent } from "./sampleData";
 import {
   bodyPreview,
@@ -300,11 +295,7 @@ function PendingRow({
     );
   }
   return (
-    <ParentRow
-      parent={item.parent}
-      isBeingDragged={isBeingDragged}
-      onPointerDown={onPointerDown}
-    />
+    <ParentRow parent={item.parent} isBeingDragged={isBeingDragged} onPointerDown={onPointerDown} />
   );
 }
 
@@ -389,9 +380,7 @@ function TopUpperZone({
           color={projColor}
         />
       </div>
-      {preview && (
-        <div className="mt-1 truncate font-jp text-[10px] text-fg-weak">{preview}</div>
-      )}
+      {preview && <div className="mt-1 truncate font-jp text-[10px] text-fg-weak">{preview}</div>}
     </>
   );
 }
