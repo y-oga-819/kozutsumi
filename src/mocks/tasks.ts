@@ -11,6 +11,7 @@ export function buildInitialTasks(): Task[] {
     status: "idle" as const,
     isInterruption: false,
     parentTaskId: null,
+    taskCategory: null,
     createdAt: now,
     completedAt: null,
   };

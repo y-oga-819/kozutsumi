@@ -165,6 +165,7 @@ describe("ACTION_TYPES", () => {
       TASK_REORDERED: "task_reordered",
       TASK_DELETED: "task_deleted",
       TASK_TITLE_CHANGED: "task_title_changed",
+      TASK_CATEGORY_CHANGED: "task_category_changed",
       TASK_DEPENDENCY_SET: "task_dependency_set",
       TASK_DEPENDENCY_CLEARED: "task_dependency_cleared",
       INTERRUPTION_PUSHED: "interruption_pushed",
@@ -172,6 +173,51 @@ describe("ACTION_TYPES", () => {
       STACK_PROPOSED: "stack_proposed",
       STACK_PROPOSAL_ACCEPTED: "stack_proposal_accepted",
       CALENDAR_SYNCED: "calendar_synced",
+    });
+  });
+});
+
+describe("log(task_category_changed)", () => {
+  beforeEach(() => {
+    clearLog();
+    __resetLoggerClientForTest();
+    insertMock.mockClear();
+    fromMock.mockClear();
+    getUserMock.mockClear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("AI 初期ラベル無し (from=null) → user 選択 (to) を insert する", async () => {
+    log(ACTION_TYPES.TASK_CATEGORY_CHANGED, {
+      task_id: "t1",
+      from: null,
+      to: "coding",
+    });
+    await flushMicrotasks();
+    expect(insertMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      action_type: "task_category_changed",
+      task_id: "t1",
+      metadata: { task_id: "t1", from: null, to: "coding" },
+    });
+  });
+
+  test("AI ラベル → user override (from / to あり) を insert する", async () => {
+    log(ACTION_TYPES.TASK_CATEGORY_CHANGED, {
+      task_id: "t1",
+      from: "doc",
+      to: "research",
+    });
+    await flushMicrotasks();
+    expect(insertMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      action_type: "task_category_changed",
+      task_id: "t1",
+      metadata: { task_id: "t1", from: "doc", to: "research" },
     });
   });
 });

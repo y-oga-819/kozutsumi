@@ -1,4 +1,13 @@
+import type { TaskCategoryValue } from "@/shared/types/database";
+
 export type TaskStatus = "idle" | "active" | "paused" | "done";
+
+/**
+ * タスク種別 (ADR 0015 / #87)。
+ * AI が初期ラベル、人間は override で暗黙的フィードバックを残す。
+ * AI ラベリング失敗時 / 既存タスクは null。
+ */
+export type TaskCategory = TaskCategoryValue;
 
 /**
  * DB スキーマ (supabase/migrations/..._initial_schema.sql の tasks) と 1:1 対応。
@@ -16,6 +25,7 @@ export type Task = {
   dependsOnEventId: string | null;
   isInterruption: boolean;
   parentTaskId: string | null;
+  taskCategory: TaskCategory | null;
   createdAt: string;
   completedAt: string | null;
 };
