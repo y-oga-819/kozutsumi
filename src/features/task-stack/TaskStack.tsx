@@ -1,7 +1,11 @@
-import type { Event } from "../../entities/event/types";
-import type { PauseReason } from "../../entities/task/time-entries";
-import type { Task } from "../../entities/task/types";
+import { useMemo } from "react";
+
+import type { Event } from "@/entities/event/types";
+import type { PauseReason } from "@/entities/task/time-entries";
+import type { Task } from "@/entities/task/types";
+
 import { DoneList } from "./DoneList";
+import { buildStackItems, computeChildProgress } from "./stackItems";
 import { TaskRow } from "./TaskRow";
 import { TopTaskCard } from "./TopTaskCard";
 import { useStackDnD } from "./useStackDnD";
@@ -53,25 +57,35 @@ export function TaskStack({
   onToggleDone,
   onOpenDetail,
 }: TaskStackProps) {
+  // ADR 0016 §1: decomposed 親を Stack 行から除外し、子をフラット化。
+  const allTasks = useMemo(() => [...pendingTasks, ...doneTasks], [pendingTasks, doneTasks]);
+  const { items } = useMemo(
+    () => buildStackItems(pendingTasks, allTasks),
+    [pendingTasks, allTasks],
+  );
+
   const { dragIdx, overIdx, rowRefs, handlePointerDown } = useStackDnD(onReorder);
 
   return (
     <>
-      <StackHeader count={pendingTasks.length} />
+      <StackHeader count={items.length} />
 
       {/*
         並び順が意味を持つリスト。role=list / listitem を立てておくと
         スクリーンリーダーが項目数を読み上げ、e2e も semantic に取れる。
       */}
       <ul role="list" aria-label="タスクスタック" className="m-0 list-none p-0">
-        {pendingTasks.map((task, idx) => {
+        {items.map((item, idx) => {
           const isFirst = idx === 0;
           const isBeingDragged = dragIdx === idx;
           const isDropTarget = overIdx === idx && dragIdx !== null && dragIdx !== idx;
+          const task = item.task;
+          const parent = item.kind === "leaf-child" ? item.parent : undefined;
+          const progress = parent ? computeChildProgress(task, parent, allTasks, items) : undefined;
 
           return (
             <li
-              key={task.id}
+              key={item.id}
               ref={(el: HTMLLIElement | null) => {
                 rowRefs.current[idx] = el;
               }}
@@ -85,6 +99,8 @@ export function TaskStack({
                   isBeingDragged={isBeingDragged}
                   elapsedSeconds={topTimer.elapsedSeconds}
                   pauseReason={topTimer.pauseReason}
+                  parent={parent}
+                  progress={progress}
                   onPointerDown={(e) => handlePointerDown(idx, e)}
                   onClick={() => onOpenDetail(task.id)}
                   onStart={topTimer.onStart}
@@ -98,9 +114,10 @@ export function TaskStack({
                   events={events}
                   now={now}
                   isBeingDragged={isBeingDragged}
+                  parent={parent}
+                  progress={progress}
                   onPointerDown={(e) => handlePointerDown(idx, e)}
                   onClick={() => onOpenDetail(task.id)}
-                  onToggleDone={() => onToggleDone(task.id)}
                 />
               )}
             </li>
@@ -108,7 +125,12 @@ export function TaskStack({
         })}
       </ul>
 
-      <DoneList doneTasks={doneTasks} onOpenDetail={onOpenDetail} onToggleDone={onToggleDone} />
+      <DoneList
+        doneTasks={doneTasks}
+        allTasks={allTasks}
+        onOpenDetail={onOpenDetail}
+        onToggleDone={onToggleDone}
+      />
     </>
   );
 }
