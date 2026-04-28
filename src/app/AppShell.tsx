@@ -24,6 +24,7 @@ import { useLazyCalendarSync } from "@/features/sync/useLazyCalendarSync";
 import { TaskDetailPanel } from "@/features/task-detail/TaskDetailPanel";
 import { PauseReasonModal } from "@/features/task-stack/PauseReasonModal";
 import { TaskStack, type TopTimerBinding } from "@/features/task-stack/TaskStack";
+import { triggerDecompose } from "@/features/task-stack/triggerDecompose";
 import { useTaskTimer } from "@/features/task-stack/useTaskTimer";
 import { TreeView } from "@/features/tree-view/TreeView";
 import { UserMenu } from "@/features/user-menu/UserMenu";
@@ -626,7 +627,24 @@ export function AppShell({ initialView, user }: AppShellProps) {
             onCreateTask={async (input) => {
               // stackOrder は末尾に割り当て (pending 件数)
               const stackOrder = pendingTasks.length;
-              await createTaskMutation.mutateAsync({ ...input, stackOrder });
+              const created = await createTaskMutation.mutateAsync({ ...input, stackOrder });
+              // P3-6 / ADR 0017: タスク作成成功後に AI 分解を fire-and-forget で投げる。
+              // server 側でも `decompose_status='decomposing'` に倒すが、UI に分解中 pill を
+              // 即時出すため optimistic に cache を書き換える。AI_ENABLED=false / 失敗時は
+              // server が `none` に戻す (decompose-server の guard 経路)。
+              // 既に invalidateQueries で refetch 中の cache に対しては map で上書き、
+              // refetch 前で entry が無ければ末尾に append する。
+              queryClient.setQueryData<Task[]>(keys.tasks, (prev) => {
+                const list = prev ?? [];
+                const found = list.some((t) => t.id === created.id);
+                const updated = { ...created, decomposeStatus: "decomposing" as const };
+                return found
+                  ? list.map((t) =>
+                      t.id === created.id ? { ...t, decomposeStatus: "decomposing" } : t,
+                    )
+                  : [...list, updated];
+              });
+              triggerDecompose(created.id);
             }}
             onCreateEvent={async (input) => {
               await createEventMutation.mutateAsync(input);
