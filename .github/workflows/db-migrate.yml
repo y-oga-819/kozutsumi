@@ -31,7 +31,7 @@ jobs:
   migrate:
     name: Apply migrations to production
     runs-on: ubuntu-latest
-    environment: production
+    environment: Production
     timeout-minutes: 15
 
     steps:

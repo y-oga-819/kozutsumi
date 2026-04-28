@@ -95,7 +95,7 @@ PC からの `supabase db push` 直接実行はしない。
 
 1. 該当の migration を含む PR を main に merge する
 2. GitHub の `Actions` タブ →「DB migrate (production)」→「Run workflow」
-3. `production` Environment の approval を承認する（reviewer = repo owner）
+3. `Production` Environment の approval を承認する（reviewer = repo owner）
 4. workflow が走り、適用前 backup → migration 適用 → 結果確認の順に実行される
 5. backup は artifact として 14 日保持される（事故時のロールバック用）
 
@@ -103,7 +103,7 @@ PC からの `supabase db push` 直接実行はしない。
 
 **事前設定（一度だけ）:**
 
-- GitHub Repository → Settings → Environments で `production` Environment を作成
+- GitHub Repository → Settings → Environments で `Production` Environment を作成
   - `Required reviewers` に repo owner を追加（approval gate）
 - 同 Environment の Secrets に `SUPABASE_DB_URL` を登録
   - 形式: `postgresql://postgres.<PROJECT_REF>:<DB_PASSWORD>@<host>:5432/postgres`
