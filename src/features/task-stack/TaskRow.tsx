@@ -1,20 +1,39 @@
-import type { Task } from "../../entities/task/types";
-import type { Event } from "../../entities/event/types";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { getProject } from "../../entities/project/projects";
-import { useProjects } from "../../entities/project/ProjectsContext";
-import { IMMINENT_THRESHOLD_MS, fmtDuration, formatRelativeTime } from "../../shared/lib/time";
-import { Grip } from "./Grip";
 
+import { getProject } from "@/entities/project/projects";
+import { useProjects } from "@/entities/project/ProjectsContext";
+import type { Event } from "@/entities/event/types";
+import type { Task } from "@/entities/task/types";
+import { ParallelogramProgress } from "@/shared/ui/ParallelogramProgress";
+import { IMMINENT_THRESHOLD_MS, fmtDuration, formatRelativeTime } from "@/shared/lib/time";
+
+import { Grip } from "./Grip";
+import type { Progress } from "./stackItems";
+import { StatusPill } from "./StatusPill";
+
+/**
+ * Stack View の行カード (Top 以外) (ADR 0016 §3)。
+ *
+ * 3 行構成:
+ * - Row 1: Grip + ProjectDot + title (左) + estimate (右)
+ * - Row 2: dep event (右詰) ※子は親の dep に fallback (§6)
+ * - Row 3: ⤷ 親タスク名 (左) + 進捗バー | 分解状態 pill (右)
+ *
+ * 完了 checkbox は出さない (Top-only complete; ADR 0016 §7)。
+ * leaf-parent (親自身が Stack 行) は「⤷ 親」を出さず、status pill のみ。
+ */
 type TaskRowProps = {
   task: Task;
   events: readonly Event[];
   /** 現在時刻 (ms)。依存イベントの相対時刻 / 直近判定で使う。0 は SSR placeholder。 */
   now: number;
   isBeingDragged: boolean;
+  /** 子タスクなら親 Task。leaf-parent では undefined。 */
+  parent?: Task;
+  /** 子タスクなら親に紐付く進捗。leaf-parent では undefined。 */
+  progress?: Progress;
   onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
   onClick: () => void;
-  onToggleDone: () => void;
 };
 
 export function TaskRow({
@@ -22,72 +41,97 @@ export function TaskRow({
   events,
   now,
   isBeingDragged,
+  parent,
+  progress,
   onPointerDown,
   onClick,
-  onToggleDone,
 }: TaskRowProps) {
   const { projectsById } = useProjects();
   const proj = getProject(projectsById, task.projectId);
-  const dep = task.dependsOnEventId ? events.find((e) => e.id === task.dependsOnEventId) : null;
+
+  // ADR 0016 §6: 子は親の dependsOnEventId を継承 (子自身の値がなければ親に fallback)。
+  const effectiveDepId = task.dependsOnEventId ?? parent?.dependsOnEventId ?? null;
+  const dep = effectiveDepId ? events.find((e) => e.id === effectiveDepId) : null;
   const depImminent =
     dep !== null &&
     dep !== undefined &&
     now > 0 &&
     new Date(dep.startTime).getTime() - now <= IMMINENT_THRESHOLD_MS;
 
+  const showProgress = parent !== undefined && progress !== undefined;
+  // leaf-parent (= 親自身が Stack 行) のときは status pill。decomposing/skipped/none を表示。
+  const showStatusPill = parent === undefined && task.decomposeStatus !== "decomposed";
+
   return (
     <div
       onClick={onClick}
-      className={`mx-4 flex cursor-pointer items-center gap-2 border-b border-bg-elevated px-2.5 py-2 transition-opacity duration-150 ${
+      className={`mx-4 cursor-pointer border-b border-bg-elevated px-2.5 py-2 transition-opacity duration-150 ${
         isBeingDragged ? "opacity-30" : "opacity-100"
       }`}
     >
-      <div
-        onPointerDown={(e) => {
-          e.stopPropagation();
-          onPointerDown(e);
-        }}
-        className="shrink-0 cursor-grab touch-none p-0.5"
-      >
-        <Grip />
-      </div>
-      <div
-        className="h-1.5 w-1.5 shrink-0 rounded-full opacity-70"
-        style={{ background: proj.color }}
-      />
-      <span className="flex-1 truncate font-jp text-[12px] text-fg-muted">{task.title}</span>
-      {dep && (
-        <span
-          className={`max-w-[140px] shrink-0 truncate rounded-[3px] px-1 py-px font-jp text-[8px] text-accent-amber ${
-            depImminent ? "bg-[#E85D0440] font-semibold" : "bg-[#E85D0415]"
-          }`}
-          title={`${dep.title} (${formatRelativeTime(dep.startTime, new Date(now))})`}
+      {/* Row 1: Grip + ProjectDot + title + estimate */}
+      <div className="flex items-center gap-2">
+        <div
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onPointerDown(e);
+          }}
+          aria-label="並び替えハンドル"
+          className="shrink-0 cursor-grab touch-none p-0.5"
         >
-          ← {formatRelativeTime(dep.startTime, new Date(now))} {dep.title}
-        </span>
+          <Grip />
+        </div>
+        <div
+          className="h-1.5 w-1.5 shrink-0 rounded-full opacity-70"
+          style={{ background: proj.color }}
+        />
+        <span className="flex-1 truncate font-jp text-[12px] text-fg-muted">{task.title}</span>
+        {task.estimatedMinutes !== null && (
+          <span className="text-[9px] tabular-nums text-fg-faint">
+            {fmtDuration(task.estimatedMinutes)}
+          </span>
+        )}
+      </div>
+      {/* Row 2: dep event (右詰) */}
+      {dep && (
+        <div className="ml-[26px] mt-1 flex items-center justify-end">
+          <span
+            className={`max-w-[180px] truncate rounded-[3px] px-1.5 py-px font-jp text-[8px] text-accent-amber ${
+              depImminent ? "bg-[#E85D0440] font-semibold" : "bg-[#E85D0415]"
+            }`}
+            title={`${dep.title} (${formatRelativeTime(dep.startTime, new Date(now))})`}
+          >
+            ← {formatRelativeTime(dep.startTime, new Date(now))} {dep.title}
+          </span>
+        </div>
       )}
-      {task.estimatedMinutes !== null && (
-        <span className="text-[9px] tabular-nums text-fg-faint">
-          {fmtDuration(task.estimatedMinutes)}
-        </span>
+      {/* Row 3: ⤷ 親 (左) + progress | status pill (右) */}
+      {(showProgress || showStatusPill) && (
+        <div className="ml-[26px] mt-1 flex items-center gap-2">
+          {showProgress && parent ? (
+            <span
+              className="min-w-0 flex-1 truncate font-jp text-[9px]"
+              style={{ color: `${getProject(projectsById, parent.projectId).color}cc` }}
+              title={`親: ${parent.title}`}
+            >
+              ⤷ {parent.title}
+            </span>
+          ) : (
+            <span className="min-w-0 flex-1" />
+          )}
+          {showProgress && progress && parent ? (
+            <ParallelogramProgress
+              total={progress.total}
+              doneCount={progress.doneCount}
+              currentIndex={progress.currentIndex}
+              color={getProject(projectsById, parent.projectId).color}
+              size="sm"
+            />
+          ) : showStatusPill ? (
+            <StatusPill status={task.decomposeStatus} />
+          ) : null}
+        </div>
       )}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleDone();
-        }}
-        className="flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[5px] border border-bg-divider bg-transparent text-fg-weak"
-      >
-        <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-          <polyline
-            points="3,8 7,12 13,4"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
     </div>
   );
 }

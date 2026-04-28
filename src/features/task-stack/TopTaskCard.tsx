@@ -1,28 +1,44 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 
-import type { Event } from "../../entities/event/types";
-import { getProject } from "../../entities/project/projects";
-import { useProjects } from "../../entities/project/ProjectsContext";
-import type { PauseReason } from "../../entities/task/time-entries";
-import type { Task } from "../../entities/task/types";
-import { IMMINENT_THRESHOLD_MS, formatRelativeTime } from "../../shared/lib/time";
+import type { Event } from "@/entities/event/types";
+import { getProject } from "@/entities/project/projects";
+import { useProjects } from "@/entities/project/ProjectsContext";
+import type { PauseReason } from "@/entities/task/time-entries";
+import type { Task } from "@/entities/task/types";
+import { bodyPreview } from "@/shared/lib/body-preview";
+import { IMMINENT_THRESHOLD_MS, fmtDuration, formatRelativeTime } from "@/shared/lib/time";
+import { ParallelogramProgress } from "@/shared/ui/ParallelogramProgress";
+
 import { Grip } from "./Grip";
 import { pauseReasonLabel } from "./PauseReasonModal";
+import type { Progress } from "./stackItems";
+import { StatusPill } from "./StatusPill";
 import { formatElapsed } from "./useTaskTimer";
 
-function bodyPreview(body: string): string {
-  if (!body) return "";
-  return body.split("\n").find((l) => l.trim() && !l.startsWith("#")) || "";
-}
-
+/**
+ * Stack View の Top カード (ADR 0016 §2)。
+ *
+ * 上下 2 ゾーン構造:
+ * - 上ゾーン (Top 専用 / 着手集中): project header + 状態 badge + 大タイトル
+ *   + Timer Controls + body preview + 自タスク見積もり
+ * - 下ゾーン (行カードと共通参照): dep (右詰) → ⤷ 親 + 合計 + progress | status pill
+ *
+ * leaf-parent (親自身が Top) のときは下ゾーンの「⤷ 親」を省き、status pill のみ。
+ *
+ * 完了は idle / active / paused いずれの状態でも常時表示 (Top-only complete; §7)。
+ */
 type TopTaskCardProps = {
   task: Task;
-  events: Event[];
-  /** 現在時刻 (ms)。依存イベントの相対時刻 / 直近判定で使う。0 は SSR placeholder で計算をスキップ。 */
+  events: readonly Event[];
+  /** 現在時刻 (ms)。依存イベントの相対時刻 / 直近判定で使う。0 は SSR placeholder。 */
   now: number;
   isBeingDragged: boolean;
   elapsedSeconds: number;
   pauseReason: PauseReason | null;
+  /** 子タスクなら親 Task。leaf-parent では undefined。 */
+  parent?: Task;
+  /** 子タスクなら親に紐付く進捗。leaf-parent では undefined。 */
+  progress?: Progress;
   onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
   onClick: () => void;
   onStart: () => void;
@@ -38,6 +54,8 @@ export function TopTaskCard({
   isBeingDragged,
   elapsedSeconds,
   pauseReason,
+  parent,
+  progress,
   onPointerDown,
   onClick,
   onStart,
@@ -47,14 +65,16 @@ export function TopTaskCard({
 }: TopTaskCardProps) {
   const { projectsById } = useProjects();
   const proj = getProject(projectsById, task.projectId);
-  const dep = task.dependsOnEventId ? events.find((e) => e.id === task.dependsOnEventId) : null;
-  // 24h 以内に迫っている依存はハイライト (背景濃度 + 太字) して着手判断のシグナルを強める。
-  // now=0 (SSR placeholder) のときは判定スキップ。
+
+  // ADR 0016 §6: 子は親の dependsOnEventId を継承 (子自身の値がなければ親に fallback)。
+  const effectiveDepId = task.dependsOnEventId ?? parent?.dependsOnEventId ?? null;
+  const dep = effectiveDepId ? events.find((e) => e.id === effectiveDepId) : null;
   const depImminent =
     dep !== null &&
     dep !== undefined &&
     now > 0 &&
     new Date(dep.startTime).getTime() - now <= IMMINENT_THRESHOLD_MS;
+
   const preview = bodyPreview(task.body);
   const isActive = task.status === "active";
   const isPaused = task.status === "paused";
@@ -62,42 +82,36 @@ export function TopTaskCard({
   return (
     <div
       onClick={onClick}
-      className={`relative mx-4 mb-1 cursor-pointer overflow-hidden rounded-[10px] bg-bg-elevated py-3.5 pl-[18px] pr-3.5 transition-opacity duration-150 ${
+      className={`relative mx-4 mb-1 cursor-pointer overflow-hidden rounded-[10px] bg-bg-elevated py-3.5 pl-[14px] pr-3.5 transition-opacity duration-150 ${
         isBeingDragged ? "opacity-40" : "opacity-100"
       }`}
-      style={{
-        border: `1px solid ${proj.color}40`,
-      }}
+      style={{ border: `1px solid ${proj.color}40` }}
     >
-      <div className="absolute bottom-0 left-0 top-0 w-[3px]" style={{ background: proj.color }} />
-      <div className="flex items-start gap-2.5">
+      <div
+        aria-hidden="true"
+        className="absolute bottom-0 left-0 top-0 w-[3px]"
+        style={{ background: proj.color }}
+      />
+      <div className="flex items-start gap-2">
         <div
           onPointerDown={(e) => {
             e.stopPropagation();
             onPointerDown(e);
           }}
+          aria-label="並び替えハンドル"
           className="mt-1.5 shrink-0 cursor-grab touch-none px-0.5 py-1"
         >
           <Grip />
         </div>
-        <div className="flex-1">
-          <div className="mb-1 flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          {/* ----------- 上ゾーン: project + state badge + title + Timer + preview ----------- */}
+          <div className="flex flex-wrap items-center gap-2">
             <div className="h-2 w-2 rounded-full" style={{ background: proj.color }} />
             <span className="font-jp text-[9px] text-fg-subtle">{proj.name}</span>
-            {dep && (
-              <span
-                className={`max-w-[180px] truncate rounded-[3px] px-1.5 py-px font-jp text-[8px] text-accent-amber ${
-                  depImminent ? "bg-[#E85D0440] font-semibold" : "bg-[#E85D0415]"
-                }`}
-                title={`${dep.title} (${formatRelativeTime(dep.startTime, new Date(now))})`}
-              >
-                ← {formatRelativeTime(dep.startTime, new Date(now))} {dep.title}
-              </span>
-            )}
             {isActive && (
               <span
-                className="rounded-[3px] bg-accent-blue/15 px-1.5 py-px font-jp text-[9px] font-semibold tabular-nums text-accent-blue"
                 aria-label="経過時間"
+                className="rounded-[3px] bg-accent-blue/15 px-1.5 py-px font-jp text-[9px] font-semibold tabular-nums text-accent-blue"
               >
                 ● {formatElapsed(elapsedSeconds)}
               </span>
@@ -107,29 +121,107 @@ export function TopTaskCard({
                 中断: {pauseReasonLabel(pauseReason)}
               </span>
             )}
+            {task.estimatedMinutes !== null && (
+              <span className="ml-auto text-[10px] tabular-nums text-fg-faint">
+                {fmtDuration(task.estimatedMinutes)}
+              </span>
+            )}
           </div>
-          <div className="font-jp text-[15px] font-semibold leading-[1.4] text-fg-strong">
-            {task.title}
+          <div className="mt-1 flex items-start gap-2">
+            <div className="flex-1 font-jp text-[15px] font-semibold leading-[1.4] text-fg-strong">
+              {task.title}
+            </div>
+            <TimerControls
+              status={task.status}
+              color={proj.color}
+              onStart={onStart}
+              onPauseRequest={onPauseRequest}
+              onResume={onResume}
+              onComplete={onComplete}
+            />
           </div>
           {preview && (
             <div className="mt-1 truncate font-jp text-[10px] text-fg-weak">{preview}</div>
           )}
+
+          {/* ----------- 下ゾーン: dep / ⤷ 親 + 合計 + progress | status pill ----------- */}
+          <div className="mt-3 border-t border-bg-border/60 pt-2">
+            {/* Row 2: dep (右詰)。slot は常時確保 (ADR 0016 §6) */}
+            <div className="flex min-h-[16px] items-center justify-end">
+              {dep && (
+                <span
+                  className={`max-w-[180px] truncate rounded-[3px] px-1.5 py-px font-jp text-[8px] text-accent-amber ${
+                    depImminent ? "bg-[#E85D0440] font-semibold" : "bg-[#E85D0415]"
+                  }`}
+                  title={`${dep.title} (${formatRelativeTime(dep.startTime, new Date(now))})`}
+                >
+                  ← {formatRelativeTime(dep.startTime, new Date(now))} {dep.title}
+                </span>
+              )}
+            </div>
+            {/* Row 3: ⤷ 親 (左) + 合計 (中) + progress | status pill (右) */}
+            <BottomRow task={task} parent={parent} progress={progress} />
+          </div>
         </div>
-        <TimerControls
-          task={task}
-          color={proj.color}
-          onStart={onStart}
-          onPauseRequest={onPauseRequest}
-          onResume={onResume}
-          onComplete={onComplete}
-        />
       </div>
     </div>
   );
 }
 
-type TimerControlsProps = {
+function BottomRow({
+  task,
+  parent,
+  progress,
+}: {
   task: Task;
+  parent: Task | undefined;
+  progress: Progress | undefined;
+}) {
+  const { projectsById } = useProjects();
+  const showProgress = parent !== undefined && progress !== undefined;
+  const showStatusPill = parent === undefined && task.decomposeStatus !== "decomposed";
+
+  if (!showProgress && !showStatusPill) return null;
+
+  if (!showProgress) {
+    // leaf-parent: ⤷ 親 を出さず、status pill のみ右詰
+    return (
+      <div className="mt-1 flex items-center justify-end">
+        <StatusPill status={task.decomposeStatus} />
+      </div>
+    );
+  }
+
+  // leaf-child: ⤷ 親 + 合計 + progress
+  if (!parent || !progress) return null;
+  const parentColor = getProject(projectsById, parent.projectId).color;
+  return (
+    <div className="mt-1 flex items-center gap-2">
+      <span
+        className="min-w-0 flex-1 truncate font-jp text-[10px]"
+        style={{ color: `${parentColor}cc` }}
+        title={`親: ${parent.title}`}
+      >
+        ⤷ {parent.title}
+      </span>
+      {progress.totalMinutes !== null && (
+        <span className="font-jp text-[10px] tabular-nums text-fg-muted">
+          合計 {fmtDuration(progress.totalMinutes)}
+        </span>
+      )}
+      <ParallelogramProgress
+        total={progress.total}
+        doneCount={progress.doneCount}
+        currentIndex={progress.currentIndex}
+        color={parentColor}
+        size="md"
+      />
+    </div>
+  );
+}
+
+type TimerControlsProps = {
+  status: Task["status"];
   color: string;
   onStart: () => void;
   onPauseRequest: () => void;
@@ -138,7 +230,7 @@ type TimerControlsProps = {
 };
 
 function TimerControls({
-  task,
+  status,
   color,
   onStart,
   onPauseRequest,
@@ -149,9 +241,21 @@ function TimerControls({
     e.stopPropagation();
     fn();
   };
-  if (task.status === "active") {
-    return (
-      <div className="flex shrink-0 items-center gap-1.5">
+  // Top-only complete (ADR 0016 §7): どの状態でも Complete を併置する。
+  return (
+    <div className="flex shrink-0 items-center gap-1.5">
+      {status === "idle" && (
+        <button
+          type="button"
+          onClick={stop(onStart)}
+          aria-label="開始"
+          className="flex h-9 cursor-pointer items-center gap-1 rounded-lg bg-transparent px-2.5 font-jp text-[11px] font-semibold"
+          style={{ border: `1.5px solid ${color}60`, color }}
+        >
+          <PlayIcon /> 開始
+        </button>
+      )}
+      {status === "active" && (
         <button
           type="button"
           onClick={stop(onPauseRequest)}
@@ -161,50 +265,34 @@ function TimerControls({
         >
           <PauseIcon />
         </button>
+      )}
+      {status === "paused" && (
         <button
           type="button"
-          onClick={stop(onComplete)}
-          aria-label="完了"
-          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-transparent"
+          onClick={stop(onResume)}
+          aria-label="再開"
+          className="flex h-9 cursor-pointer items-center gap-1 rounded-lg bg-transparent px-2.5 font-jp text-[11px] font-semibold"
           style={{ border: `1.5px solid ${color}60`, color }}
         >
-          <CheckIcon />
+          <PlayIcon /> 再開
         </button>
-      </div>
-    );
-  }
-  if (task.status === "paused") {
-    return (
+      )}
       <button
         type="button"
-        onClick={stop(onResume)}
-        aria-label="再開"
-        className="flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-lg bg-transparent px-2.5 font-jp text-[11px] font-semibold"
+        onClick={stop(onComplete)}
+        aria-label="完了"
+        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-transparent"
         style={{ border: `1.5px solid ${color}60`, color }}
       >
-        <PlayIcon />
-        再開
+        <CheckIcon />
       </button>
-    );
-  }
-  // idle / done は開始ボタン。done の場合は呼ばれない想定 (TaskStack 側で除外)
-  return (
-    <button
-      type="button"
-      onClick={stop(onStart)}
-      aria-label="開始"
-      className="flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-lg bg-transparent px-2.5 font-jp text-[11px] font-semibold"
-      style={{ border: `1.5px solid ${color}60`, color }}
-    >
-      <PlayIcon />
-      開始
-    </button>
+    </div>
   );
 }
 
 function PlayIcon() {
   return (
-    <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor">
+    <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor" aria-hidden="true">
       <polygon points="1,1 9,6 1,11" />
     </svg>
   );
@@ -212,7 +300,7 @@ function PlayIcon() {
 
 function PauseIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
       <rect x="2" y="2" width="3" height="8" rx="1" />
       <rect x="7" y="2" width="3" height="8" rx="1" />
     </svg>
@@ -221,7 +309,7 @@ function PauseIcon() {
 
 function CheckIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <polyline
         points="3,8 7,12 13,4"
         stroke="currentColor"
