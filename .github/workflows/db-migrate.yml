@@ -44,8 +44,9 @@ jobs:
 
       # pg_dump はサーバーと同じメジャーバージョン以上が必要。
       # Supabase 本番は PostgreSQL 17 にアップグレード済みなので 17 を入れる。
-      # Ubuntu runner には client 16 が既に入っているため、pg_wrapper が 16 を
-      # 選ばないよう必ず最新メジャーを追加 install すること。
+      # Ubuntu runner には client 16 が既に入っており、`/usr/bin/pg_dump`
+      # (pg_wrapper) が 16 を選ぶケースがあるため、17 のバイナリディレクトリを
+      # PATH 先頭に明示的に追加して `pg_dump` / `psql` が必ず 17 で解決されるようにする。
       - name: Install PostgreSQL 17 client tools
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
@@ -54,6 +55,16 @@ jobs:
           sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17
+          test -x /usr/lib/postgresql/17/bin/pg_dump
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Verify pg_dump / psql resolves to 17
+        run: |
+          which pg_dump
+          pg_dump --version
+          which psql
+          psql --version
+          pg_dump --version | grep -q ' 17\.'
 
       # 適用前のロールバック用 dump。public schema はデータ込み、それ以外は構造のみ。
       # 重い時間がかかるほどデータが大きくなったら別 issue で再設計する。
