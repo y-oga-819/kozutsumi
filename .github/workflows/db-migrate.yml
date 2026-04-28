@@ -1,0 +1,137 @@
+name: DB migrate (production)
+
+# 本番 Supabase に migration を適用する。手動 trigger のみ。
+# 設計判断は ADR-0019 / ADR-0020 を参照。
+#
+# 手順:
+# 1. GitHub UI から `Run workflow` で起動
+# 2. `production` Environment の approval を承認
+# 3. 適用前バックアップ → migration 適用 → 結果確認の順に流れる
+# 4. backup は artifact として 14 日保持される
+#
+# secret は `SUPABASE_DB_URL` のみ。step env で個別に渡す
+# (job env / workflow env には置かない: ADR-0020 の hardening 方針)。
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: take backup and show pending migrations, but do not apply"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-migrate-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply migrations to production
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # pg_dump はサーバーと同じメジャーバージョン以上が必要。
+      # Supabase 本番は PostgreSQL 17 にアップグレード済みなので 17 を入れる。
+      # Ubuntu runner の client 16 と pg_wrapper の優先順位に依存しないよう、
+      # 17 の bin を PATH 先頭に明示的に追加する。
+      - name: Install PostgreSQL 17 client tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          test -x /usr/lib/postgresql/17/bin/pg_dump
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Verify pg_dump / psql resolves to 17
+        run: |
+          which pg_dump
+          pg_dump --version
+          which psql
+          psql --version
+          pg_dump --version | grep -q ' 17\.'
+
+      # 適用前のロールバック用 dump。public schema はデータ込み、それ以外は構造のみ。
+      # 重い時間がかかるほどデータが大きくなったら別 issue で再設計する。
+      - name: Take pre-migration backup
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          ts=$(date -u +%Y%m%dT%H%M%SZ)
+          mkdir -p backups
+          pg_dump --no-owner --no-privileges --schema=public \
+            --file="backups/pre-migrate-${ts}-public.sql" \
+            "$SUPABASE_DB_URL"
+          pg_dump --no-owner --no-privileges --schema-only \
+            --file="backups/pre-migrate-${ts}-schema.sql" \
+            "$SUPABASE_DB_URL"
+          echo "BACKUP_TS=${ts}" >> "$GITHUB_ENV"
+          ls -la backups/
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ env.BACKUP_TS }}
+          path: backups/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Show migration state (local files vs applied)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          echo "::group::Local migration files (supabase/migrations/)"
+          ls -1 supabase/migrations/ || true
+          echo "::endgroup::"
+          echo "::group::Applied migrations on remote (supabase_migrations.schema_migrations)"
+          psql "$SUPABASE_DB_URL" -c \
+            "SELECT version FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 30;" \
+            || echo "Could not read schema_migrations (table might not exist on first run)"
+          echo "::endgroup::"
+
+      - name: Apply migrations
+        if: ${{ inputs.dry_run != true }}
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          supabase db push --db-url "$SUPABASE_DB_URL"
+
+      - name: Verify post-migrate state
+        if: ${{ inputs.dry_run != true }}
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          echo "::group::Applied migrations after push"
+          psql "$SUPABASE_DB_URL" -c \
+            "SELECT version FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 10;"
+          echo "::endgroup::"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### DB migrate (production)"
+            echo ""
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "- Mode: **DRY RUN** (no apply)"
+            else
+              echo "- Mode: **APPLY**"
+            fi
+            echo "- Backup artifact: \`db-backup-${BACKUP_TS:-unknown}\` (retention 14 days)"
+            echo ""
+            echo "ADR: [0019](../blob/main/docs/adr/0019-db-migration-via-manual-github-actions.md) / [0020](../blob/main/docs/adr/0020-db-migration-credential-as-db-connection-string.md)"
+          } >> "$GITHUB_STEP_SUMMARY"
