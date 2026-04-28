@@ -88,7 +88,35 @@ supabase db reset
 supabase gen types typescript --local > src/shared/types/database.ts
 ```
 
-リモートにプッシュするときは `supabase db push`。
+#### 本番 Supabase への適用
+
+本番への migration 適用は **GitHub Actions の手動 trigger workflow** で行う（ADR-0019 / ADR-0020）。
+PC からの `supabase db push` 直接実行はしない。
+
+1. 該当の migration を含む PR を main に merge する
+2. GitHub の `Actions` タブ →「DB migrate (production)」→「Run workflow」
+3. `production` Environment の approval を承認する（reviewer = repo owner）
+4. workflow が走り、適用前 backup → migration 適用 → 結果確認の順に実行される
+5. backup は artifact として 14 日保持される（事故時のロールバック用）
+
+スマホからは GitHub アプリで上記 2〜3 を 2 タップで完結できる。
+
+**事前設定（一度だけ）:**
+
+- GitHub Repository → Settings → Environments で `production` Environment を作成
+  - `Required reviewers` に repo owner を追加（approval gate）
+- 同 Environment の Secrets に `SUPABASE_DB_URL` を登録
+  - 形式: `postgresql://postgres.<PROJECT_REF>:<DB_PASSWORD>@<host>:5432/postgres`
+  - **必ず Session pooler (port 5432)** を使う。Transaction pooler (6543) では `pg_dump` が動かない
+  - 値は Supabase Dashboard → Project Settings → Database → Connection string から取得
+
+**dry run:**
+
+「Run workflow」起動時に `dry_run` を ON にすると、backup と pending migration の表示までで止まる（適用しない）。本番に流す前の事前確認用。
+
+**漏洩時 / 定期 rotate:**
+
+Supabase Dashboard → Database → Reset database password で再生成 → GitHub Environment Secret の `SUPABASE_DB_URL` を上書き。半年〜1 年に 1 回が目安。
 
 ## ドキュメント
 
