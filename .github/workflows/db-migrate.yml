@@ -42,16 +42,18 @@ jobs:
         with:
           version: latest
 
-      # supabase/config.toml の major_version = 15 と揃える。
       # pg_dump はサーバーと同じメジャーバージョン以上が必要。
-      - name: Install PostgreSQL 15 client tools
+      # Supabase 本番は PostgreSQL 17 にアップグレード済みなので 17 を入れる。
+      # Ubuntu runner には client 16 が既に入っているため、pg_wrapper が 16 を
+      # 選ばないよう必ず最新メジャーを追加 install すること。
+      - name: Install PostgreSQL 17 client tools
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
             -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
           sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-15
+          sudo apt-get install -y -qq postgresql-client-17
 
       # 適用前のロールバック用 dump。public schema はデータ込み、それ以外は構造のみ。
       # 重い時間がかかるほどデータが大きくなったら別 issue で再設計する。
