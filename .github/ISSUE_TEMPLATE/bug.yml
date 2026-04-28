@@ -1,0 +1,122 @@
+name: バグレポート
+description: 動作不良の報告。AI が修正方針判定に使う構造化入力。
+title: "[bug] "
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **AI 向けの注記**: このフォームは AI が修正方針判定に使う構造化入力です。
+        見出し（`### 〇〇`）は編集しないでください。
+
+        **機微情報の取り扱い**: API キー / トークン / 個人特定情報 / 第三者の project ID 等は
+        貼る前にマスク (`<redacted>`) してください。
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 何が壊れているか。1〜3 行で。
+      placeholder: |
+        AI 分解中の親タスクが decompose_status='decomposing' で固まり、UI に永遠に「AI 分解中」pill が出続ける。
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 再現手順
+      description: 再現できるなら手順を、できないなら「再現困難」と書いて状況を残す。
+      placeholder: |
+        1. AppShell でタスクを追加
+        2. UI に「AI 分解中」pill が表示される
+        3. 数分待っても切り替わらない
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待動作
+      placeholder: |
+        - 成功: 子タスクが Stack View にフラットに並ぶ
+        - 失敗: decompose_status='none' に戻り、ユーザーが再試行できる
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の挙動 / ログ
+      description: |
+        コンソール / サーバーログ / Network レスポンス / DB 状態を貼る。
+        機微情報はマスク。
+      placeholder: |
+        server console:
+        [ai] unexpected error Error [GoogleGenerativeAI Error]: ... 429 Too Many Requests ...
+
+        DB:
+        select id, decompose_status from tasks where ... → 'decomposing' で stuck
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 環境
+      description: |
+        production / dev / e2e、branch、commit、データソース (Supabase / mock) 等。
+        ブラウザ / OS は UI バグなら書く。
+      placeholder: |
+        - production (Vercel)
+        - main の <commit-sha>
+        - データソース: Supabase
+    validations:
+      required: true
+
+  - type: textarea
+    id: related
+    attributes:
+      label: 関連
+      description: |
+        関連 issue / PR / ADR。原因仮説や直すべきコード位置を書ければなお良い。
+        無ければ `なし` と書く。
+      placeholder: |
+        - 原因と推定される箇所: src/shared/ai/route.ts:55-62
+        - 関連 ADR: 0013 / 0017
+        - 関連 PR: #100
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影響範囲
+      description: |
+        誰がいつ困るか。kozutsumi は個人特化なので「自分が今 / 将来困る程度」で OK。
+        AI が優先度判断に使う。
+      placeholder: |
+        AI が落ちている期間中、新規タスクが作成されると全部 'decomposing' で固まる。
+        billing 復帰しても DB が固まったままなので手動 cleanup が必要。
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: 暫定回避策
+      description: |
+        恒久対応までの間、どう凌げるか。無ければ `なし` と書く。
+      placeholder: |
+        update tasks set decompose_status='none' where decompose_status='decomposing';
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 緊急度
+      description: AI が優先度判断に使う。
+      options:
+        - low (放置可、回避策あり)
+        - mid (近いうちに直したい)
+        - high (今すぐ困る、直近の体験を破壊している)
+      default: 1
+    validations:
+      required: true
