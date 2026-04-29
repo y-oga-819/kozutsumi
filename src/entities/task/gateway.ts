@@ -1,3 +1,4 @@
+import type { CorrectionFactor } from "./correction";
 import type { DecomposeStatus, Task, TaskCategory } from "./types";
 
 export type CreateTaskInput = {
@@ -38,4 +39,11 @@ export interface TaskGateway {
   reorder(entries: readonly { id: string; stackOrder: number | null }[]): Promise<void>;
   delete(id: string): Promise<void>;
   deleteAllForCurrentUser(): Promise<void>;
+  /**
+   * 見積もり補正倍率の取得 (P3-9 / #93、ADR 0024 / 0025)。
+   * Supabase view `task_category_correction_factors` を読む薄ラッパー。
+   * 行が無い場合 (= 完了タスクが無い / 全 category が外れ値で除外された) は空配列。
+   * 最小サンプル数判定はここでは行わず、呼び出し側 (`correctEstimate`) で判定する。
+   */
+  listCorrectionFactors(): Promise<CorrectionFactor[]>;
 }

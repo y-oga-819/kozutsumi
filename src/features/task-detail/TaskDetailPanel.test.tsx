@@ -4,6 +4,8 @@ import type { LatestDecomposeLog } from "../../entities/action-log/gateway";
 import type { Event } from "../../entities/event/types";
 import type { Project } from "../../entities/project/types";
 import { ProjectsProvider } from "../../entities/project/ProjectsContext";
+import { CorrectionFactorsProvider } from "../../entities/task/CorrectionFactorsContext";
+import type { CorrectionFactor } from "../../entities/task/correction";
 import type { Task } from "../../entities/task/types";
 import { TaskDetailPanel, type TaskDetailPanelProps } from "./TaskDetailPanel";
 
@@ -20,8 +22,12 @@ afterEach(() => {
 const projects: Project[] = [
   { id: "slo", name: "SLO推進", color: "#2D9F45", isPrimary: true, createdAt: "" },
 ];
-const render = (ui: React.ReactElement) =>
-  rtlRender(<ProjectsProvider projects={projects}>{ui}</ProjectsProvider>);
+const render = (ui: React.ReactElement, options: { factors?: readonly CorrectionFactor[] } = {}) =>
+  rtlRender(
+    <ProjectsProvider projects={projects}>
+      <CorrectionFactorsProvider factors={options.factors ?? []}>{ui}</CorrectionFactorsProvider>
+    </ProjectsProvider>,
+  );
 
 const baseTask: Task = {
   id: "t1",
@@ -42,7 +48,10 @@ const baseTask: Task = {
 
 const noop = () => {};
 
-function renderPanel(overrides: Partial<TaskDetailPanelProps> = {}) {
+function renderPanel(
+  overrides: Partial<TaskDetailPanelProps> = {},
+  options: { factors?: readonly CorrectionFactor[] } = {},
+) {
   const props: TaskDetailPanelProps = {
     task: baseTask,
     events: [],
@@ -51,7 +60,7 @@ function renderPanel(overrides: Partial<TaskDetailPanelProps> = {}) {
     onToggleDone: noop,
     ...overrides,
   };
-  return render(<TaskDetailPanel {...props} />);
+  return render(<TaskDetailPanel {...props} />, options);
 }
 
 describe("TaskDetailPanel", () => {
@@ -592,5 +601,60 @@ describe("TaskDetailPanel - AI 分解情報エリア (P3-15)", () => {
     // <section aria-label="..."> は ARIA で region として扱われる
     const section = getByRole("region", { name: "AI 分解情報" });
     expect(section).toBeTruthy();
+  });
+});
+
+describe("TaskDetailPanel: 見積もり補正 (P3-9 / #93、ADR 0026)", () => {
+  test("補正なし (category null) は元値だけを faint で出し、自然文は出さない", () => {
+    const { getByText, queryByText } = renderPanel(
+      { task: { ...baseTask, estimatedMinutes: 30, taskCategory: null } },
+      {
+        factors: [{ taskCategory: "doc", factor: 2.2, sampleCount: 7 }],
+      },
+    );
+    expect(getByText("30m")).toBeTruthy();
+    expect(queryByText(/同じ種類のタスク/)).toBeNull();
+    expect(queryByText(/あなたの見積もり/)).toBeNull();
+  });
+
+  test("補正適用時はヘッダに補正後を出し、title 下の自然文に元値と倍率を添える", () => {
+    const { getByText, queryByText } = renderPanel(
+      {
+        task: { ...baseTask, estimatedMinutes: 30, taskCategory: "doc" },
+      },
+      {
+        factors: [{ taskCategory: "doc", factor: 2.2, sampleCount: 7 }],
+      },
+    );
+    // ヘッダに補正後の値 (30 * 2.2 = 66 → 1h06m)
+    expect(getByText("1h06m")).toBeTruthy();
+    // 自然文ライン (補正の存在は明言しない、ADR 0026)
+    expect(getByText(/あなたの見積もり 30m/)).toBeTruthy();
+    expect(getByText(/同じ種類のタスクは平均 2\.2 倍かかっています/)).toBeTruthy();
+    // ADR 0026: 「補正係数」「補正済み」「元」「確保」等のラベルは出さない
+    expect(queryByText(/補正/)).toBeNull();
+    expect(queryByText(/^元 /)).toBeNull();
+  });
+
+  test("最小サンプル数閾値未満は補正なし扱い (元値のみ + 自然文なし)", () => {
+    const { getByText, queryByText } = renderPanel(
+      {
+        task: { ...baseTask, estimatedMinutes: 30, taskCategory: "doc" },
+      },
+      {
+        factors: [{ taskCategory: "doc", factor: 2.2, sampleCount: 2 }],
+      },
+    );
+    expect(getByText("30m")).toBeTruthy();
+    expect(queryByText(/同じ種類のタスク/)).toBeNull();
+  });
+
+  test("estimatedMinutes が null なら見積もり関連の表示は一切出ない", () => {
+    const { queryByText } = renderPanel(
+      { task: { ...baseTask, estimatedMinutes: null, taskCategory: "doc" } },
+      { factors: [{ taskCategory: "doc", factor: 2.2, sampleCount: 7 }] },
+    );
+    expect(queryByText(/30m/)).toBeNull();
+    expect(queryByText(/あなたの見積もり/)).toBeNull();
   });
 });

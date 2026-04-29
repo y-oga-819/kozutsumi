@@ -3,10 +3,13 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { getProject } from "@/entities/project/projects";
 import { useProjects } from "@/entities/project/ProjectsContext";
 import type { Event } from "@/entities/event/types";
+import { useCorrectionFactors } from "@/entities/task/CorrectionFactorsContext";
+import { correctEstimate } from "@/entities/task/correction";
 import type { Task } from "@/entities/task/types";
 import { ParallelogramProgress } from "@/shared/ui/ParallelogramProgress";
-import { IMMINENT_THRESHOLD_MS, fmtDuration, formatRelativeTime } from "@/shared/lib/time";
+import { IMMINENT_THRESHOLD_MS, formatRelativeTime } from "@/shared/lib/time";
 
+import { CorrectedEstimate } from "./CorrectedEstimate";
 import { Grip } from "./Grip";
 import type { Progress } from "./stackItems";
 import { StatusPill } from "./StatusPill";
@@ -48,6 +51,12 @@ export function TaskRow({
 }: TaskRowProps) {
   const { projectsById } = useProjects();
   const proj = getProject(projectsById, task.projectId);
+  const factors = useCorrectionFactors();
+  const estimate = correctEstimate({
+    estimatedMinutes: task.estimatedMinutes,
+    taskCategory: task.taskCategory,
+    factors,
+  });
 
   // ADR 0016 §6: 子は親の dependsOnEventId を継承 (子自身の値がなければ親に fallback)。
   const effectiveDepId = task.dependsOnEventId ?? parent?.dependsOnEventId ?? null;
@@ -86,11 +95,7 @@ export function TaskRow({
           style={{ background: proj.color }}
         />
         <span className="flex-1 truncate font-jp text-[12px] text-fg-muted">{task.title}</span>
-        {task.estimatedMinutes !== null && (
-          <span className="text-[9px] tabular-nums text-fg-faint">
-            {fmtDuration(task.estimatedMinutes)}
-          </span>
-        )}
+        {estimate && <CorrectedEstimate estimate={estimate} variant="row" />}
       </div>
       {/* Row 2: dep event (右詰) */}
       {dep && (

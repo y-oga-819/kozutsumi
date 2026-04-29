@@ -152,3 +152,48 @@ describe("SupabaseTaskGateway: task_category mapping", () => {
     expect(tasks[0]!.taskCategory).toBe("admin");
   });
 });
+
+describe("SupabaseTaskGateway: listCorrectionFactors (P3-9 / #93)", () => {
+  function makeViewClient(
+    rows: { task_category: string; sample_count: number; factor: unknown }[],
+  ) {
+    const select = vi.fn(async () => ({ data: rows, error: null }));
+    const from = vi.fn(() => ({ select }));
+    const client = { from } as unknown as SupabaseClient<Database>;
+    return { client, from, select };
+  }
+
+  test("view 行を CorrectionFactor[] に写し、factor は Number で正規化する", async () => {
+    // PostgREST 経由だと numeric が string で来る場合がある (ADR 0024 / 0025)。
+    const { client, from } = makeViewClient([
+      { task_category: "coding", sample_count: 10, factor: "0.8" },
+      { task_category: "doc", sample_count: 7, factor: 2.2 },
+    ]);
+
+    const gateway = new SupabaseTaskGateway(client);
+    const factors = await gateway.listCorrectionFactors();
+
+    expect(from).toHaveBeenCalledWith("task_category_correction_factors");
+    expect(factors).toEqual([
+      { taskCategory: "coding", factor: 0.8, sampleCount: 10 },
+      { taskCategory: "doc", factor: 2.2, sampleCount: 7 },
+    ]);
+  });
+
+  test("view 行が無ければ空配列 (補正対象タスクが無い / 全 category が外れ値除外)", async () => {
+    const { client } = makeViewClient([]);
+    const gateway = new SupabaseTaskGateway(client);
+
+    expect(await gateway.listCorrectionFactors()).toEqual([]);
+  });
+
+  test("RLS は view 側 (security_invoker=true) なので user_id 絞り込みは書かない", async () => {
+    const { client, from, select } = makeViewClient([]);
+    const gateway = new SupabaseTaskGateway(client);
+
+    await gateway.listCorrectionFactors();
+    // from + select だけで eq() / filter() は呼ばれない
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(select).toHaveBeenCalledTimes(1);
+  });
+});
