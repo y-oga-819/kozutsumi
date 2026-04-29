@@ -3,12 +3,15 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import type { Event } from "@/entities/event/types";
 import { getProject } from "@/entities/project/projects";
 import { useProjects } from "@/entities/project/ProjectsContext";
+import { useCorrectionFactors } from "@/entities/task/CorrectionFactorsContext";
+import { correctEstimate } from "@/entities/task/correction";
 import type { PauseReason } from "@/entities/task/time-entries";
 import type { Task } from "@/entities/task/types";
 import { bodyPreview } from "@/shared/lib/body-preview";
 import { IMMINENT_THRESHOLD_MS, fmtDuration, formatRelativeTime } from "@/shared/lib/time";
 import { ParallelogramProgress } from "@/shared/ui/ParallelogramProgress";
 
+import { CorrectedEstimate } from "./CorrectedEstimate";
 import { Grip } from "./Grip";
 import { pauseReasonLabel } from "./PauseReasonModal";
 import type { Progress } from "./stackItems";
@@ -69,6 +72,13 @@ export function TopTaskCard({
 }: TopTaskCardProps) {
   const { projectsById } = useProjects();
   const proj = getProject(projectsById, task.projectId);
+  const factors = useCorrectionFactors();
+  // P3-9 / #93、ADR 0024 / 0026: 補正後 + 元値の組。category null / サンプル不足は元値のみ。
+  const estimate = correctEstimate({
+    estimatedMinutes: task.estimatedMinutes,
+    taskCategory: task.taskCategory,
+    factors,
+  });
 
   // ADR 0016 §6: 子は親の dependsOnEventId を継承 (子自身の値がなければ親に fallback)。
   const effectiveDepId = task.dependsOnEventId ?? parent?.dependsOnEventId ?? null;
@@ -133,9 +143,9 @@ export function TopTaskCard({
                 中断: {pauseReasonLabel(pauseReason)}
               </span>
             )}
-            {task.estimatedMinutes !== null && (
-              <span className="ml-auto text-[10px] tabular-nums text-fg-faint">
-                {fmtDuration(task.estimatedMinutes)}
+            {estimate && (
+              <span className="ml-auto">
+                <CorrectedEstimate estimate={estimate} variant="top" />
               </span>
             )}
           </div>

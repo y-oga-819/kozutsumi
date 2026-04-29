@@ -10,6 +10,8 @@ import type { Event } from "@/entities/event/types";
 import type { CreateProjectInput, UpdateProjectInput } from "@/entities/project/gateway";
 import { ProjectsProvider } from "@/entities/project/ProjectsContext";
 import type { Project } from "@/entities/project/types";
+import { CorrectionFactorsProvider } from "@/entities/task/CorrectionFactorsContext";
+import type { CorrectionFactor } from "@/entities/task/correction";
 import type { CreateTaskInput } from "@/entities/task/gateway";
 import type { Task, TaskCategory } from "@/entities/task/types";
 import { AddButton } from "@/features/add-forms/AddButton";
@@ -69,6 +71,8 @@ const keys = {
   events: ["events"] as const,
   /** 詳細パネル (P3-15) で fetch する AI 分解の最新試行ログ。タスク id 単位で分離する。 */
   decomposeLog: (taskId: string) => ["actionLog", "decompose", taskId] as const,
+  /** 見積もり補正倍率 (P3-9 / #93、ADR 0025): user-scoped、view 経由で取る。 */
+  correctionFactors: ["correctionFactors"] as const,
 };
 
 export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
@@ -99,6 +103,19 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
   const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
   const events = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data]);
+
+  // P3-9 / #93: 見積もり補正倍率 (ADR 0024 / 0025)。
+  // 補正は augmentation (ADR 0013) なので未取得 / fetch 失敗は空配列扱い (= 全タスク補正なし)。
+  // staleTime を長めにして、タスク完了のたびに再取得しない (補正値の鋭敏な更新は不要)。
+  const correctionFactorsQuery = useQuery({
+    queryKey: keys.correctionFactors,
+    queryFn: () => taskGateway.listCorrectionFactors(),
+    staleTime: 5 * 60_000,
+  });
+  const correctionFactors = useMemo<readonly CorrectionFactor[]>(
+    () => correctionFactorsQuery.data ?? [],
+    [correctionFactorsQuery.data],
+  );
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [eventDetailId, setEventDetailId] = useState<string | null>(null);
@@ -582,177 +599,182 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
 
   return (
     <ProjectsProvider projects={mergeTreeProjects(projects, historyData)}>
-      <div className="relative select-none">
-        {/* Header */}
-        <div className="sticky top-0 z-50 flex items-center gap-3 border-b border-bg-elevated bg-bg-primary px-5 pb-3 pt-4">
-          <div className="font-jp text-[16px] font-bold -tracking-[0.02em]">
-            <span className="text-accent-blue">kozu</span>
-            <span className="text-fg-faint">tsumi</span>
+      <CorrectionFactorsProvider factors={correctionFactors}>
+        <div className="relative select-none">
+          {/* Header */}
+          <div className="sticky top-0 z-50 flex items-center gap-3 border-b border-bg-elevated bg-bg-primary px-5 pb-3 pt-4">
+            <div className="font-jp text-[16px] font-bold -tracking-[0.02em]">
+              <span className="text-accent-blue">kozu</span>
+              <span className="text-fg-faint">tsumi</span>
+            </div>
+            <div className="flex-1" />
+            <div className="flex rounded-md bg-bg-elevated p-0.5">
+              {tabs.map((tab) => {
+                const active = view === tab.key;
+                return (
+                  <Link
+                    key={tab.key}
+                    href={tab.href}
+                    className={`cursor-pointer rounded-[4px] px-3.5 py-1 text-[11px] font-medium no-underline ${
+                      active ? "bg-bg-divider text-fg-emphasized" : "bg-transparent text-fg-weak"
+                    }`}
+                  >
+                    {tab.label}
+                  </Link>
+                );
+              })}
+            </div>
+            <CalendarSyncButton
+              isPending={calendarSync.isPending}
+              lastSyncedAt={calendarSync.lastSyncedAt}
+              onClick={() => calendarSync.triggerSync("manual")}
+            />
+            <UserMenu
+              email={user.email}
+              avatarUrl={user.avatarUrl}
+              onResetSample={resetSample}
+              onClearAll={clearAll}
+            />
           </div>
-          <div className="flex-1" />
-          <div className="flex rounded-md bg-bg-elevated p-0.5">
-            {tabs.map((tab) => {
-              const active = view === tab.key;
-              return (
-                <Link
-                  key={tab.key}
-                  href={tab.href}
-                  className={`cursor-pointer rounded-[4px] px-3.5 py-1 text-[11px] font-medium no-underline ${
-                    active ? "bg-bg-divider text-fg-emphasized" : "bg-transparent text-fg-weak"
-                  }`}
-                >
-                  {tab.label}
-                </Link>
-              );
-            })}
-          </div>
-          <CalendarSyncButton
-            isPending={calendarSync.isPending}
-            lastSyncedAt={calendarSync.lastSyncedAt}
-            onClick={() => calendarSync.triggerSync("manual")}
-          />
-          <UserMenu
-            email={user.email}
-            avatarUrl={user.avatarUrl}
-            onResetSample={resetSample}
-            onClearAll={clearAll}
-          />
+
+          <ReauthBanner visible={calendarSync.needsReauth} onDismiss={calendarSync.dismissReauth} />
+
+          {view === "stack" ? (
+            <StackView
+              events={events}
+              pendingTasks={pendingTasks}
+              doneTasks={doneTasks}
+              topTimer={topTimer}
+              toggleDone={toggleDone}
+              reorder={reorder}
+              nowMin={nowMin}
+              now={nowMs}
+              today={today}
+              onOpenDetail={setDetailId}
+              onOpenEvent={setEventDetailId}
+            />
+          ) : (
+            <TreeView historyData={historyData} projectOrder={projectOrderForTree} />
+          )}
+
+          {detailTask && (
+            <TaskDetailPanel
+              task={detailTask}
+              events={events}
+              now={nowMs}
+              onClose={() => setDetailId(null)}
+              onUpdate={updateBody}
+              onToggleDone={toggleDone}
+              onDelete={(id) => deleteTaskMutation.mutate(id)}
+              onChangeDependency={(id, dependsOnEventId) =>
+                updateDependencyMutation.mutate({ id, dependsOnEventId })
+              }
+              onChangeCategory={(id, taskCategory) =>
+                updateCategoryMutation.mutate({ id, taskCategory })
+              }
+              aiEnabled={aiEnabled}
+              latestDecomposeLog={decomposeLogQuery.data ?? null}
+              isDecomposeLogLoading={decomposeLogQuery.isPending}
+              onTriggerDecompose={(id) => {
+                // P3-15 / ADR 0021 §4: optimistic に decomposing pill を出しつつ fire-and-forget。
+                // server 側でも `decompose_status='decomposing'` に倒す (重複設定は無害)。
+                queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
+                  (prev ?? []).map((t) =>
+                    t.id === id ? { ...t, decomposeStatus: "decomposing" } : t,
+                  ),
+                );
+                // 既存 log は陳腐化するので invalidate (新たな試行が完了したら再 fetch される)
+                queryClient.invalidateQueries({ queryKey: keys.decomposeLog(id) });
+                triggerDecompose(id);
+              }}
+            />
+          )}
+
+          {eventDetailId &&
+            (() => {
+              const ev = events.find((e) => e.id === eventDetailId);
+              return ev ? (
+                <EventDetailPanel
+                  event={ev}
+                  onClose={() => setEventDetailId(null)}
+                  onChangeProject={(id, projectId) =>
+                    updateEventProjectMutation.mutate({ id, projectId })
+                  }
+                  onUpdate={async (id, patch) => {
+                    await updateEventMutation.mutateAsync({ id, patch });
+                  }}
+                  onDelete={async (id) => {
+                    await deleteEventMutation.mutateAsync(id);
+                  }}
+                />
+              ) : null;
+            })()}
+
+          <AddButton onClick={() => setAddOpen(true)} />
+
+          {addOpen ? (
+            <AddPanel
+              projects={projects}
+              events={events}
+              onClose={() => setAddOpen(false)}
+              onCreateTask={async (input) => {
+                // stackOrder は末尾に割り当て (pending 件数)
+                const stackOrder = pendingTasks.length;
+                const created = await createTaskMutation.mutateAsync({ ...input, stackOrder });
+                // P3-6 / ADR 0017: タスク作成成功後に AI 分解を fire-and-forget で投げる。
+                // server 側でも `decompose_status='decomposing'` に倒すが、UI に分解中 pill を
+                // 即時出すため optimistic に cache を書き換える。AI_ENABLED=false / 失敗時は
+                // server が `none` に戻す (decompose-server の guard 経路)。
+                // 既に invalidateQueries で refetch 中の cache に対しては map で上書き、
+                // refetch 前で entry が無ければ末尾に append する。
+                queryClient.setQueryData<Task[]>(keys.tasks, (prev) => {
+                  const list = prev ?? [];
+                  const found = list.some((t) => t.id === created.id);
+                  const updated = { ...created, decomposeStatus: "decomposing" as const };
+                  return found
+                    ? list.map((t) =>
+                        t.id === created.id ? { ...t, decomposeStatus: "decomposing" } : t,
+                      )
+                    : [...list, updated];
+                });
+                triggerDecompose(created.id);
+                // P3-4 / ADR 0015: AI 初期ラベリングも同経路で fire-and-forget。
+                // 失敗 / AI_ENABLED=false は server が `task_category=null` のまま残す
+                // (ADR 0013 augmentation only)。client 側の optimistic 反映はしない —
+                // category は UX 上「気づいたら埋まっている」体験で良い。
+                triggerCategorize(created.id);
+              }}
+              onCreateEvent={async (input) => {
+                await createEventMutation.mutateAsync(input);
+              }}
+              onCreateProject={async (input) => {
+                await createProjectMutation.mutateAsync(input);
+              }}
+              onOpenProject={setProjectDetailId}
+            />
+          ) : null}
+
+          {projectDetail && (
+            <ProjectDetailPanel
+              project={projectDetail}
+              onClose={() => setProjectDetailId(null)}
+              onUpdate={async (id, patch) => {
+                await updateProjectMutation.mutateAsync({ id, patch });
+              }}
+              onDelete={async (id) => {
+                await deleteProjectMutation.mutateAsync(id);
+              }}
+            />
+          )}
+
+          {pauseModalOpen ? (
+            <PauseReasonModal
+              onSelect={handlePauseSelect}
+              onClose={() => setPauseModalOpen(false)}
+            />
+          ) : null}
         </div>
-
-        <ReauthBanner visible={calendarSync.needsReauth} onDismiss={calendarSync.dismissReauth} />
-
-        {view === "stack" ? (
-          <StackView
-            events={events}
-            pendingTasks={pendingTasks}
-            doneTasks={doneTasks}
-            topTimer={topTimer}
-            toggleDone={toggleDone}
-            reorder={reorder}
-            nowMin={nowMin}
-            now={nowMs}
-            today={today}
-            onOpenDetail={setDetailId}
-            onOpenEvent={setEventDetailId}
-          />
-        ) : (
-          <TreeView historyData={historyData} projectOrder={projectOrderForTree} />
-        )}
-
-        {detailTask && (
-          <TaskDetailPanel
-            task={detailTask}
-            events={events}
-            now={nowMs}
-            onClose={() => setDetailId(null)}
-            onUpdate={updateBody}
-            onToggleDone={toggleDone}
-            onDelete={(id) => deleteTaskMutation.mutate(id)}
-            onChangeDependency={(id, dependsOnEventId) =>
-              updateDependencyMutation.mutate({ id, dependsOnEventId })
-            }
-            onChangeCategory={(id, taskCategory) =>
-              updateCategoryMutation.mutate({ id, taskCategory })
-            }
-            aiEnabled={aiEnabled}
-            latestDecomposeLog={decomposeLogQuery.data ?? null}
-            isDecomposeLogLoading={decomposeLogQuery.isPending}
-            onTriggerDecompose={(id) => {
-              // P3-15 / ADR 0021 §4: optimistic に decomposing pill を出しつつ fire-and-forget。
-              // server 側でも `decompose_status='decomposing'` に倒す (重複設定は無害)。
-              queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
-                (prev ?? []).map((t) =>
-                  t.id === id ? { ...t, decomposeStatus: "decomposing" } : t,
-                ),
-              );
-              // 既存 log は陳腐化するので invalidate (新たな試行が完了したら再 fetch される)
-              queryClient.invalidateQueries({ queryKey: keys.decomposeLog(id) });
-              triggerDecompose(id);
-            }}
-          />
-        )}
-
-        {eventDetailId &&
-          (() => {
-            const ev = events.find((e) => e.id === eventDetailId);
-            return ev ? (
-              <EventDetailPanel
-                event={ev}
-                onClose={() => setEventDetailId(null)}
-                onChangeProject={(id, projectId) =>
-                  updateEventProjectMutation.mutate({ id, projectId })
-                }
-                onUpdate={async (id, patch) => {
-                  await updateEventMutation.mutateAsync({ id, patch });
-                }}
-                onDelete={async (id) => {
-                  await deleteEventMutation.mutateAsync(id);
-                }}
-              />
-            ) : null;
-          })()}
-
-        <AddButton onClick={() => setAddOpen(true)} />
-
-        {addOpen ? (
-          <AddPanel
-            projects={projects}
-            events={events}
-            onClose={() => setAddOpen(false)}
-            onCreateTask={async (input) => {
-              // stackOrder は末尾に割り当て (pending 件数)
-              const stackOrder = pendingTasks.length;
-              const created = await createTaskMutation.mutateAsync({ ...input, stackOrder });
-              // P3-6 / ADR 0017: タスク作成成功後に AI 分解を fire-and-forget で投げる。
-              // server 側でも `decompose_status='decomposing'` に倒すが、UI に分解中 pill を
-              // 即時出すため optimistic に cache を書き換える。AI_ENABLED=false / 失敗時は
-              // server が `none` に戻す (decompose-server の guard 経路)。
-              // 既に invalidateQueries で refetch 中の cache に対しては map で上書き、
-              // refetch 前で entry が無ければ末尾に append する。
-              queryClient.setQueryData<Task[]>(keys.tasks, (prev) => {
-                const list = prev ?? [];
-                const found = list.some((t) => t.id === created.id);
-                const updated = { ...created, decomposeStatus: "decomposing" as const };
-                return found
-                  ? list.map((t) =>
-                      t.id === created.id ? { ...t, decomposeStatus: "decomposing" } : t,
-                    )
-                  : [...list, updated];
-              });
-              triggerDecompose(created.id);
-              // P3-4 / ADR 0015: AI 初期ラベリングも同経路で fire-and-forget。
-              // 失敗 / AI_ENABLED=false は server が `task_category=null` のまま残す
-              // (ADR 0013 augmentation only)。client 側の optimistic 反映はしない —
-              // category は UX 上「気づいたら埋まっている」体験で良い。
-              triggerCategorize(created.id);
-            }}
-            onCreateEvent={async (input) => {
-              await createEventMutation.mutateAsync(input);
-            }}
-            onCreateProject={async (input) => {
-              await createProjectMutation.mutateAsync(input);
-            }}
-            onOpenProject={setProjectDetailId}
-          />
-        ) : null}
-
-        {projectDetail && (
-          <ProjectDetailPanel
-            project={projectDetail}
-            onClose={() => setProjectDetailId(null)}
-            onUpdate={async (id, patch) => {
-              await updateProjectMutation.mutateAsync({ id, patch });
-            }}
-            onDelete={async (id) => {
-              await deleteProjectMutation.mutateAsync(id);
-            }}
-          />
-        )}
-
-        {pauseModalOpen ? (
-          <PauseReasonModal onSelect={handlePauseSelect} onClose={() => setPauseModalOpen(false)} />
-        ) : null}
-      </div>
+      </CorrectionFactorsProvider>
     </ProjectsProvider>
   );
 }

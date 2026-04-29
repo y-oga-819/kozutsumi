@@ -4,6 +4,8 @@ import type { DecomposeFailReason } from "../../entities/action-log/types";
 import type { Event } from "../../entities/event/types";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
+import { useCorrectionFactors } from "../../entities/task/CorrectionFactorsContext";
+import { correctEstimate } from "../../entities/task/correction";
 import type { Task, TaskCategory } from "../../entities/task/types";
 import { renderMarkdown } from "../../shared/lib/markdown";
 import { isDone } from "../../shared/lib/task";
@@ -73,6 +75,13 @@ export function TaskDetailPanel({
   const proj = getProject(projectsById, task.projectId);
   const dep = task.dependsOnEventId ? events.find((e) => e.id === task.dependsOnEventId) : null;
   const done = isDone(task);
+  const factors = useCorrectionFactors();
+  // P3-9 / #93、ADR 0026: 補正後 + 元値の組。null ならヘッダの見積もり表示自体を出さない。
+  const estimate = correctEstimate({
+    estimatedMinutes: task.estimatedMinutes,
+    taskCategory: task.taskCategory,
+    factors,
+  });
 
   // 依存先候補は「未来のイベント + 現在選択中のイベント (過去でも保持表示)」。
   // 過去のイベントを新規依存先にしても意味がないが、既存の依存先を勝手に外すと混乱するため残す。
@@ -110,11 +119,19 @@ export function TaskDetailPanel({
           <div className="mb-2 flex items-center gap-2">
             <div className="h-2 w-2 rounded-full" style={{ background: proj.color }} />
             <span className="font-jp text-[10px] text-fg-subtle">{proj.name}</span>
-            {task.estimatedMinutes !== null && (
-              <span className="text-[9px] tabular-nums text-fg-faint">
-                {fmtDuration(task.estimatedMinutes)}
+            {estimate?.correctedMinutes !== null && estimate !== null ? (
+              // ADR 0026 詳細パネル: ヘッダは補正後だけを大きく出し、元値と倍率は title 下の自然文で添える。
+              <span
+                aria-label={`${fmtDuration(estimate.correctedMinutes)} を確保`}
+                className="text-[10px] tabular-nums text-fg-muted"
+              >
+                {fmtDuration(estimate.correctedMinutes)}
               </span>
-            )}
+            ) : estimate ? (
+              <span aria-label="見積もり" className="text-[9px] tabular-nums text-fg-faint">
+                {fmtDuration(estimate.rawMinutes)}
+              </span>
+            ) : null}
             {dep && (
               <span className="rounded-[3px] bg-[#E85D0415] px-1.5 py-px font-jp text-[9px] text-accent-amber">
                 ← {formatRelativeTime(dep.startTime, nowDate)} {dep.title}
@@ -138,6 +155,14 @@ export function TaskDetailPanel({
           <h2 className="m-0 font-jp text-[16px] font-bold leading-[1.4] text-fg-strong">
             {task.title}
           </h2>
+          {estimate?.correctedMinutes !== null && estimate !== null && (
+            // ADR 0026 詳細パネル: 元値を自然文で添え、補正の存在を明言しない文脈的な文言で倍率を示す。
+            // 「補正係数」「補正済み」等の言い回しは出さない。
+            <p className="mt-1 font-jp text-[10px] leading-[1.5] text-fg-subtle">
+              あなたの見積もり {fmtDuration(estimate.rawMinutes)} ・ 同じ種類のタスクは平均{" "}
+              {formatFactor(estimate.factor!)} 倍かかっています
+            </p>
+          )}
         </div>
 
         {onChangeDependency && (
@@ -441,6 +466,16 @@ function rawResponseFromLog(log: LatestDecomposeLog): string | null {
   if (log.action_type === "task_decompose_skipped") return log.metadata.raw_response;
   // task_decompose_failed: raw_response は generate が応答を返した後に失敗した場合のみ存在
   return log.metadata.raw_response ?? null;
+}
+
+/**
+ * 補正倍率を「同じ種類のタスクは平均 X.X 倍かかっています」形式で添えるための整形 (ADR 0026)。
+ * - 0.95〜1.05 のような微差は「1.0」では補正の存在を不自然に明示するので
+ *   小数 1 桁で四捨五入して文脈的に出す。
+ * - 0.1 以下や 10 以上は外れ値クリップで除外されているので来ない (correction.ts 側で担保)。
+ */
+function formatFactor(factor: number): string {
+  return factor.toFixed(1);
 }
 
 // ADR 0015 / #90: タスク種類 override の表示ラベル。値域 (TASK_CATEGORY_VALUES) は

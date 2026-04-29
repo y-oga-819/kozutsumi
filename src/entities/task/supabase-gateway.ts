@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ACTION_TYPES, log } from "@/entities/action-log/logger";
 import type { Database, Tables, TablesInsert, TablesUpdate } from "@/shared/types/database";
 
+import type { CorrectionFactor } from "./correction";
 import type { CreateTaskInput, TaskGateway, UpdateTaskInput } from "./gateway";
 import type { Task } from "./types";
 
@@ -116,5 +117,21 @@ export class SupabaseTaskGateway implements TaskGateway {
     const uid = await getUserId(this.supabase);
     const { error } = await this.supabase.from("tasks").delete().eq("user_id", uid);
     if (error) throw error;
+  }
+
+  async listCorrectionFactors(): Promise<CorrectionFactor[]> {
+    // RLS は view 側 (security_invoker=true) で auth.uid() ベースに効くので、
+    // user_id の絞り込みは明示的に書かない。
+    const { data, error } = await this.supabase
+      .from("task_category_correction_factors")
+      .select("task_category, sample_count, factor");
+    if (error) throw error;
+    return (data ?? []).map((row) => ({
+      taskCategory: row.task_category,
+      // PostgreSQL の `numeric` は PostgREST 経由で string に乗ることがあるので
+      // Number に揃えてから返す (Supabase JS の型は number だが防御的に統一)。
+      factor: Number(row.factor),
+      sampleCount: row.sample_count,
+    }));
   }
 }
