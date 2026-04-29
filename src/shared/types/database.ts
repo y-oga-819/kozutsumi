@@ -227,7 +227,28 @@ export type Database = {
         Relationships: [];
       };
     };
-    Views: Record<string, never>;
+    Views: {
+      task_actual_minutes: {
+        Row: {
+          task_id: string;
+          user_id: string;
+          task_category: TaskCategoryValue | null;
+          status: "idle" | "active" | "paused" | "done";
+          estimated_minutes: number | null;
+          actual_minutes: number;
+        };
+        Relationships: [];
+      };
+      task_category_correction_factors: {
+        Row: {
+          user_id: string;
+          task_category: TaskCategoryValue;
+          sample_count: number;
+          factor: number;
+        };
+        Relationships: [];
+      };
+    };
     Functions: Record<string, never>;
     Enums: {
       task_status: "idle" | "active" | "paused" | "done";
@@ -244,4 +265,6 @@ export type TablesInsert<T extends keyof Database["public"]["Tables"]> =
   Database["public"]["Tables"][T]["Insert"];
 export type TablesUpdate<T extends keyof Database["public"]["Tables"]> =
   Database["public"]["Tables"][T]["Update"];
+export type Views<T extends keyof Database["public"]["Views"]> =
+  Database["public"]["Views"][T]["Row"];
 export type Enums<T extends keyof Database["public"]["Enums"]> = Database["public"]["Enums"][T];
