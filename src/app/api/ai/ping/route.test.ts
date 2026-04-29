@@ -17,8 +17,8 @@ import { POST } from "./route";
 function makeSupabase(): SupabaseClient {
   return {
     auth: {
-      getSession: vi.fn(async () => ({
-        data: { session: { user: { id: "user-1" } } },
+      getUser: vi.fn(async () => ({
+        data: { user: { id: "user-1" } },
         error: null,
       })),
     },

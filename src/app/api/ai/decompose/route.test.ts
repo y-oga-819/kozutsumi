@@ -28,10 +28,10 @@ import { createClient } from "@/shared/supabase/server";
 
 import { POST } from "./route";
 
-function makeSupabase(session: { user: { id: string } } | null): SupabaseClient {
+function makeSupabase(user: { id: string } | null): SupabaseClient {
   return {
     auth: {
-      getSession: vi.fn(async () => ({ data: { session }, error: null })),
+      getUser: vi.fn(async () => ({ data: { user }, error: null })),
     },
   } as unknown as SupabaseClient;
 }
@@ -91,7 +91,7 @@ describe("POST /api/ai/decompose", () => {
   test("body に task_id が無い → ok:false で error を返す (200 で握る、fire-and-forget client は無視)", async () => {
     process.env.AI_ENABLED = "true";
     process.env.GEMINI_API_KEY = "k";
-    vi.mocked(createClient).mockResolvedValue(makeSupabase({ user: { id: "u1" } }));
+    vi.mocked(createClient).mockResolvedValue(makeSupabase({ id: "u1" }));
 
     const response = await POST(makeRequest({ wrong_field: "x" }));
 
@@ -104,7 +104,7 @@ describe("POST /api/ai/decompose", () => {
   test("body が JSON でない → ok:false で error を返す (parse エラーで 500 にしない)", async () => {
     process.env.AI_ENABLED = "true";
     process.env.GEMINI_API_KEY = "k";
-    vi.mocked(createClient).mockResolvedValue(makeSupabase({ user: { id: "u1" } }));
+    vi.mocked(createClient).mockResolvedValue(makeSupabase({ id: "u1" }));
 
     const response = await POST(makeRequest("not json"));
 
@@ -117,7 +117,7 @@ describe("POST /api/ai/decompose", () => {
   test("正常系: decomposeTask を userId / taskId / generate 付きで呼び出す", async () => {
     process.env.AI_ENABLED = "true";
     process.env.GEMINI_API_KEY = "k";
-    const supabase = makeSupabase({ user: { id: "u1" } });
+    const supabase = makeSupabase({ id: "u1" });
     vi.mocked(createClient).mockResolvedValue(supabase);
     decomposeTaskMock.mockResolvedValue({
       kind: "decomposed",
@@ -153,7 +153,7 @@ describe("POST /api/ai/decompose", () => {
   test("decomposeTask が throw → 500 ai_failed (fail-soft、client は握り潰す)", async () => {
     process.env.AI_ENABLED = "true";
     process.env.GEMINI_API_KEY = "k";
-    vi.mocked(createClient).mockResolvedValue(makeSupabase({ user: { id: "u1" } }));
+    vi.mocked(createClient).mockResolvedValue(makeSupabase({ id: "u1" }));
     decomposeTaskMock.mockRejectedValue(new Error("gemini quota exceeded"));
 
     const response = await POST(makeRequest({ task_id: "p1" }));
