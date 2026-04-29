@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-04-29
-- **Related**: [ADR 0013](./0013-ai-as-augmentation-only.md) / [ADR 0015](./0015-task-category-ai-first-labeling.md) / [ADR 0016](./0016-stack-view-decomposition-children-only.md) / [ADR 0017](./0017-ai-task-decomposition-async.md) / [ADR 0018](./0018-keep-parent-task-id-for-ai-decomposition.md) / Issue #89 / PR #123
+- **Related**: [ADR 0013](./0013-ai-as-augmentation-only.md) / [ADR 0015](./0015-task-category-ai-first-labeling.md) / [ADR 0016](./0016-stack-view-decomposition-children-only.md) / [ADR 0017](./0017-ai-task-decomposition-async.md) / [ADR 0018](./0018-keep-parent-task-id-for-ai-decomposition.md) / Issue #89 / PR #123 / Issue #124 (子経路の実装 issue)
 
 ## Context
 
