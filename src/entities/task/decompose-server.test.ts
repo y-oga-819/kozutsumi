@@ -134,8 +134,8 @@ describe("decomposeTask", () => {
   test("happy path: AI が 2 件返す → 子 insert + 親 decomposed + action_log 記録 (raw_response を含む)", async () => {
     const { client, calls } = makeSupabase(defaultPlan(makeParentRow()));
     const rawResponse = JSON.stringify([
-      { title: "子A", estimated_minutes: 30 },
-      { title: "子B", estimated_minutes: 15 },
+      { title: "子A", estimated_minutes: 30, task_category: "research" },
+      { title: "子B", estimated_minutes: 15, task_category: "doc" },
     ]);
     const generate = vi.fn(async () => rawResponse);
 
@@ -154,11 +154,13 @@ describe("decomposeTask", () => {
       parent_task_id: "parent-1",
       title: "子A",
       estimated_minutes: 30,
+      task_category: "research", // ADR 0022: decompose プロンプトが同時推論
       stack_order: 5, // baseStackOrder = parent.stack_order
       decompose_status: "none",
     });
     expect(inserted[1]).toMatchObject({
       title: "子B",
+      task_category: "doc",
       stack_order: 6, // baseStackOrder + 1
     });
 
@@ -469,6 +471,27 @@ describe("decomposeTask", () => {
     const inserted = calls.insertedTasks[0] as Array<Record<string, unknown>>;
     expect(inserted[0].depends_on_event_id).toBeNull();
     expect(inserted[1].depends_on_event_id).toBeNull();
+  });
+
+  test("task_category が混在 (値域内 / 値域外 / 欠損) → 値域内は採用 / それ以外は null で子は作られる (ADR 0022)", async () => {
+    const { client, calls } = makeSupabase(defaultPlan(makeParentRow()));
+    const generate = vi.fn(async () =>
+      JSON.stringify([
+        { title: "a", estimated_minutes: 15, task_category: "coding" },
+        { title: "b", estimated_minutes: 15, task_category: "general" }, // 値域外
+        { title: "c", estimated_minutes: 15 }, // 欠損
+      ]),
+    );
+
+    const result = await decomposeTask(makeDeps({ client, generate }));
+
+    // category の部分失敗で子の生成自体は止めない (フェイルソフト)
+    expect(result.kind).toBe("decomposed");
+    const inserted = calls.insertedTasks[0] as Array<Record<string, unknown>>;
+    expect(inserted).toHaveLength(3);
+    expect(inserted[0]).toMatchObject({ title: "a", task_category: "coding" });
+    expect(inserted[1]).toMatchObject({ title: "b", task_category: null });
+    expect(inserted[2]).toMatchObject({ title: "c", task_category: null });
   });
 });
 
