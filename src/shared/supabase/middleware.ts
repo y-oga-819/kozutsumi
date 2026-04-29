@@ -5,9 +5,7 @@ import type { Database } from "@/shared/types/database";
 
 import { getSupabaseEnv } from "./env";
 
-// `/experiments` は ADR 0016 の体験比較プレイグラウンド用 (`__experiments__/`)。
-// ADR 決着後にプレイグラウンド本体ごと削除し、ここからも除外する。
-const PUBLIC_PATHS = ["/login", "/auth/callback", "/experiments"];
+const PUBLIC_PATHS = ["/login", "/auth/callback"];
 
 /**
  * middleware からの Supabase セッション更新 + 未ログインリダイレクト。
