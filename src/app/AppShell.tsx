@@ -23,6 +23,7 @@ import { useCalendarSync } from "@/features/sync/useCalendarSync";
 import { useLazyCalendarSync } from "@/features/sync/useLazyCalendarSync";
 import { TaskDetailPanel } from "@/features/task-detail/TaskDetailPanel";
 import { PauseReasonModal } from "@/features/task-stack/PauseReasonModal";
+import { reorderTasksById } from "@/features/task-stack/reorderTasks";
 import { TaskStack, type TopTimerBinding } from "@/features/task-stack/TaskStack";
 import { triggerCategorize } from "@/features/task-stack/triggerCategorize";
 import { triggerDecompose } from "@/features/task-stack/triggerDecompose";
@@ -471,19 +472,18 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
   );
 
   const reorder = useCallback(
-    (fromIdx: number, toIdx: number) => {
+    (fromId: string, toId: string) => {
+      if (fromId === toId) return;
       const cached = queryClient.getQueryData<Task[]>(keys.tasks) ?? [];
       const pending = cached.filter((t) => !isDone(t));
       const done = cached.filter((t) => isDone(t));
-      if (fromIdx < 0 || fromIdx >= pending.length) return;
-      if (toIdx < 0 || toIdx >= pending.length) return;
-      const next = [...pending];
-      const [item] = next.splice(fromIdx, 1);
-      next.splice(toIdx, 0, item);
-      const reordered = next.map((t, i) => ({ ...t, stackOrder: i }));
+      const fromIdx = pending.findIndex((t) => t.id === fromId);
+      const toIdx = pending.findIndex((t) => t.id === toId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      const reordered = reorderTasksById(pending, fromId, toId);
       queryClient.setQueryData<Task[]>(keys.tasks, [...reordered, ...done]);
       log(ACTION_TYPES.TASK_REORDERED, {
-        task_id: item.id,
+        task_id: fromId,
         from_position: fromIdx,
         to_position: toIdx,
       });
@@ -812,7 +812,7 @@ type StackViewProps = {
   doneTasks: Task[];
   topTimer: TopTimerBinding;
   toggleDone: (id: string) => void;
-  reorder: (from: number, to: number) => void;
+  reorder: (fromId: string, toId: string) => void;
   nowMin: number;
   now: number;
   today: string;
