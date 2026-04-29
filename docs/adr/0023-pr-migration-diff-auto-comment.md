@@ -35,13 +35,28 @@ sticky コメントとして PR に投稿する。
 - Trigger: 既存 `supabase` job と同じ (`pull_request` で `supabase/**` が変更された時)
 - 差分の出し方: `pg_dump --schema-only` の生 diff + `information_schema` / `pg_catalog` から
   取った構造化スナップショットの diff の両方を出す
+- 構造化スナップショットの対象: tables (relkind in `r`/`v`/`m` を `kind` で識別) /
+  columns / constraints / foreign_keys / indexes / policies / enums / views
+  (definition + `security_invoker` / `security_barrier` reloptions)
 - 規約チェック (`❌` / `⚠️` / `✅`):
   - `❌` `public` の新テーブルに RLS が有効化されていない
   - `❌` カラム追加で NOT NULL かつ default なし（既存行で fail）
   - `❌` enum 値の削除（互換性破壊）
+  - `❌` 新規 view / matview に `security_invoker = true` が指定されていない（postgres の view は
+    未指定だと **definer 権限で評価され RLS をバイパス**するため、kozutsumi では原則必須）
+  - `❌` 既存 view の `security_invoker` が `true → false` に変更された（RLS 迂回経路ができる）
   - `⚠️` `public` の新テーブルで owner-only ポリシー 4 種（select / insert / update / delete）が揃っていない
   - `⚠️` 外部キーの ON DELETE policy が未指定（`NO ACTION` のまま）
 - `❌` が一つでもあれば workflow は fail（job exit code 非ゼロ）。`⚠️` は警告のみ
+- 比較は **PR の HEAD vs main の現 HEAD (`github.event.pull_request.base.sha`)** で行う。
+  fork point ではなく現 HEAD と比較するのは **「今この PR を merge した時の最終スキーマ」を
+  示すため**。副次効果として、main にあって HEAD に無い migration があれば
+  「rebase が必要」シグナルとしてコメント冒頭に warning を出す（PR ブランチが古いことを検知できる）
+- main 状態への巻き戻しは `git restore --source="$BASE_SHA" --worktree --staged --
+  supabase/migrations/` で行う（`git checkout <ref> --` は overlay モードで PR が追加した
+  新規ファイルを消せないため、base 状態が再現できない）
+- 生 diff 比較前に pg_dump 17 が出力する `\restrict` / `\unrestrict` のランダムトークン行を
+  両 dump から削除する（毎 dump で値が変わるため、実差分なしでも 2 行偽の diff が出るのを防ぐ）
 - コメントは [marocchino/sticky-pull-request-comment](https://github.com/marocchino/sticky-pull-request-comment) で
   push のたびに同じコメントを上書き更新する
 - workflow から本番 DB へは一切接続しない。ephemeral Supabase local stack のみ使う
@@ -63,8 +78,8 @@ sticky コメントとして PR に投稿する。
 - **CI 時間が +2〜3 分**。`supabase start` が支配的（2 分強）。`supabase/migrations/**` を
   変更する PR でしか走らないので、頻度は低い
 - **構造化スナップショットのカバレッジは限定的**。本 ADR では columns / tables / constraints /
-  foreign_keys / indexes / policies / enums のみ対象。functions / triggers / sequences は
-  生 diff のみ（必要になったら別 ADR で拡張）
+  foreign_keys / indexes / policies / enums / views(definition + reloptions) のみ対象。
+  functions / triggers / sequences は生 diff のみ（必要になったら別 ADR で拡張）
 - **規約チェックは false positive を起こしうる**。例外的に RLS を意図的に外したい場合の
   override 機構は持たない（必要になったら別 ADR で扱う）
 - **fork PR からの実行**は制限される。`pull_request` トリガーで `pull-requests: write` 権限を
@@ -111,3 +126,21 @@ sticky コメントとして PR に投稿する。
   - 構造化スナップショットの対象を functions / triggers に広げたくなった
   - `⚠️` レベルの違反も fail にしたくなった（例: RLS policy 不足を厳格化）
   - Supabase CLI の `db diff` が pg_dump diff を超える品質になった
+- 改訂履歴:
+  - 2026-04-29: 初版（PR #136）
+  - **2026-04-29 改訂**:
+    - **base 状態巻き戻しの不具合修正**: 旧実装は `git checkout <BASE_SHA> --
+      supabase/migrations/` で base に戻していたが、これは overlay モードのため PR が
+      新規追加した migration ファイルを working tree から消せず、`supabase db reset`
+      で **PR の migration が base 側にも適用される** バグがあった。結果、構造化サマリ /
+      生 diff いずれも「変更なし」になり、新規 migration が事実上スキップされていた
+      （PR #135 のコメントが該当例）。`git restore --no-overlay` 相当に置換して修正
+    - 構造化スナップショットに **view / matview** を追加。columns 側にも `kind` を付け、
+      view 由来の列が「既存テーブルへのカラム追加」として誤検出されないようにした
+    - **`security_invoker = true`** を新規 view の必須要件として追加（未指定 view は
+      definer 権限で評価され RLS を迂回するため）。既存 view からの `security_invoker`
+      除去も `❌` 扱い
+    - main 現 HEAD 比較の副次効果として **rebase 必要シグナル** をコメント冒頭に表示
+      （main にあって HEAD に無い migration を検出してリスト表示）
+    - 生 diff 比較前に pg_dump 17 の `\restrict` / `\unrestrict` ランダムトークンを除去
+      （差分ゼロでも 2 行ノイズが出る問題の解消）
