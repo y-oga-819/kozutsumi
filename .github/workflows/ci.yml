@@ -193,23 +193,34 @@ jobs:
           pg_dump --schema-only --schema=public --no-owner --no-privileges \
             --dbname="$DATABASE_URL" > /tmp/migration-diff/pr.sql
 
-      - name: List new migration files in this PR
+      - name: List new / missing migration files vs base
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          # 3-dot 構文 = fork point (merge base) からの差分。「PR ブランチで追加された」分。
           git diff --name-only --diff-filter=A "$BASE_SHA"...HEAD -- supabase/migrations/ \
             > /tmp/migration-diff/new_migrations.txt || true
+          # 逆向き: HEAD には無いが base (= main 現 HEAD) にあるファイル = rebase 必要 signal。
+          # 3-dot ではなく 2-dot で `git diff HEAD..BASE_SHA --diff-filter=A` を取ると
+          # 「HEAD に対して BASE_SHA で追加された」= HEAD に欠けている main の migration が出る。
+          git diff --name-only --diff-filter=A HEAD.."$BASE_SHA" -- supabase/migrations/ \
+            > /tmp/migration-diff/missing_migrations.txt || true
           echo "new migrations:"
           cat /tmp/migration-diff/new_migrations.txt || true
+          echo "missing (need rebase) migrations:"
+          cat /tmp/migration-diff/missing_migrations.txt || true
 
-      - name: Checkout base migrations and reset DB
+      - name: Restore base migrations and reset DB
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # PR で追加 / 変更された migration ファイルを base 状態に巻き戻す
-          git checkout "$BASE_SHA" -- supabase/migrations/
+          # `git checkout <ref> -- <path>` は overlay モードで動くので、HEAD で新規追加された
+          # ファイルを working tree から消してくれない。`git restore` のデフォルトは
+          # no-overlay モードなので、`supabase/migrations/` を BASE_SHA と完全一致させ
+          # (= PR で追加した migration を物理削除) てから db reset できる。
+          git restore --source="$BASE_SHA" --worktree --staged -- supabase/migrations/
           supabase db reset --no-seed
 
       - name: Snapshot base-state
@@ -228,8 +239,16 @@ jobs:
       - name: Compute schema diff
         if: github.event_name == 'pull_request'
         run: |
+          # PostgreSQL 17 の pg_dump は出力先頭 / 末尾に `\restrict <ランダムトークン>` と
+          # `\unrestrict <ランダムトークン>` を吐く。トークンは dump のたびに変わるので、
+          # 残しておくと「実差分なし」のときも 2 行偽の diff が出てノイズになる。
+          # diff を取る前に両方の dump から落として比較する。
+          sed -E '/^\\(restrict|unrestrict)[[:space:]]/d' \
+            /tmp/migration-diff/base.sql > /tmp/migration-diff/base.normalized.sql
+          sed -E '/^\\(restrict|unrestrict)[[:space:]]/d' \
+            /tmp/migration-diff/pr.sql > /tmp/migration-diff/pr.normalized.sql
           # diff は差分があれば exit 1。`|| true` で workflow を落とさない
-          diff -u /tmp/migration-diff/base.sql /tmp/migration-diff/pr.sql \
+          diff -u /tmp/migration-diff/base.normalized.sql /tmp/migration-diff/pr.normalized.sql \
             > /tmp/migration-diff/schema.diff || true
 
       - name: Render comment markdown
@@ -244,6 +263,7 @@ jobs:
             /tmp/migration-diff/pr.json \
             /tmp/migration-diff/schema.diff \
             /tmp/migration-diff/new_migrations.txt \
+            /tmp/migration-diff/missing_migrations.txt \
             > /tmp/migration-diff/comment.md
           rc=$?
           set -e

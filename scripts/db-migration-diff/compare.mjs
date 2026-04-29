@@ -3,13 +3,15 @@
 //
 // 使い方:
 //   node scripts/db-migration-diff/compare.mjs \
-//     <base.json> <pr.json> <schema_diff.txt> <new_migrations.txt> > comment.md
+//     <base.json> <pr.json> <schema_diff.txt> <new_migrations.txt> <missing_migrations.txt> \
+//     > comment.md
 //
 // 引数:
-//   base.json            : main 適用後の snapshot (snapshot.sql の出力)
-//   pr.json              : PR 適用後の snapshot
-//   schema_diff.txt      : pg_dump --schema-only の生 diff (diff -u 出力)
-//   new_migrations.txt   : PR で新規追加された migration ファイル名 (1 行 1 ファイル)
+//   base.json              : main 適用後の snapshot (snapshot.sql の出力)
+//   pr.json                : PR 適用後の snapshot
+//   schema_diff.txt        : pg_dump --schema-only の生 diff (diff -u 出力)
+//   new_migrations.txt     : PR で新規追加された migration ファイル名 (1 行 1 ファイル)
+//   missing_migrations.txt : main にあって HEAD に無い migration ファイル名 (rebase 必要 signal)
 //
 // 終了コード:
 //   0 - 規約違反 (`❌`) なし
@@ -20,28 +22,39 @@
 import { readFile } from "node:fs/promises";
 import { argv, exit, stdout } from "node:process";
 
-const [, , basePath, prPath, schemaDiffPath, newMigrationsPath] = argv;
+const [, , basePath, prPath, schemaDiffPath, newMigrationsPath, missingMigrationsPath] = argv;
 
-if (!basePath || !prPath || !schemaDiffPath || !newMigrationsPath) {
-  console.error("usage: compare.mjs <base.json> <pr.json> <schema_diff.txt> <new_migrations.txt>");
+if (!basePath || !prPath || !schemaDiffPath || !newMigrationsPath || !missingMigrationsPath) {
+  console.error(
+    "usage: compare.mjs <base.json> <pr.json> <schema_diff.txt> <new_migrations.txt> <missing_migrations.txt>",
+  );
   exit(2);
 }
 
-const [base, pr, schemaDiff, newMigrationsRaw] = await Promise.all([
+const [base, pr, schemaDiff, newMigrationsRaw, missingMigrationsRaw] = await Promise.all([
   readJson(basePath),
   readJson(prPath),
   readFile(schemaDiffPath, "utf8").catch(() => ""),
   readFile(newMigrationsPath, "utf8").catch(() => ""),
+  readFile(missingMigrationsPath, "utf8").catch(() => ""),
 ]);
 
-const newMigrations = newMigrationsRaw
-  .split("\n")
-  .map((line) => line.trim())
-  .filter(Boolean);
+const newMigrations = splitLines(newMigrationsRaw);
+const missingMigrations = splitLines(missingMigrationsRaw);
+
+// kind フィルタ。tables (relkind in r/v/m) から table 行だけ抽出する用途。
+// 古い snapshot 互換のため kind 未指定は table とみなす。
+const isTable = (t) => (t.kind ?? "table") === "table";
 
 const report = buildReport(base, pr);
 const assertions = runAssertions(report, pr);
-const md = renderMarkdown({ report, assertions, schemaDiff, newMigrations });
+const md = renderMarkdown({
+  report,
+  assertions,
+  schemaDiff,
+  newMigrations,
+  missingMigrations,
+});
 
 stdout.write(md);
 exit(assertions.failed ? 1 : 0);
@@ -53,10 +66,18 @@ async function readJson(path) {
   return JSON.parse(raw);
 }
 
+function splitLines(raw) {
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 // ---- Diff ----
 
 function buildReport(before, after) {
   return {
+    // tables は relkind in ('r','v','m') を含む。kind フィールドで table / view / matview を判別する
     tables: diffByKey(before.tables, after.tables, (t) => `${t.schema}.${t.table}`),
     columns: diffByKey(before.columns, after.columns, (c) => `${c.schema}.${c.table}.${c.column}`),
     constraints: diffByKey(
@@ -72,6 +93,8 @@ function buildReport(before, after) {
     indexes: diffByKey(before.indexes, after.indexes, (i) => `${i.schema}.${i.table}.${i.name}`),
     policies: diffByKey(before.policies, after.policies, (p) => `${p.schema}.${p.table}.${p.name}`),
     enums: diffEnums(before.enums, after.enums),
+    // views は view / matview 専用 (definition / security_invoker / security_barrier を含む)
+    views: diffByKey(before.views ?? [], after.views ?? [], (v) => `${v.schema}.${v.name}`),
   };
 }
 
@@ -141,9 +164,10 @@ function runAssertions(report, prSnapshot) {
   const warnings = [];
   const oks = [];
 
-  // ❌ public の新テーブルに RLS が有効化されていない
+  // ❌ public の新テーブルに RLS が有効化されていない (view / matview は対象外)
   for (const t of report.tables.added) {
     if (t.schema !== "public") continue;
+    if (!isTable(t)) continue;
     if (!t.rls_enabled) {
       errors.push({
         kind: "rls-missing",
@@ -155,9 +179,10 @@ function runAssertions(report, prSnapshot) {
     }
   }
 
-  // ❌ NOT NULL かつ default なしのカラム追加 (既存行で fail)
+  // ❌ NOT NULL かつ default なしのカラム追加 (既存行で fail) — 通常 table のみ対象
   for (const c of report.columns.added) {
     if (c.schema !== "public") continue;
+    if ((c.kind ?? "table") !== "table") continue; // view / matview の列は対象外
     // 既存テーブルへのカラム追加だけが対象 (新規テーブルは初期データなしなので問題ない)
     const isNewTable = report.tables.added.some(
       (t) => t.schema === c.schema && t.table === c.table,
@@ -183,7 +208,35 @@ function runAssertions(report, prSnapshot) {
     }
   }
 
-  // ⚠️ 新規 public テーブルに owner-only ポリシー 4 種が揃っていない
+  // ❌ 新規 view / matview に security_invoker = true が指定されていない
+  // 未指定だと definer (= 所有者 = postgres) 権限で評価され、呼び出し元の RLS をバイパスする。
+  for (const v of report.views.added) {
+    if (v.schema !== "public") continue;
+    if (!v.security_invoker) {
+      errors.push({
+        kind: "view-not-security-invoker",
+        message: `\`${v.schema}.${v.name}\` (${v.kind}) に \`security_invoker = true\` が指定されていません`,
+        fix: `\`CREATE VIEW ... WITH (security_invoker = true) AS ...\` で作成。未指定だと所有者権限で評価され RLS を迂回する`,
+      });
+    } else {
+      oks.push(
+        `\`${v.schema}.${v.name}\` (${v.kind}) で \`security_invoker = true\` が指定されている`,
+      );
+    }
+  }
+
+  // ⚠️ 既存 view の security_invoker が外された (true → false)
+  for (const m of report.views.modified) {
+    if (m.before.security_invoker && !m.after.security_invoker) {
+      errors.push({
+        kind: "view-security-invoker-removed",
+        message: `\`${m.after.schema}.${m.after.name}\` で \`security_invoker\` が外されました (true → false)`,
+        fix: "RLS 迂回経路ができるため原則維持する。意図的に外す場合は ADR で根拠を残す",
+      });
+    }
+  }
+
+  // ⚠️ 新規 public テーブルに owner-only ポリシー 4 種が揃っていない (table のみ対象)
   const policiesByTable = new Map();
   for (const p of prSnapshot.policies ?? []) {
     const key = `${p.schema}.${p.table}`;
@@ -192,6 +245,7 @@ function runAssertions(report, prSnapshot) {
   }
   for (const t of report.tables.added) {
     if (t.schema !== "public") continue;
+    if (!isTable(t)) continue;
     const key = `${t.schema}.${t.table}`;
     const policies = policiesByTable.get(key) ?? [];
     const cmds = new Set(policies.map((p) => p.command));
@@ -229,10 +283,28 @@ function runAssertions(report, prSnapshot) {
 
 // ---- Markdown rendering ----
 
-function renderMarkdown({ report, assertions, schemaDiff, newMigrations }) {
+function renderMarkdown({ report, assertions, schemaDiff, newMigrations, missingMigrations }) {
   const lines = [];
   lines.push("## 🗄️ Migration diff");
   lines.push("");
+
+  // ---- rebase 警告 (main にあって HEAD に無い migration を検出) ----
+  if (missingMigrations.length > 0) {
+    lines.push(
+      `> ⚠️ **main に ${missingMigrations.length} 件の migration があり、このブランチに含まれていません**。`,
+    );
+    lines.push(">");
+    lines.push(
+      "> 以下のファイルが main 側で追加されています。rebase / merge して取り込んでください:",
+    );
+    lines.push(">");
+    for (const m of missingMigrations) lines.push(`> - \`${m}\``);
+    lines.push(">");
+    lines.push(
+      "> （以下の diff は **main 現 HEAD vs このブランチ** のため、欠けている migration が「削除」として表示されることがあります）",
+    );
+    lines.push("");
+  }
 
   // ---- 新規 migration 一覧 ----
   lines.push("**このPRで追加された migration**");
@@ -248,29 +320,78 @@ function renderMarkdown({ report, assertions, schemaDiff, newMigrations }) {
   lines.push("");
 
   // ---- サマリ ----
+  const tablesOnly = filterAddedRemovedModified(report.tables, isTable);
+  const viewsOnly = report.views;
   lines.push("### サマリ");
   lines.push("");
   lines.push("| カテゴリ | 変更 |");
   lines.push("|---|---|");
-  lines.push(`| テーブル | ${summarizeTables(report.tables)} |`);
+  lines.push(`| テーブル | ${summarizeTables(tablesOnly)} |`);
+  lines.push(`| ビュー | ${summarizeViews(viewsOnly)} |`);
   lines.push(`| 型 (enum) | ${summarizeEnums(report.enums)} |`);
-  lines.push(`| インデックス | ${summarizeSimple(report.indexes, "インデックス")} |`);
-  lines.push(`| RLS / ポリシー | ${summarizePolicies(report.tables, report.policies)} |`);
+  lines.push(`| インデックス | ${summarizeSimple(report.indexes)} |`);
+  lines.push(`| RLS / ポリシー | ${summarizePolicies(tablesOnly, report.policies)} |`);
   lines.push(`| 制約 | ${summarizeConstraints(report.constraints, report.foreignKeys)} |`);
   lines.push("");
 
-  // ---- 新規テーブル詳細 ----
-  if (report.tables.added.length > 0) {
+  // ---- 新規テーブル詳細 (view は除外) ----
+  const newTables = report.tables.added.filter(isTable);
+  if (newTables.length > 0) {
     lines.push("### 新規テーブルの詳細");
     lines.push("");
-    for (const t of report.tables.added) {
+    for (const t of newTables) {
       lines.push(...renderNewTableSection(t, report));
       lines.push("");
     }
   }
 
-  // ---- 既存テーブルへのカラム追加詳細 ----
+  // ---- 新規 view / matview 詳細 ----
+  if (report.views.added.length > 0) {
+    lines.push("### 新規 view / matview の詳細");
+    lines.push("");
+    for (const v of report.views.added) {
+      lines.push(...renderNewViewSection(v, report));
+      lines.push("");
+    }
+  }
+
+  // ---- 既存 view の definition 変更 ----
+  if (report.views.modified.length > 0) {
+    lines.push("### View の変更");
+    lines.push("");
+    for (const m of report.views.modified) {
+      lines.push(`#### \`${m.after.schema}.${m.after.name}\` (${m.after.kind})`);
+      lines.push("");
+      const flagDiff = [];
+      if (m.before.security_invoker !== m.after.security_invoker) {
+        flagDiff.push(
+          `- \`security_invoker\`: \`${m.before.security_invoker}\` → \`${m.after.security_invoker}\``,
+        );
+      }
+      if (m.before.security_barrier !== m.after.security_barrier) {
+        flagDiff.push(
+          `- \`security_barrier\`: \`${m.before.security_barrier}\` → \`${m.after.security_barrier}\``,
+        );
+      }
+      if (flagDiff.length) {
+        lines.push("**オプション変更**:");
+        lines.push(...flagDiff);
+        lines.push("");
+      }
+      if (m.before.definition !== m.after.definition) {
+        lines.push("**定義変更** (CREATE OR REPLACE):");
+        lines.push("");
+        lines.push("```sql");
+        lines.push(truncateForComment(m.after.definition ?? "", 4000));
+        lines.push("```");
+        lines.push("");
+      }
+    }
+  }
+
+  // ---- 既存テーブルへのカラム追加詳細 (view 由来は除外) ----
   const addedColumnsOnExistingTables = report.columns.added.filter((c) => {
+    if ((c.kind ?? "table") !== "table") return false;
     return !report.tables.added.some((t) => t.schema === c.schema && t.table === c.table);
   });
   if (addedColumnsOnExistingTables.length > 0) {
@@ -319,7 +440,7 @@ function renderMarkdown({ report, assertions, schemaDiff, newMigrations }) {
     assertions.warnings.length === 0 &&
     assertions.oks.length === 0
   ) {
-    lines.push("- ℹ️ 検査対象なし (テーブル / カラム / enum / FK の追加変更がない)");
+    lines.push("- ℹ️ 検査対象なし (テーブル / カラム / enum / FK / view の追加変更がない)");
   }
   lines.push("");
 
@@ -350,6 +471,14 @@ function renderMarkdown({ report, assertions, schemaDiff, newMigrations }) {
 
 // ---- Summary helpers ----
 
+function filterAddedRemovedModified(diff, predicate) {
+  return {
+    added: diff.added.filter(predicate),
+    removed: diff.removed.filter(predicate),
+    modified: diff.modified.filter((m) => predicate(m.after)),
+  };
+}
+
 function summarizeTables({ added, removed, modified }) {
   const parts = [];
   if (added.length)
@@ -363,7 +492,22 @@ function summarizeTables({ added, removed, modified }) {
   return parts.length ? parts.join(" / ") : "変更なし";
 }
 
-function summarizeSimple({ added, removed, modified }, label) {
+function summarizeViews({ added, removed, modified }) {
+  const parts = [];
+  if (added.length)
+    parts.push(
+      `${added.length} 件追加 (${added.map((v) => `\`${v.name}\` (${v.kind})`).join(", ")})`,
+    );
+  if (removed.length)
+    parts.push(`⚠️ ${removed.length} 件削除 (${removed.map((v) => `\`${v.name}\``).join(", ")})`);
+  if (modified.length)
+    parts.push(
+      `${modified.length} 件変更 (${modified.map((m) => `\`${m.after.name}\``).join(", ")})`,
+    );
+  return parts.length ? parts.join(" / ") : "変更なし";
+}
+
+function summarizeSimple({ added, removed, modified }) {
   const parts = [];
   if (added.length) parts.push(`${added.length} 件追加`);
   if (removed.length) parts.push(`⚠️ ${removed.length} 件削除`);
@@ -388,9 +532,9 @@ function summarizeEnums({ added, removed, modified }) {
   return parts.length ? parts.join(" / ") : "変更なし";
 }
 
-function summarizePolicies(tables, policies) {
+function summarizePolicies(tablesOnly, policies) {
   const parts = [];
-  const newTablesWithRls = tables.added.filter((t) => t.rls_enabled);
+  const newTablesWithRls = tablesOnly.added.filter((t) => t.rls_enabled);
   if (newTablesWithRls.length) {
     parts.push(`新規テーブル ${newTablesWithRls.length} 件で RLS 有効化`);
   }
@@ -421,7 +565,9 @@ function renderNewTableSection(t, report) {
   lines.push("");
 
   // Columns
-  const columns = report.columns.added.filter((c) => c.schema === t.schema && c.table === t.table);
+  const columns = report.columns.added.filter(
+    (c) => c.schema === t.schema && c.table === t.table && (c.kind ?? "table") === "table",
+  );
   if (columns.length) {
     lines.push("| 列 | 型 | NULL | デフォルト |");
     lines.push("|---|---|---|---|");
@@ -467,6 +613,52 @@ function renderNewTableSection(t, report) {
 
   if (!t.rls_enabled) {
     lines.push("> ⚠️ このテーブルは RLS が有効化されていません");
+    lines.push("");
+  }
+
+  return lines;
+}
+
+// ---- New view detail ----
+
+function renderNewViewSection(v, report) {
+  const lines = [];
+  lines.push(`#### \`${v.schema}.${v.name}\` (${v.kind})`);
+  lines.push("");
+
+  // セキュリティオプション
+  const flags = [];
+  flags.push(`- \`security_invoker\`: ${v.security_invoker ? "✅ true" : "❌ false (RLS 迂回)"}`);
+  flags.push(`- \`security_barrier\`: \`${v.security_barrier}\``);
+  lines.push("**オプション**:");
+  lines.push(...flags);
+  lines.push("");
+
+  // Columns (information_schema 経由で view 列も取れる)
+  const columns = report.columns.added.filter(
+    (c) =>
+      c.schema === v.schema && c.table === v.name && (c.kind === "view" || c.kind === "matview"),
+  );
+  if (columns.length) {
+    lines.push("**列**:");
+    lines.push("");
+    lines.push("| 列 | 型 | NULL |");
+    lines.push("|---|---|---|");
+    for (const c of columns) {
+      lines.push(
+        `| \`${c.column}\` | \`${formatType(c)}\` | ${c.nullable === "YES" ? "NULL 可" : "NOT NULL"} |`,
+      );
+    }
+    lines.push("");
+  }
+
+  // 定義
+  if (v.definition) {
+    lines.push("**定義**:");
+    lines.push("");
+    lines.push("```sql");
+    lines.push(truncateForComment(v.definition, 4000));
+    lines.push("```");
     lines.push("");
   }
 
