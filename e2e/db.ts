@@ -133,6 +133,7 @@ export type TaskRow = {
   status: "idle" | "active" | "paused" | "done";
   stack_order: number | null;
   depends_on_event_id: string | null;
+  task_category: "coding" | "doc" | "research" | "admin" | "other" | null;
   completed_at: string | null;
 };
 
