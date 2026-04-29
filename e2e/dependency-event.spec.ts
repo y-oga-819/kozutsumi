@@ -95,8 +95,9 @@ test.describe("依存イベント設定 (TaskDetailPanel → DB → バッジ)",
     // --- 依存をクリアして task_dependency_cleared が記録される -------------
     // 依存設定後はボタン文言が "<relative> <title> を変更" になる。
     // 文言の relative-time 部分 (例: "5/14" / "3年後" など) に依存しないよう
-    // suffix `を変更` で取る。
-    await page.getByRole("button", { name: /を変更$/ }).click();
+    // event title を含めて識別する (詳細パネル内のタスク種類「未分類 を変更」とも
+    // 衝突しないように suffix だけでなく title を含める)。
+    await page.getByRole("button", { name: new RegExp(`${eventTitle}\\s*を変更$`) }).click();
     await page.locator("select").first().selectOption({ value: "" });
 
     await expect
