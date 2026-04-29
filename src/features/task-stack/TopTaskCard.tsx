@@ -21,9 +21,13 @@ import { formatElapsed } from "./useTaskTimer";
  * 上下 2 ゾーン構造:
  * - 上ゾーン (Top 専用 / 着手集中): project header + 状態 badge + 大タイトル
  *   + Timer Controls + body preview + 自タスク見積もり
- * - 下ゾーン (行カードと共通参照): dep (右詰) → ⤷ 親 + 合計 + progress | status pill
+ * - 下ゾーン (行カードと共通参照): dep / ⤷ 親 / 合計 + progress | status pill
  *
- * leaf-parent (親自身が Top) のときは下ゾーンの「⤷ 親」を省き、status pill のみ。
+ * 下ゾーンは「dep / 親グループ進捗 / 分解状態 pill」の少なくとも 1 つがあるときだけ
+ * 描画する。leaf-parent + dep 無しのときは下ゾーン自体を出さない (issue #109)。
+ *
+ * leaf-child では親名が長くて truncate されるのを避けるため、⤷ 親 を独立行に
+ * 切り出し (wrap 可)、合計 + progress は別行に右詰で出す (issue #109)。
  *
  * 完了は idle / active / paused いずれの状態でも常時表示 (Top-only complete; §7)。
  */
@@ -78,6 +82,14 @@ export function TopTaskCard({
   const preview = bodyPreview(task.body);
   const isActive = task.status === "active";
   const isPaused = task.status === "paused";
+
+  // leaf-parent (子無し親) は status pill を下ゾーン右詰に出す (TaskRow と位置揃え)。
+  // leaf-child (parent あり) では進捗バーが代わりに出るので status pill は出さない。
+  const showLeafParentStatusPill = parent === undefined && task.decomposeStatus !== "decomposed";
+  const showProgress = parent !== undefined && progress !== undefined;
+  // 下ゾーン全体の描画条件: dep / 親グループ進捗 / 分解状態 pill のいずれかがある。
+  // leaf-parent + dep 無しのときは描画しない (issue #109)。
+  const showLowerZone = !!dep || showProgress || showLeafParentStatusPill;
 
   return (
     <div
@@ -144,78 +156,102 @@ export function TopTaskCard({
             <div className="mt-1 truncate font-jp text-[10px] text-fg-weak">{preview}</div>
           )}
 
-          {/* ----------- 下ゾーン: dep / ⤷ 親 + 合計 + progress | status pill ----------- */}
-          <div className="mt-3 border-t border-bg-border/60 pt-2">
-            {/* Row 2: dep (右詰)。slot は常時確保 (ADR 0016 §6) */}
-            <div className="flex min-h-[16px] items-center justify-end">
-              {dep && (
-                <span
-                  className={`max-w-[180px] truncate rounded-[3px] px-1.5 py-px font-jp text-[8px] text-accent-amber ${
-                    depImminent ? "bg-[#E85D0440] font-semibold" : "bg-[#E85D0415]"
-                  }`}
-                  title={`${dep.title} (${formatRelativeTime(dep.startTime, new Date(now))})`}
-                >
-                  ← {formatRelativeTime(dep.startTime, new Date(now))} {dep.title}
-                </span>
-              )}
-            </div>
-            {/* Row 3: ⤷ 親 (左) + 合計 (中) + progress | status pill (右) */}
-            <BottomRow task={task} parent={parent} progress={progress} />
-          </div>
+          {/* ----------- 下ゾーン: dep / ⤷ 親 / 合計 + progress | status pill -----------
+              leaf-parent + dep 無しのケースでは下ゾーン自体を描画しない (issue #109)。 */}
+          {showLowerZone && (
+            <LowerZone
+              dep={dep}
+              depImminent={depImminent}
+              now={now}
+              parent={parent}
+              progress={progress}
+              decomposeStatus={task.decomposeStatus}
+              showProgress={showProgress}
+              showLeafParentStatusPill={showLeafParentStatusPill}
+            />
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function BottomRow({
-  task,
-  parent,
-  progress,
-}: {
-  task: Task;
+type LowerZoneProps = {
+  dep: Event | null | undefined;
+  depImminent: boolean;
+  now: number;
   parent: Task | undefined;
   progress: Progress | undefined;
-}) {
+  decomposeStatus: Task["decomposeStatus"];
+  showProgress: boolean;
+  showLeafParentStatusPill: boolean;
+};
+
+/**
+ * Top カード下ゾーン。dep (右詰) → ⤷ 親 (wrap 可) → (合計 + progress | status pill) (右詰)
+ * を縦に並べる。各行は中身が無ければ描画しないので、leaf-parent + dep 無しのケース等で
+ * 空白が出ないようにする (issue #109)。
+ */
+function LowerZone({
+  dep,
+  depImminent,
+  now,
+  parent,
+  progress,
+  decomposeStatus,
+  showProgress,
+  showLeafParentStatusPill,
+}: LowerZoneProps) {
   const { projectsById } = useProjects();
-  const showProgress = parent !== undefined && progress !== undefined;
-  const showStatusPill = parent === undefined && task.decomposeStatus !== "decomposed";
+  const parentColor = parent ? getProject(projectsById, parent.projectId).color : null;
+  const showParentName = parent !== undefined && progress !== undefined && parentColor !== null;
+  const showMetaRow = showProgress || showLeafParentStatusPill;
 
-  if (!showProgress && !showStatusPill) return null;
-
-  if (!showProgress) {
-    // leaf-parent: ⤷ 親 を出さず、status pill のみ右詰
-    return (
-      <div className="mt-1 flex items-center justify-end">
-        <StatusPill status={task.decomposeStatus} />
-      </div>
-    );
-  }
-
-  // leaf-child: ⤷ 親 + 合計 + progress
-  if (!parent || !progress) return null;
-  const parentColor = getProject(projectsById, parent.projectId).color;
   return (
-    <div className="mt-1 flex items-center gap-2">
-      <span
-        className="min-w-0 flex-1 truncate font-jp text-[10px]"
-        style={{ color: `${parentColor}cc` }}
-        title={`親: ${parent.title}`}
-      >
-        ⤷ {parent.title}
-      </span>
-      {progress.totalMinutes !== null && (
-        <span className="font-jp text-[10px] tabular-nums text-fg-muted">
-          合計 {fmtDuration(progress.totalMinutes)}
-        </span>
+    <div className="mt-3 space-y-1 border-t border-bg-border/60 pt-2">
+      {dep && (
+        <div className="flex items-center justify-end">
+          <span
+            className={`max-w-[180px] truncate rounded-[3px] px-1.5 py-px font-jp text-[8px] text-accent-amber ${
+              depImminent ? "bg-[#E85D0440] font-semibold" : "bg-[#E85D0415]"
+            }`}
+            title={`${dep.title} (${formatRelativeTime(dep.startTime, new Date(now))})`}
+          >
+            ← {formatRelativeTime(dep.startTime, new Date(now))} {dep.title}
+          </span>
+        </div>
       )}
-      <ParallelogramProgress
-        total={progress.total}
-        doneCount={progress.doneCount}
-        currentIndex={progress.currentIndex}
-        color={parentColor}
-        size="md"
-      />
+      {showParentName && parent && parentColor && (
+        <div
+          className="font-jp text-[10px] leading-[1.4]"
+          style={{ color: `${parentColor}cc` }}
+          title={`親: ${parent.title}`}
+        >
+          ⤷ {parent.title}
+        </div>
+      )}
+      {showMetaRow && (
+        <div className="flex items-center justify-end gap-2">
+          {showProgress && progress && parentColor ? (
+            <>
+              {progress.totalMinutes !== null && (
+                <span className="font-jp text-[10px] tabular-nums text-fg-muted">
+                  合計 {fmtDuration(progress.totalMinutes)}
+                </span>
+              )}
+              <ParallelogramProgress
+                total={progress.total}
+                doneCount={progress.doneCount}
+                currentIndex={progress.currentIndex}
+                color={parentColor}
+                size="md"
+              />
+            </>
+          ) : showLeafParentStatusPill ? (
+            <StatusPill status={decomposeStatus} />
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

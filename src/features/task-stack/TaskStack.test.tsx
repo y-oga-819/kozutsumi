@@ -182,21 +182,73 @@ describe("TopTaskCard", () => {
     expect(bar.getAttribute("aria-label")).toMatch(/進捗 1\/3、現在 2\/3/);
   });
 
-  test("leaf-parent (decomposing) の Top は status pill を下ゾーンに出す", () => {
-    const { getByRole, queryByText } = render(
+  test("leaf-parent (decomposing) の Top は status pill を下ゾーンに出す (TaskRow と位置揃え)", () => {
+    const { getByRole, queryByText, container } = render(
       <TopTaskCard {...topProps} task={{ ...baseTask, decomposeStatus: "decomposing" }} />,
     );
     expect(getByRole("status").textContent).toContain("AI 分解中");
     expect(queryByText(/⤷ /)).toBeNull();
+    // dep 無しでも status pill のために下ゾーンは描画される (issue #109)
+    expect(container.querySelector(".border-t")).not.toBeNull();
   });
 
   test("leaf-parent (failed) の Top は『分解失敗』pill を下ゾーンに出す (ADR 0021 §3)", () => {
-    const { getByText, queryByRole } = render(
+    const { getByText, queryByRole, container } = render(
       <TopTaskCard {...topProps} task={{ ...baseTask, decomposeStatus: "failed" }} />,
     );
     expect(getByText("分解失敗")).toBeTruthy();
     // failed は終端状態なので role=status (live region) は付けない
     expect(queryByRole("status")).toBeNull();
+    expect(container.querySelector(".border-t")).not.toBeNull();
+  });
+
+  test("leaf-parent (decomposed = 親自身) の Top は下ゾーンを描画しない (issue #109)", () => {
+    // decomposed の親が parent prop 無しで Top に来るケースは通常あり得ないが、
+    // 念のため status pill も progress も無いときに下ゾーンが消えることを保証する。
+    const { container } = render(
+      <TopTaskCard {...topProps} task={{ ...baseTask, decomposeStatus: "decomposed" }} />,
+    );
+    expect(container.querySelector(".border-t")).toBeNull();
+  });
+
+  test("leaf-parent + dep がある Top は下ゾーンに dep + status pill を縦並びで出す", () => {
+    const { getByText, queryByText, container } = render(
+      <TopTaskCard
+        {...topProps}
+        task={{ ...baseTask, decomposeStatus: "none", dependsOnEventId: "e1" }}
+        events={[baseEvent]}
+      />,
+    );
+    expect(getByText(/今日 14:00 MTG/)).toBeTruthy();
+    expect(getByText("未分解")).toBeTruthy();
+    expect(container.querySelector(".border-t")).not.toBeNull();
+    // ⤷ 親 / 進捗バーは leaf-parent では出ない
+    expect(queryByText(/⤷ /)).toBeNull();
+  });
+
+  test("leaf-child の Top では ⤷ 親が独立行で truncate されない (issue #109)", () => {
+    const longParentTitle = "EngagementSupport資料の目的とターゲット顧客を定義する";
+    const parent: Task = {
+      ...baseTask,
+      id: "p1",
+      title: longParentTitle,
+      decomposeStatus: "decomposed",
+    };
+    const child: Task = { ...baseTask, id: "c1", title: "志望動機A", parentTaskId: "p1" };
+    const { getByText, getByTitle } = render(
+      <TopTaskCard
+        {...topProps}
+        task={child}
+        parent={parent}
+        progress={{ total: 3, doneCount: 1, currentIndex: 2, totalMinutes: 90 }}
+      />,
+    );
+    // 親名行は truncate せず full な文字列をテキストとして含む
+    const parentRow = getByTitle(`親: ${longParentTitle}`);
+    expect(parentRow.textContent).toContain(longParentTitle);
+    expect(parentRow.className).not.toMatch(/\btruncate\b/);
+    // 合計 + progress は別行 (right-aligned) に出る
+    expect(getByText(/合計\s/)).toBeTruthy();
   });
 
   test("子の dependsOnEventId が null なら親の dep を継承する (ADR 0016 §6)", () => {
