@@ -229,7 +229,7 @@ export type Database = {
       task_status: "idle" | "active" | "paused" | "done";
       event_source: "manual" | "google_calendar";
       pause_reason: "meeting" | "interruption" | "voluntary";
-      decompose_status: "none" | "decomposing" | "decomposed" | "skipped";
+      decompose_status: "none" | "decomposing" | "decomposed" | "skipped" | "failed";
     };
   };
 };
