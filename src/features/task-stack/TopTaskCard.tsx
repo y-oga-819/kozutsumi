@@ -85,8 +85,7 @@ export function TopTaskCard({
 
   // leaf-parent (子無し親) は status pill を下ゾーン右詰に出す (TaskRow と位置揃え)。
   // leaf-child (parent あり) では進捗バーが代わりに出るので status pill は出さない。
-  const showLeafParentStatusPill =
-    parent === undefined && task.decomposeStatus !== "decomposed";
+  const showLeafParentStatusPill = parent === undefined && task.decomposeStatus !== "decomposed";
   const showProgress = parent !== undefined && progress !== undefined;
   // 下ゾーン全体の描画条件: dep / 親グループ進捗 / 分解状態 pill のいずれかがある。
   // leaf-parent + dep 無しのときは描画しない (issue #109)。
