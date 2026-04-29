@@ -24,6 +24,7 @@ import { useLazyCalendarSync } from "@/features/sync/useLazyCalendarSync";
 import { TaskDetailPanel } from "@/features/task-detail/TaskDetailPanel";
 import { PauseReasonModal } from "@/features/task-stack/PauseReasonModal";
 import { TaskStack, type TopTimerBinding } from "@/features/task-stack/TaskStack";
+import { triggerCategorize } from "@/features/task-stack/triggerCategorize";
 import { triggerDecompose } from "@/features/task-stack/triggerDecompose";
 import { useTaskTimer } from "@/features/task-stack/useTaskTimer";
 import { TreeView } from "@/features/tree-view/TreeView";
@@ -681,6 +682,11 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
                   : [...list, updated];
               });
               triggerDecompose(created.id);
+              // P3-4 / ADR 0015: AI 初期ラベリングも同経路で fire-and-forget。
+              // 失敗 / AI_ENABLED=false は server が `task_category=null` のまま残す
+              // (ADR 0013 augmentation only)。client 側の optimistic 反映はしない —
+              // category は UX 上「気づいたら埋まっている」体験で良い。
+              triggerCategorize(created.id);
             }}
             onCreateEvent={async (input) => {
               await createEventMutation.mutateAsync(input);

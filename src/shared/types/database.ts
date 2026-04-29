@@ -15,8 +15,12 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
  * tasks.task_category の値域 (#87, ADR 0015)。
  * DB 側は text + CHECK 制約 (supabase/migrations/20260427000000_task_category.sql)。
  * 値の追加・名称変更は ADR の supersede ではなく migration + ここの更新で行う。
+ *
+ * 配列は AI 応答 parser (P3-4) など runtime で値域チェックする箇所で再利用する
+ * 単一の真実の場所。type は配列から導出して二重管理を避ける。
  */
-export type TaskCategoryValue = "coding" | "doc" | "research" | "admin" | "other";
+export const TASK_CATEGORY_VALUES = ["coding", "doc", "research", "admin", "other"] as const;
+export type TaskCategoryValue = (typeof TASK_CATEGORY_VALUES)[number];
 
 export type Database = {
   public: {
