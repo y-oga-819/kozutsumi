@@ -28,10 +28,10 @@ import { createClient } from "@/shared/supabase/server";
 
 import { POST } from "./route";
 
-function makeSupabase(session: { user: { id: string } } | null): SupabaseClient {
+function makeSupabase(user: { id: string } | null): SupabaseClient {
   return {
     auth: {
-      getSession: vi.fn(async () => ({ data: { session }, error: null })),
+      getUser: vi.fn(async () => ({ data: { user }, error: null })),
     },
   } as unknown as SupabaseClient;
 }
@@ -91,7 +91,7 @@ describe("POST /api/ai/categorize", () => {
   test("body に task_id が無い → ok:false で error を返す (200、fire-and-forget client は無視)", async () => {
     process.env.AI_ENABLED = "true";
     process.env.GEMINI_API_KEY = "k";
-    vi.mocked(createClient).mockResolvedValue(makeSupabase({ user: { id: "u1" } }));
+    vi.mocked(createClient).mockResolvedValue(makeSupabase({ id: "u1" }));
 
     const response = await POST(makeRequest({ wrong_field: "x" }));
 
@@ -104,7 +104,7 @@ describe("POST /api/ai/categorize", () => {
   test("body が JSON でない → ok:false で error を返す (parse エラーで 500 にしない)", async () => {
     process.env.AI_ENABLED = "true";
     process.env.GEMINI_API_KEY = "k";
-    vi.mocked(createClient).mockResolvedValue(makeSupabase({ user: { id: "u1" } }));
+    vi.mocked(createClient).mockResolvedValue(makeSupabase({ id: "u1" }));
 
     const response = await POST(makeRequest("not json"));
 
@@ -117,7 +117,7 @@ describe("POST /api/ai/categorize", () => {
   test("正常系: categorizeTask を userId / taskId / generate 付きで呼び出す", async () => {
     process.env.AI_ENABLED = "true";
     process.env.GEMINI_API_KEY = "k";
-    vi.mocked(createClient).mockResolvedValue(makeSupabase({ user: { id: "u1" } }));
+    vi.mocked(createClient).mockResolvedValue(makeSupabase({ id: "u1" }));
     categorizeTaskMock.mockResolvedValue({ kind: "categorized", category: "coding" });
     generateContentMock.mockResolvedValue({ response: { text: () => "coding" } });
 
@@ -149,7 +149,7 @@ describe("POST /api/ai/categorize", () => {
   test("categorizeTask が throw → 500 ai_failed (fail-soft、client は握り潰す)", async () => {
     process.env.AI_ENABLED = "true";
     process.env.GEMINI_API_KEY = "k";
-    vi.mocked(createClient).mockResolvedValue(makeSupabase({ user: { id: "u1" } }));
+    vi.mocked(createClient).mockResolvedValue(makeSupabase({ id: "u1" }));
     categorizeTaskMock.mockRejectedValue(new Error("unexpected db error"));
 
     const response = await POST(makeRequest({ task_id: "t1" }));

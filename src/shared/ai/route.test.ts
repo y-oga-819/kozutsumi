@@ -9,12 +9,12 @@ import { createClient } from "@/shared/supabase/server";
 
 import { withAiRoute } from "./route";
 
-type SessionShape = { user: { id: string } } | null;
+type UserShape = { id: string } | null;
 
-function makeSupabase(session: SessionShape): SupabaseClient {
+function makeSupabase(user: UserShape): SupabaseClient {
   return {
     auth: {
-      getSession: vi.fn(async () => ({ data: { session }, error: null })),
+      getUser: vi.fn(async () => ({ data: { user }, error: null })),
     },
   } as unknown as SupabaseClient;
 }
@@ -90,7 +90,7 @@ describe("withAiRoute", () => {
   test("AI 有効 + ログイン済み → handler に userId と supabase が渡る", async () => {
     process.env.AI_ENABLED = "true";
     process.env.GEMINI_API_KEY = "k";
-    const supabase = makeSupabase({ user: { id: "user-1" } });
+    const supabase = makeSupabase({ id: "user-1" });
     vi.mocked(createClient).mockResolvedValue(supabase);
     const handler = vi.fn(async () => ({ ok: true }));
 
@@ -106,7 +106,7 @@ describe("withAiRoute", () => {
   test("handler が throw → 500 ai_failed (ユーザー操作は別経路で続行する前提)", async () => {
     process.env.AI_ENABLED = "true";
     process.env.GEMINI_API_KEY = "k";
-    vi.mocked(createClient).mockResolvedValue(makeSupabase({ user: { id: "user-1" } }));
+    vi.mocked(createClient).mockResolvedValue(makeSupabase({ id: "user-1" }));
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const response = await withAiRoute(makeRequest(), async () => {
