@@ -354,8 +354,7 @@ function DecomposeStatusLabel({
     );
   }
   if (status === "failed") {
-    const reason =
-      log?.action_type === "task_decompose_failed" ? log.metadata.reason : null;
+    const reason = log?.action_type === "task_decompose_failed" ? log.metadata.reason : null;
     return (
       <span
         role="alert"

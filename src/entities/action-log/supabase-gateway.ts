@@ -2,11 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/shared/types/database";
 
-import type {
-  ActionLogGateway,
-  DecomposeActionType,
-  LatestDecomposeLog,
-} from "./gateway";
+import type { ActionLogGateway, DecomposeActionType, LatestDecomposeLog } from "./gateway";
 import type { ActionMetadataMap } from "./types";
 
 const DECOMPOSE_ACTION_TYPES: readonly DecomposeActionType[] = [
