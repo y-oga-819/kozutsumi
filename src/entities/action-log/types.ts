@@ -15,7 +15,26 @@ export type ActionType =
   | "stack_proposal_accepted"
   | "calendar_synced"
   | "task_decomposed"
+  | "task_decompose_failed"
+  | "task_decompose_skipped"
   | "decomposition_modified";
+
+/**
+ * AI 分解の失敗種別 (ADR 0021)。詳細パネル (P3-15) で reason ごとに recovery 文言を出すため
+ * 機械可読タグとして action_log に保存する。
+ *
+ * - quota_exhausted     : Gemini 429 / billing
+ * - upstream_unavailable: network / 503 / timeout
+ * - ai_response_unparseable: parser 失敗
+ * - insert_failed       : 子 insert 失敗
+ * - internal_error      : その他想定外 throw (last-resort safety net)
+ */
+export type DecomposeFailReason =
+  | "quota_exhausted"
+  | "upstream_unavailable"
+  | "ai_response_unparseable"
+  | "insert_failed"
+  | "internal_error";
 
 /**
  * `decomposition_modified.kind` の値域。Phase 3 ではこの 1 ACTION_TYPE で
@@ -87,12 +106,29 @@ export type ActionMetadataMap = {
     deleted: number;
     trigger: CalendarSyncTrigger;
   };
-  // Phase 3 #88: AI 分解成功時、子作成と同時に記録 (ADR 0017 / 0018)。
+  // Phase 3 #88: AI 分解成功時、子作成と同時に記録 (ADR 0017 / 0018 / 0021)。
   // task_id は親 = 分解元タスク。child_ids は parent_task_id = task_id で
   // 紐づく子タスクの id 列で、Phase 4 の暗黙フィードバック分析の出発点になる。
+  // raw_response (ADR 0021) は詳細パネルで折りたたみ表示する Gemini の生応答。
   task_decomposed: {
     task_id: string;
     child_ids: string[];
+    raw_response: string;
+  };
+  // Phase 3 #111 / ADR 0021: AI 分解失敗時に reason と raw_response を残す。
+  // raw_response は generate が応答を返した後に失敗した場合のみ存在する
+  // (quota / network 等で generate 自体が throw した場合は無し)。
+  task_decompose_failed: {
+    task_id: string;
+    reason: DecomposeFailReason;
+    raw_response?: string;
+    error_message?: string;
+  };
+  // Phase 3 #111 / ADR 0021: AI が「分解不要」と判断したケースを記録。
+  // 詳細パネルで「AI が分解不要と判断」+ raw_response (判断理由) を表示する。
+  task_decompose_skipped: {
+    task_id: string;
+    raw_response: string;
   };
   // Phase 3 #88: 分解後に親子関係が動いた事象の総称 (ADR 0018 Notes)。
   // task_id は当該イベントの主体 (削除された子 / 編集された子 / 削除された親)、
