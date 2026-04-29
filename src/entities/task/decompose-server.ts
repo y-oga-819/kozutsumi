@@ -46,8 +46,9 @@ export type DecomposeTaskDeps = {
 };
 
 const SKIP_STATUSES = new Set(["active", "paused", "done"]);
-// `failed` も「終端」なので二重分解させない。再実行は詳細パネルから明示的に none → decomposing で行う (ADR 0021)。
-const ALREADY_RESOLVED = new Set(["decomposed", "skipped", "failed"]);
+// 終端のうち「再分解しない」ものだけ。`failed` は ADR 0021 §1 で `failed → decomposing` を
+// 明示的に許容しているので含めない（詳細パネルの「再実行」ボタンが直接ここを通る）。
+const ALREADY_RESOLVED = new Set(["decomposed", "skipped"]);
 
 export async function decomposeTask(deps: DecomposeTaskDeps): Promise<DecomposeTaskOutcome> {
   const { supabase, userId, taskId, generate } = deps;
