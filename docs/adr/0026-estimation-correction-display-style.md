@@ -1,12 +1,12 @@
-# ADR 0025: 補正後見積もりは大小コントラストで併記、取消線・矢印・ラベルは使わない
+# ADR 0026: 補正後見積もりは大小コントラストで併記、取消線・矢印・ラベルは使わない
 
 - **Status**: Accepted
 - **Date**: 2026-04-29
-- **Related**: `docs/design/vision.md` §「人間の見積もりは信用できない」 / `docs/design/architecture.md` §1.5 / [ADR 0016](./0016-stack-view-decomposition-children-only.md) / [ADR 0023](./0023-estimation-correction-by-category-median.md) / Issue #93
+- **Related**: `docs/design/vision.md` §「人間の見積もりは信用できない」 / `docs/design/architecture.md` §1.5 / [ADR 0016](./0016-stack-view-decomposition-children-only.md) / [ADR 0024](./0024-estimation-correction-by-category-median.md) / Issue #93
 
 ## Context
 
-ADR 0023 / 0024 で「補正倍率を中央値で算出し、Supabase view + TS 純粋関数で計算する」ところまで決めた。残るは **補正後の値をどう見せるか** の判断。
+ADR 0024 / 0025 で「補正倍率を中央値で算出し、Supabase view + TS 純粋関数で計算する」ところまで決めた。残るは **補正後の値をどう見せるか** の判断。
 
 vision の核 (`docs/design/vision.md` §「人間の見積もりは信用できない」) と architecture.md §1.5 が体験設計の制約を強く決めている:
 
