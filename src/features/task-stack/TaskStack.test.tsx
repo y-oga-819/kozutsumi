@@ -182,21 +182,41 @@ describe("TopTaskCard", () => {
     expect(bar.getAttribute("aria-label")).toMatch(/進捗 1\/3、現在 2\/3/);
   });
 
-  test("leaf-parent (decomposing) の Top は status pill を下ゾーンに出す", () => {
-    const { getByRole, queryByText } = render(
+  test("leaf-parent (decomposing) の Top は status pill を上ゾーンに出す (issue #109)", () => {
+    const { getByRole, queryByText, container } = render(
       <TopTaskCard {...topProps} task={{ ...baseTask, decomposeStatus: "decomposing" }} />,
     );
     expect(getByRole("status").textContent).toContain("AI 分解中");
     expect(queryByText(/⤷ /)).toBeNull();
+    // 下ゾーン (border-top + Row 2 のスロット) は描画しない (issue #109)
+    expect(container.querySelector(".border-t")).toBeNull();
   });
 
-  test("leaf-parent (failed) の Top は『分解失敗』pill を下ゾーンに出す (ADR 0021 §3)", () => {
-    const { getByText, queryByRole } = render(
+  test("leaf-parent (failed) の Top は『分解失敗』pill を上ゾーンに出す (ADR 0021 §3 / issue #109)", () => {
+    const { getByText, queryByRole, container } = render(
       <TopTaskCard {...topProps} task={{ ...baseTask, decomposeStatus: "failed" }} />,
     );
     expect(getByText("分解失敗")).toBeTruthy();
     // failed は終端状態なので role=status (live region) は付けない
     expect(queryByRole("status")).toBeNull();
+    // 下ゾーンは描画しない
+    expect(container.querySelector(".border-t")).toBeNull();
+  });
+
+  test("leaf-parent + dep がある Top は下ゾーンに dep だけ出す (status pill は上ゾーン)", () => {
+    const { getByText, queryByText, container } = render(
+      <TopTaskCard
+        {...topProps}
+        task={{ ...baseTask, decomposeStatus: "none", dependsOnEventId: "e1" }}
+        events={[baseEvent]}
+      />,
+    );
+    expect(getByText(/今日 14:00 MTG/)).toBeTruthy();
+    expect(getByText("未分解")).toBeTruthy();
+    // dep があるので下ゾーンは描画される
+    expect(container.querySelector(".border-t")).not.toBeNull();
+    // ⤷ 親 / 進捗バーは leaf-parent では出ない
+    expect(queryByText(/⤷ /)).toBeNull();
   });
 
   test("子の dependsOnEventId が null なら親の dep を継承する (ADR 0016 §6)", () => {
