@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
 import type { Event } from "@/entities/event/types";
 import type { PauseReason } from "@/entities/task/time-entries";
@@ -42,7 +42,13 @@ type TaskStackProps = {
   topTimer: TopTimerBinding;
   /** 現在時刻 (ms)。依存イベントの相対時刻 / 直近判定で使う。0 は SSR 時の placeholder。 */
   now: number;
-  onReorder: (from: number, to: number) => void;
+  /**
+   * 並び替え操作。`fromId` を `toId` の位置に移す。
+   * Stack 行の index ではなく id ベースで受け取るのは、`buildStackItems` が
+   * decomposed 親を除外するため、UI 上の index と pending Task[] の index が
+   * 一致しないことがあるため。
+   */
+  onReorder: (fromId: string, toId: string) => void;
   onToggleDone: (id: string) => void;
   onOpenDetail: (id: string) => void;
 };
@@ -64,7 +70,16 @@ export function TaskStack({
     [pendingTasks, allTasks],
   );
 
-  const { dragIdx, overIdx, rowRefs, handlePointerDown } = useStackDnD(onReorder);
+  const handleReorderByIdx = useCallback(
+    (fromIdx: number, toIdx: number) => {
+      const fromItem = items[fromIdx];
+      const toItem = items[toIdx];
+      if (!fromItem || !toItem) return;
+      onReorder(fromItem.task.id, toItem.task.id);
+    },
+    [items, onReorder],
+  );
+  const { dragIdx, overIdx, rowRefs, handlePointerDown } = useStackDnD(handleReorderByIdx);
 
   return (
     <>
