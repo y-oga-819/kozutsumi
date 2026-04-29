@@ -1,16 +1,21 @@
 /**
- * AI タスク分解 (P3-6, ADR 0017 / 0018) の prompt 構築 + 応答パース。
+ * AI タスク分解 (P3-6, ADR 0017 / 0018 / 0022) の prompt 構築 + 応答パース。
  *
  * Gemini 呼び出し境界の外側に純粋関数として置くことで、prompt 文字列の組み立てと
  * 応答 JSON の解釈をユニットテストで踏める形にしている (`/api/ai/decompose` 本体は
  * これをデータパイプとしてつなぐだけ)。
  *
- * 出力契約 (ADR 0016 §1, 0017 Decision 3-5, 0018 Decision):
+ * 出力契約 (ADR 0016 §1, 0017 Decision 3-5, 0018 Decision, 0022 Decision 2):
  * - 「これ以上分解する必要なし」と判定された場合は空配列 → 親は `decompose_status='skipped'` に倒す
  * - 子タイトルは親文脈なしで意味が読める独立した文言 (ADR 0016 Notes 「子タイトルの自立性」)
  * - 子の estimated_minutes は AI が自信を持てない場合 null。親見積もりの機械的等分はしない
  *   (補正後見積もりの責務は P3-9 / architecture.md §1.5)
+ * - 子の task_category も同じ AI 呼び出しで推論する (ADR 0022)。値域外・欠損は null に倒し、
+ *   `other` で握り潰さない (ADR 0013 augmentation only)。category だけの parse 失敗で
+ *   子の生成自体は止めない (title / estimated_minutes が取れていれば子を作る)。
  */
+
+import { TASK_CATEGORY_VALUES, type TaskCategoryValue } from "@/shared/types/database";
 
 export type DecomposeInput = {
   title: string;
@@ -21,6 +26,7 @@ export type DecomposeInput = {
 export type DecomposedChild = {
   title: string;
   estimatedMinutes: number | null;
+  taskCategory: TaskCategoryValue | null;
 };
 
 const MIN_CHILDREN = 2;
@@ -52,6 +58,14 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
     `- title は ${MAX_TITLE_LEN} 文字以内。装飾的なプレフィックス (Step 1: 等) は付けない。`,
     `- estimated_minutes は ${ALLOWED_ESTIMATE_BUCKETS.join("/")} のいずれかの整数か、自信が無ければ null。`,
     "",
+    "# task_category の値域 (各子タスクの作業種類)",
+    "- coding   : 実装 / バグ修正 / リファクタ / レビュー / セットアップなどコードを書く作業",
+    "- doc      : ドキュメント / 議事録 / 設計メモ / レポート / メール / 連絡文を書く作業",
+    "- research : 調査 / 比較検討 / 学習 / インタビュー / 仕様読解など情報収集の作業",
+    "- admin    : 事務手続き / 経費精算 / 予約 / スケジューリング / 雑務",
+    "- other    : 上記いずれにも当てはまらない作業",
+    "判断に確信が持てない場合は other を返す。",
+    "",
     "# 親タスク",
     `title: ${parent.title}`,
     `body: ${bodyText}`,
@@ -59,7 +73,8 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
     "",
     "# 出力形式",
     "JSON 配列のみを返す。前後に説明文や markdown fence を付けない。",
-    '例: [{"title":"...","estimated_minutes":30},{"title":"...","estimated_minutes":null}]',
+    "各要素は title / estimated_minutes / task_category の 3 フィールドを持つ。",
+    '例: [{"title":"...","estimated_minutes":30,"task_category":"coding"},{"title":"...","estimated_minutes":null,"task_category":"research"}]',
   ].join("\n");
 }
 
@@ -121,7 +136,10 @@ function normalizeChild(raw: unknown): DecomposedChild | null {
   if (title.length === 0 || title.length > MAX_TITLE_LEN) return null;
 
   const estimate = normalizeEstimate(obj.estimated_minutes);
-  return { title, estimatedMinutes: estimate };
+  // task_category だけの parse 失敗 (値域外 / 型違い / 欠損) では子の生成自体を止めない。
+  // null で埋めて子は作る (ADR 0022 §否定的影響: フェイルソフト)。
+  const taskCategory = normalizeCategory(obj.task_category);
+  return { title, estimatedMinutes: estimate, taskCategory };
 }
 
 function normalizeEstimate(raw: unknown): number | null {
@@ -132,4 +150,18 @@ function normalizeEstimate(raw: unknown): number | null {
     return null;
   }
   return raw;
+}
+
+/**
+ * task_category の値域 ガード。
+ *
+ * - 値域内 (`coding` / `doc` / `research` / `admin` / `other`) → そのまま採用
+ * - 値域外 / 型違い / 欠損 → null (`other` で握り潰さない: AI が判定不能だったケースと
+ *   AI が `other` と判定したケースを区別するため。ADR 0015 Notes / ADR 0022 §動機)
+ */
+function normalizeCategory(raw: unknown): TaskCategoryValue | null {
+  if (typeof raw !== "string") return null;
+  const cleaned = raw.trim().toLowerCase();
+  const found = TASK_CATEGORY_VALUES.find((v) => v === cleaned);
+  return found ?? null;
 }

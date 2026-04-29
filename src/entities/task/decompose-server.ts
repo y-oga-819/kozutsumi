@@ -127,12 +127,15 @@ async function runDecompose(
   }
 
   const baseStackOrder = parent.stack_order ?? 0;
+  // 子の task_category は decompose プロンプトが同時推論する (ADR 0022 Decision 2)。
+  // categorize の fan-out を避けることで 1 親あたりの Gemini 呼び出しを最大 2 回に固定する。
   const childPayloads: TablesInsert<"tasks">[] = parsed.map((child, idx) => ({
     user_id: userId,
     project_id: parent.project_id,
     title: child.title,
     body: "",
     estimated_minutes: child.estimatedMinutes,
+    task_category: child.taskCategory,
     parent_task_id: parent.id,
     depends_on_event_id: parent.depends_on_event_id,
     stack_order: baseStackOrder + idx,
