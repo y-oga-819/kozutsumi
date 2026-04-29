@@ -190,6 +190,15 @@ describe("TopTaskCard", () => {
     expect(queryByText(/⤷ /)).toBeNull();
   });
 
+  test("leaf-parent (failed) の Top は『分解失敗』pill を下ゾーンに出す (ADR 0021 §3)", () => {
+    const { getByText, queryByRole } = render(
+      <TopTaskCard {...topProps} task={{ ...baseTask, decomposeStatus: "failed" }} />,
+    );
+    expect(getByText("分解失敗")).toBeTruthy();
+    // failed は終端状態なので role=status (live region) は付けない
+    expect(queryByRole("status")).toBeNull();
+  });
+
   test("子の dependsOnEventId が null なら親の dep を継承する (ADR 0016 §6)", () => {
     const parent: Task = {
       ...baseTask,
@@ -323,6 +332,22 @@ describe("TaskRow", () => {
       />,
     );
     expect(getByText("未分解")).toBeTruthy();
+  });
+
+  test("leaf-parent (failed) の行カードは『分解失敗』pill を出す (ADR 0021 §3)", () => {
+    const { getByText, queryByRole } = render(
+      <TaskRow
+        task={{ ...baseTask, decomposeStatus: "failed" }}
+        events={[]}
+        now={NOW_MS}
+        isBeingDragged={false}
+        onPointerDown={noop}
+        onClick={noop}
+      />,
+    );
+    expect(getByText("分解失敗")).toBeTruthy();
+    // reason はカード上に出ない（詳細パネルに集約。ADR 0021 §3）
+    expect(queryByRole("status")).toBeNull();
   });
 });
 
