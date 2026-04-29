@@ -134,8 +134,13 @@ describe("decomposeTask", () => {
   test("happy path: AI が 2 件返す → 子 insert + 親 decomposed + action_log 記録 (raw_response を含む)", async () => {
     const { client, calls } = makeSupabase(defaultPlan(makeParentRow()));
     const rawResponse = JSON.stringify([
-      { title: "子A", estimated_minutes: 30, task_category: "research" },
-      { title: "子B", estimated_minutes: 15, task_category: "doc" },
+      {
+        title: "子A",
+        body: "- 手順を書く\n- 注意点を確認",
+        estimated_minutes: 30,
+        task_category: "research",
+      },
+      { title: "子B", body: "", estimated_minutes: 15, task_category: "doc" },
     ]);
     const generate = vi.fn(async () => rawResponse);
 
@@ -153,6 +158,7 @@ describe("decomposeTask", () => {
       depends_on_event_id: "evt-1", // 親から継承
       parent_task_id: "parent-1",
       title: "子A",
+      body: "- 手順を書く\n- 注意点を確認", // #120: AI 生成 body を子 insert に渡す
       estimated_minutes: 30,
       task_category: "research", // ADR 0022: decompose プロンプトが同時推論
       stack_order: 5, // baseStackOrder = parent.stack_order
@@ -160,6 +166,7 @@ describe("decomposeTask", () => {
     });
     expect(inserted[1]).toMatchObject({
       title: "子B",
+      body: "", // body が無い子は空文字で insert される
       task_category: "doc",
       stack_order: 6, // baseStackOrder + 1
     });

@@ -133,7 +133,7 @@ async function runDecompose(
     user_id: userId,
     project_id: parent.project_id,
     title: child.title,
-    body: "",
+    body: child.body,
     estimated_minutes: child.estimatedMinutes,
     task_category: child.taskCategory,
     parent_task_id: parent.id,

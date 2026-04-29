@@ -56,34 +56,58 @@ describe("buildDecomposePrompt", () => {
     // 出力例に task_category フィールドが含まれる
     expect(prompt).toContain('"task_category"');
   });
+
+  test("各子タスクの body 生成指示と出力例が prompt に含まれる (#120)", () => {
+    const prompt = buildDecomposePrompt({
+      title: "x",
+      body: "",
+      estimatedMinutes: null,
+    });
+
+    // 子の body 生成方針
+    expect(prompt).toContain("body は markdown");
+    expect(prompt).toContain("200 文字程度");
+    // 出力例に body フィールドが含まれる
+    expect(prompt).toContain('"body"');
+  });
 });
 
 describe("parseDecomposeResponse", () => {
   test("正常な JSON 配列をパースする (estimated_minutes / task_category とも値域内なら採用)", () => {
     const input = JSON.stringify([
-      { title: "下準備をする", estimated_minutes: 30, task_category: "research" },
-      { title: "本作業を進める", estimated_minutes: null, task_category: "coding" },
-      { title: "振り返り", estimated_minutes: 15, task_category: "doc" },
+      {
+        title: "下準備をする",
+        body: "- 必要な資料を集める\n- 環境を整える",
+        estimated_minutes: 30,
+        task_category: "research",
+      },
+      { title: "本作業を進める", body: "", estimated_minutes: null, task_category: "coding" },
+      { title: "振り返り", body: "学びを箇条書き", estimated_minutes: 15, task_category: "doc" },
     ]);
 
     const result = parseDecomposeResponse(input);
 
     expect(result).toEqual([
-      { title: "下準備をする", estimatedMinutes: 30, taskCategory: "research" },
-      { title: "本作業を進める", estimatedMinutes: null, taskCategory: "coding" },
-      { title: "振り返り", estimatedMinutes: 15, taskCategory: "doc" },
+      {
+        title: "下準備をする",
+        body: "- 必要な資料を集める\n- 環境を整える",
+        estimatedMinutes: 30,
+        taskCategory: "research",
+      },
+      { title: "本作業を進める", body: "", estimatedMinutes: null, taskCategory: "coding" },
+      { title: "振り返り", body: "学びを箇条書き", estimatedMinutes: 15, taskCategory: "doc" },
     ]);
   });
 
   test("markdown fence (```json ... ```) を剥がす", () => {
     const input =
-      '```json\n[{"title":"a","estimated_minutes":15,"task_category":"coding"},{"title":"b","estimated_minutes":15,"task_category":"doc"}]\n```';
+      '```json\n[{"title":"a","body":"","estimated_minutes":15,"task_category":"coding"},{"title":"b","body":"","estimated_minutes":15,"task_category":"doc"}]\n```';
 
     const result = parseDecomposeResponse(input);
 
     expect(result).toEqual([
-      { title: "a", estimatedMinutes: 15, taskCategory: "coding" },
-      { title: "b", estimatedMinutes: 15, taskCategory: "doc" },
+      { title: "a", body: "", estimatedMinutes: 15, taskCategory: "coding" },
+      { title: "b", body: "", estimatedMinutes: 15, taskCategory: "doc" },
     ]);
   });
 
@@ -94,7 +118,7 @@ describe("parseDecomposeResponse", () => {
 
   test("1 件のみは「実質分解されていない」ので [] (skipped 扱い) に倒す", () => {
     const input = JSON.stringify([
-      { title: "ひとつだけ", estimated_minutes: 10, task_category: "coding" },
+      { title: "ひとつだけ", body: "", estimated_minutes: 10, task_category: "coding" },
     ]);
 
     const result = parseDecomposeResponse(input);
@@ -105,6 +129,7 @@ describe("parseDecomposeResponse", () => {
   test("8 件以上は先頭 7 件で切る (AI 暴走時の安全弁)", () => {
     const items = Array.from({ length: 12 }, (_, i) => ({
       title: `子${i + 1}`,
+      body: "",
       estimated_minutes: 15,
       task_category: "coding",
     }));
@@ -119,81 +144,81 @@ describe("parseDecomposeResponse", () => {
   test("title が空 / 80 文字超過のエントリは捨て、残りを採用する", () => {
     const longTitle = "あ".repeat(81);
     const items = [
-      { title: "", estimated_minutes: 15, task_category: "coding" }, // 空 → 捨てる
-      { title: longTitle, estimated_minutes: 15, task_category: "coding" }, // 80 文字超過 → 捨てる
-      { title: "ok-1", estimated_minutes: 15, task_category: "coding" },
-      { title: "ok-2", estimated_minutes: 15, task_category: "doc" },
+      { title: "", body: "", estimated_minutes: 15, task_category: "coding" }, // 空 → 捨てる
+      { title: longTitle, body: "", estimated_minutes: 15, task_category: "coding" }, // 80 文字超過 → 捨てる
+      { title: "ok-1", body: "", estimated_minutes: 15, task_category: "coding" },
+      { title: "ok-2", body: "", estimated_minutes: 15, task_category: "doc" },
     ];
 
     const result = parseDecomposeResponse(JSON.stringify(items));
 
     expect(result).toEqual([
-      { title: "ok-1", estimatedMinutes: 15, taskCategory: "coding" },
-      { title: "ok-2", estimatedMinutes: 15, taskCategory: "doc" },
+      { title: "ok-1", body: "", estimatedMinutes: 15, taskCategory: "coding" },
+      { title: "ok-2", body: "", estimatedMinutes: 15, taskCategory: "doc" },
     ]);
   });
 
   test("estimated_minutes が許容バケット外 / 文字列 / 小数 → null に倒す (entry は採用)", () => {
     const items = [
-      { title: "a", estimated_minutes: 7, task_category: "coding" }, // バケット外
-      { title: "b", estimated_minutes: "30", task_category: "coding" }, // 文字列
-      { title: "c", estimated_minutes: 15.5, task_category: "coding" }, // 小数
-      { title: "d", estimated_minutes: 30, task_category: "coding" }, // 許容
+      { title: "a", body: "", estimated_minutes: 7, task_category: "coding" }, // バケット外
+      { title: "b", body: "", estimated_minutes: "30", task_category: "coding" }, // 文字列
+      { title: "c", body: "", estimated_minutes: 15.5, task_category: "coding" }, // 小数
+      { title: "d", body: "", estimated_minutes: 30, task_category: "coding" }, // 許容
     ];
 
     const result = parseDecomposeResponse(JSON.stringify(items));
 
     expect(result).toEqual([
-      { title: "a", estimatedMinutes: null, taskCategory: "coding" },
-      { title: "b", estimatedMinutes: null, taskCategory: "coding" },
-      { title: "c", estimatedMinutes: null, taskCategory: "coding" },
-      { title: "d", estimatedMinutes: 30, taskCategory: "coding" },
+      { title: "a", body: "", estimatedMinutes: null, taskCategory: "coding" },
+      { title: "b", body: "", estimatedMinutes: null, taskCategory: "coding" },
+      { title: "c", body: "", estimatedMinutes: null, taskCategory: "coding" },
+      { title: "d", body: "", estimatedMinutes: 30, taskCategory: "coding" },
     ]);
   });
 
   test("task_category が値域外 / 欠損 / 型違い → null に倒す (entry は採用、ADR 0022 フェイルソフト)", () => {
     const items = [
-      { title: "a", estimated_minutes: 15, task_category: "general" }, // 値域外
-      { title: "b", estimated_minutes: 15, task_category: "" }, // 空文字
-      { title: "c", estimated_minutes: 15 }, // 欠損
-      { title: "d", estimated_minutes: 15, task_category: 1 }, // 型違い (数値)
-      { title: "e", estimated_minutes: 15, task_category: null }, // 明示 null
-      { title: "f", estimated_minutes: 15, task_category: "doc" }, // 値域内
+      { title: "a", body: "", estimated_minutes: 15, task_category: "general" }, // 値域外
+      { title: "b", body: "", estimated_minutes: 15, task_category: "" }, // 空文字
+      { title: "c", body: "", estimated_minutes: 15 }, // 欠損
+      { title: "d", body: "", estimated_minutes: 15, task_category: 1 }, // 型違い (数値)
+      { title: "e", body: "", estimated_minutes: 15, task_category: null }, // 明示 null
+      { title: "f", body: "", estimated_minutes: 15, task_category: "doc" }, // 値域内
     ];
 
     const result = parseDecomposeResponse(JSON.stringify(items));
 
     expect(result).toEqual([
-      { title: "a", estimatedMinutes: 15, taskCategory: null },
-      { title: "b", estimatedMinutes: 15, taskCategory: null },
-      { title: "c", estimatedMinutes: 15, taskCategory: null },
-      { title: "d", estimatedMinutes: 15, taskCategory: null },
-      { title: "e", estimatedMinutes: 15, taskCategory: null },
-      { title: "f", estimatedMinutes: 15, taskCategory: "doc" },
+      { title: "a", body: "", estimatedMinutes: 15, taskCategory: null },
+      { title: "b", body: "", estimatedMinutes: 15, taskCategory: null },
+      { title: "c", body: "", estimatedMinutes: 15, taskCategory: null },
+      { title: "d", body: "", estimatedMinutes: 15, taskCategory: null },
+      { title: "e", body: "", estimatedMinutes: 15, taskCategory: null },
+      { title: "f", body: "", estimatedMinutes: 15, taskCategory: "doc" },
     ]);
   });
 
   test("task_category は大文字 / 前後空白を許容して値域に合わせる (Coding → coding)", () => {
     const items = [
-      { title: "a", estimated_minutes: 15, task_category: "Coding" },
-      { title: "b", estimated_minutes: 15, task_category: " admin " },
+      { title: "a", body: "", estimated_minutes: 15, task_category: "Coding" },
+      { title: "b", body: "", estimated_minutes: 15, task_category: " admin " },
     ];
 
     const result = parseDecomposeResponse(JSON.stringify(items));
 
     expect(result).toEqual([
-      { title: "a", estimatedMinutes: 15, taskCategory: "coding" },
-      { title: "b", estimatedMinutes: 15, taskCategory: "admin" },
+      { title: "a", body: "", estimatedMinutes: 15, taskCategory: "coding" },
+      { title: "b", body: "", estimatedMinutes: 15, taskCategory: "admin" },
     ]);
   });
 
   test("category 値域内すべて (coding/doc/research/admin/other) を受理する", () => {
     const items = [
-      { title: "a", estimated_minutes: 15, task_category: "coding" },
-      { title: "b", estimated_minutes: 15, task_category: "doc" },
-      { title: "c", estimated_minutes: 15, task_category: "research" },
-      { title: "d", estimated_minutes: 15, task_category: "admin" },
-      { title: "e", estimated_minutes: 15, task_category: "other" },
+      { title: "a", body: "", estimated_minutes: 15, task_category: "coding" },
+      { title: "b", body: "", estimated_minutes: 15, task_category: "doc" },
+      { title: "c", body: "", estimated_minutes: 15, task_category: "research" },
+      { title: "d", body: "", estimated_minutes: 15, task_category: "admin" },
+      { title: "e", body: "", estimated_minutes: 15, task_category: "other" },
     ];
 
     const result = parseDecomposeResponse(JSON.stringify(items));
@@ -204,6 +229,67 @@ describe("parseDecomposeResponse", () => {
       "research",
       "admin",
       "other",
+    ]);
+  });
+
+  test("body が欠損 / 型違い (number / null) → 空文字に倒す (entry は採用、フェイルソフト)", () => {
+    const items = [
+      { title: "a", estimated_minutes: 15, task_category: "coding" }, // 欠損
+      { title: "b", body: 123, estimated_minutes: 15, task_category: "coding" }, // 数値
+      { title: "c", body: null, estimated_minutes: 15, task_category: "coding" }, // null
+      { title: "d", body: "メモ", estimated_minutes: 15, task_category: "coding" }, // 文字列
+    ];
+
+    const result = parseDecomposeResponse(JSON.stringify(items));
+
+    expect(result?.map((c) => c.body)).toEqual(["", "", "", "メモ"]);
+  });
+
+  test("body が 600 文字を超える → 600 文字で truncate (AI 暴走時の hard cap)", () => {
+    const longBody = "あ".repeat(800);
+    const items = [
+      { title: "a", body: longBody, estimated_minutes: 15, task_category: "coding" },
+      { title: "b", body: "短い", estimated_minutes: 15, task_category: "coding" },
+    ];
+
+    const result = parseDecomposeResponse(JSON.stringify(items));
+
+    expect(result?.[0].body.length).toBe(600);
+    expect(result?.[1].body).toBe("短い");
+  });
+
+  test("8 件以上 / title 採用後の body 採用も含めて、parser は entry を全フィールド埋めて返す", () => {
+    // body 1 件目に markdown が入る現実的なケース
+    const items = [
+      {
+        title: "API 仕様を確認する",
+        body: "- README を読む\n- 認証フローを把握する\n- レート制限を確認する",
+        estimated_minutes: 15,
+        task_category: "research",
+      },
+      {
+        title: "クライアント実装をする",
+        body: "fetch ラッパーを作る",
+        estimated_minutes: 30,
+        task_category: "coding",
+      },
+    ];
+
+    const result = parseDecomposeResponse(JSON.stringify(items));
+
+    expect(result).toEqual([
+      {
+        title: "API 仕様を確認する",
+        body: "- README を読む\n- 認証フローを把握する\n- レート制限を確認する",
+        estimatedMinutes: 15,
+        taskCategory: "research",
+      },
+      {
+        title: "クライアント実装をする",
+        body: "fetch ラッパーを作る",
+        estimatedMinutes: 30,
+        taskCategory: "coding",
+      },
     ]);
   });
 

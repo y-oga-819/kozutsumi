@@ -25,6 +25,7 @@ export type DecomposeInput = {
 
 export type DecomposedChild = {
   title: string;
+  body: string;
   estimatedMinutes: number | null;
   taskCategory: TaskCategoryValue | null;
 };
@@ -32,6 +33,10 @@ export type DecomposedChild = {
 const MIN_CHILDREN = 2;
 const MAX_CHILDREN = 7;
 const MAX_TITLE_LEN = 80;
+// 子 body は markdown で 200 文字程度を目標に prompt で誘導する。AI が暴走しても
+// task body 全体が肥大化しないよう 600 文字で hard cap する (truncate)。
+const TARGET_BODY_LEN = 200;
+const MAX_BODY_LEN = 600;
 
 const ALLOWED_ESTIMATE_BUCKETS = [5, 10, 15, 20, 30, 45, 60, 90, 120] as const;
 
@@ -57,6 +62,10 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
     "  例 (悪): 「志望動機を書く」 / 例 (良): 「Dirbato 最終面接 志望動機 (パターン A) を書く」",
     `- title は ${MAX_TITLE_LEN} 文字以内。装飾的なプレフィックス (Step 1: 等) は付けない。`,
     `- estimated_minutes は ${ALLOWED_ESTIMATE_BUCKETS.join("/")} のいずれかの整数か、自信が無ければ null。`,
+    `- body は markdown で ${TARGET_BODY_LEN} 文字程度の実行メモ。実行手順 / 注意点 / 参照リンクなど、`,
+    "  着手時に「何を / どうやって」を思い出さなくて済むようにする。",
+    "  親 body の内容をそのまま貼らず、その子タスク固有の文脈に絞る。",
+    '  特に書くことが無い (title だけで十分) 場合は空文字 "" を返す。',
     "",
     "# task_category の値域 (各子タスクの作業種類)",
     "- coding   : 実装 / バグ修正 / リファクタ / レビュー / セットアップなどコードを書く作業",
@@ -73,8 +82,8 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
     "",
     "# 出力形式",
     "JSON 配列のみを返す。前後に説明文や markdown fence を付けない。",
-    "各要素は title / estimated_minutes / task_category の 3 フィールドを持つ。",
-    '例: [{"title":"...","estimated_minutes":30,"task_category":"coding"},{"title":"...","estimated_minutes":null,"task_category":"research"}]',
+    "各要素は title / body / estimated_minutes / task_category の 4 フィールドを持つ。",
+    '例: [{"title":"...","body":"- 手順1\\n- 手順2","estimated_minutes":30,"task_category":"coding"},{"title":"...","body":"","estimated_minutes":null,"task_category":"research"}]',
   ].join("\n");
 }
 
@@ -139,7 +148,16 @@ function normalizeChild(raw: unknown): DecomposedChild | null {
   // task_category だけの parse 失敗 (値域外 / 型違い / 欠損) では子の生成自体を止めない。
   // null で埋めて子は作る (ADR 0022 §否定的影響: フェイルソフト)。
   const taskCategory = normalizeCategory(obj.task_category);
-  return { title, estimatedMinutes: estimate, taskCategory };
+  // body は欠損 / 型違い → 空文字。長すぎ → 末尾 truncate。空文字を許容する
+  // (title だけで十分な子の場合に AI が "" を返す)。
+  const body = normalizeBody(obj.body);
+  return { title, body, estimatedMinutes: estimate, taskCategory };
+}
+
+function normalizeBody(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  if (raw.length <= MAX_BODY_LEN) return raw;
+  return raw.slice(0, MAX_BODY_LEN);
 }
 
 function normalizeEstimate(raw: unknown): number | null {
