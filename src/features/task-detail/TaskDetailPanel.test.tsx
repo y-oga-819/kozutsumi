@@ -293,6 +293,74 @@ describe("TaskDetailPanel", () => {
   });
 });
 
+// ADR 0015 / #90: タスク種類 override UI。AI 初期ラベルに対する人間の override で、
+// 暗黙フィードバック (task_category_changed) の起点となる。logging 自体は呼び出し側
+// (AppShell) の責務なので、ここではコールバックの引数だけを担保する。
+describe("TaskDetailPanel - task_category override (P3-5)", () => {
+  test("onChangeCategory 未指定なら category 編集 UI を出さない (旧呼び出し互換)", () => {
+    const { queryByLabelText } = renderPanel();
+    expect(queryByLabelText("タスク種類")).toBeNull();
+  });
+
+  test("onChangeCategory 指定時はラベル付き select が出る (a11y: getByLabelText で取れる)", () => {
+    const { getByLabelText } = renderPanel({ onChangeCategory: vi.fn() });
+    const select = getByLabelText("タスク種類") as HTMLSelectElement;
+    expect(select.tagName.toLowerCase()).toBe("select");
+  });
+
+  test("taskCategory=null の場合は select の現在値が「未分類」", () => {
+    const { getByLabelText } = renderPanel({ onChangeCategory: vi.fn() });
+    const select = getByLabelText("タスク種類") as HTMLSelectElement;
+    expect(select.value).toBe("");
+  });
+
+  test("AI 初期ラベルが既にある場合は select がその値を反映する", () => {
+    const { getByLabelText } = renderPanel({
+      task: { ...baseTask, taskCategory: "coding" },
+      onChangeCategory: vi.fn(),
+    });
+    const select = getByLabelText("タスク種類") as HTMLSelectElement;
+    expect(select.value).toBe("coding");
+  });
+
+  test("値変更で onChangeCategory(taskId, value) を呼ぶ (override)", () => {
+    const onChangeCategory = vi.fn();
+    const { getByLabelText } = renderPanel({
+      task: { ...baseTask, taskCategory: "coding" },
+      onChangeCategory,
+    });
+    fireEvent.change(getByLabelText("タスク種類"), { target: { value: "doc" } });
+    expect(onChangeCategory).toHaveBeenCalledWith("t1", "doc");
+  });
+
+  test("「未分類」(空文字) を選ぶと onChangeCategory(taskId, null) を呼ぶ", () => {
+    const onChangeCategory = vi.fn();
+    const { getByLabelText } = renderPanel({
+      task: { ...baseTask, taskCategory: "coding" },
+      onChangeCategory,
+    });
+    fireEvent.change(getByLabelText("タスク種類"), { target: { value: "" } });
+    expect(onChangeCategory).toHaveBeenCalledWith("t1", null);
+  });
+
+  test("同じ値が選ばれた場合は onChangeCategory を呼ばない (no-op)", () => {
+    const onChangeCategory = vi.fn();
+    const { getByLabelText } = renderPanel({
+      task: { ...baseTask, taskCategory: "coding" },
+      onChangeCategory,
+    });
+    fireEvent.change(getByLabelText("タスク種類"), { target: { value: "coding" } });
+    expect(onChangeCategory).not.toHaveBeenCalled();
+  });
+
+  test("値域が UI に揃っている (coding / doc / research / admin / other + 未分類)", () => {
+    const { getByLabelText } = renderPanel({ onChangeCategory: vi.fn() });
+    const select = getByLabelText("タスク種類") as HTMLSelectElement;
+    const values = Array.from(select.options).map((o) => o.value);
+    expect(values).toEqual(["", "coding", "doc", "research", "admin", "other"]);
+  });
+});
+
 // AI 分解情報エリア (P3-15 / ADR 0021 §3)。
 // 親が `latestDecomposeLog` か `onTriggerDecompose` を渡したときだけセクションが描画される。
 describe("TaskDetailPanel - AI 分解情報エリア (P3-15)", () => {

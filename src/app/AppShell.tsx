@@ -11,7 +11,7 @@ import type { CreateProjectInput, UpdateProjectInput } from "@/entities/project/
 import { ProjectsProvider } from "@/entities/project/ProjectsContext";
 import type { Project } from "@/entities/project/types";
 import type { CreateTaskInput } from "@/entities/task/gateway";
-import type { Task } from "@/entities/task/types";
+import type { Task, TaskCategory } from "@/entities/task/types";
 import { AddButton } from "@/features/add-forms/AddButton";
 import { AddPanel } from "@/features/add-forms/AddPanel";
 import { DayTimeline } from "@/features/day-timeline/DayTimeline";
@@ -247,6 +247,41 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
       }
       queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
         (prev ?? []).map((t) => (t.id === id ? { ...t, dependsOnEventId } : t)),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(keys.tasks, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: keys.tasks });
+    },
+  });
+
+  // P3-5 (#90) / ADR 0015: 詳細パネルからの task_category override。
+  // AddPanel には出さず、AI 初期ラベル → 人間 override のフローで暗黙的フィードバック
+  // (task_category_changed) を残す。Phase 4 のラベリング精度改善ループの入力源。
+  const updateCategoryMutation = useMutation({
+    mutationFn: ({ id, taskCategory }: { id: string; taskCategory: TaskCategory | null }) =>
+      taskGateway.update(id, { taskCategory }),
+    onMutate: async ({ id, taskCategory }) => {
+      await queryClient.cancelQueries({ queryKey: keys.tasks });
+      const previous = queryClient.getQueryData<Task[]>(keys.tasks);
+      const target = previous?.find((t) => t.id === id);
+      const from = target?.taskCategory ?? null;
+      // override 時のみ log。next === null (= 「未分類」へ戻す) は ADR 0015 の
+      // metadata.to: string と矛盾するので log を抑制する (DB は更新する)。
+      // Phase 4 のラベリング精度分析は「人間が AI ラベルを別の値で上書きした」事象を
+      // 拾えれば十分なので、null に戻す操作の追跡は今は持たない。
+      if (from !== taskCategory && taskCategory !== null) {
+        log(ACTION_TYPES.TASK_CATEGORY_CHANGED, {
+          task_id: id,
+          from,
+          to: taskCategory,
+        });
+      }
+      queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
+        (prev ?? []).map((t) => (t.id === id ? { ...t, taskCategory } : t)),
       );
       return { previous };
     },
@@ -615,6 +650,9 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
             onDelete={(id) => deleteTaskMutation.mutate(id)}
             onChangeDependency={(id, dependsOnEventId) =>
               updateDependencyMutation.mutate({ id, dependsOnEventId })
+            }
+            onChangeCategory={(id, taskCategory) =>
+              updateCategoryMutation.mutate({ id, taskCategory })
             }
             aiEnabled={aiEnabled}
             latestDecomposeLog={decomposeLogQuery.data ?? null}

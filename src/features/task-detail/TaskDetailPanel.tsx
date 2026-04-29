@@ -4,10 +4,11 @@ import type { DecomposeFailReason } from "../../entities/action-log/types";
 import type { Event } from "../../entities/event/types";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
-import type { Task } from "../../entities/task/types";
+import type { Task, TaskCategory } from "../../entities/task/types";
 import { renderMarkdown } from "../../shared/lib/markdown";
 import { isDone } from "../../shared/lib/task";
 import { fmtDuration, formatRelativeTime } from "../../shared/lib/time";
+import { TASK_CATEGORY_VALUES } from "../../shared/types/database";
 
 export type TaskDetailPanelProps = {
   task: Task;
@@ -23,6 +24,13 @@ export type TaskDetailPanelProps = {
    * 未指定なら依存編集 UI も表示しない (テストや特殊呼び出しで省略可)。
    */
   onChangeDependency?: (id: string, eventId: string | null) => void;
+  /**
+   * `tasks.task_category` の override (ADR 0015 / #90)。AI 初期ラベルに対する
+   * 人間の override で、暗黙的フィードバックとして `task_category_changed`
+   * action_log に残る (logging は呼び出し側 = AppShell の責務)。
+   * 未指定なら category 編集 UI を出さない (旧呼び出し / テスト互換)。
+   */
+  onChangeCategory?: (id: string, category: TaskCategory | null) => void;
   /**
    * AI 分解の最新試行ログ (`task_decomposed` / `task_decompose_failed` /
    * `task_decompose_skipped` の最新 1 件)。なければ null。
@@ -46,6 +54,7 @@ export function TaskDetailPanel({
   onToggleDone,
   onDelete,
   onChangeDependency,
+  onChangeCategory,
   latestDecomposeLog,
   isDecomposeLogLoading,
   aiEnabled = true,
@@ -164,6 +173,31 @@ export function TaskDetailPanel({
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {onChangeCategory && (
+          <div className="px-5 pb-2">
+            <label className="flex items-center gap-2">
+              <span className="font-jp text-[10px] text-fg-weak">タスク種類</span>
+              <select
+                value={task.taskCategory ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const next = raw === "" ? null : (raw as TaskCategory);
+                  if (next === (task.taskCategory ?? null)) return;
+                  onChangeCategory(task.id, next);
+                }}
+                className="flex-1 rounded border border-bg-divider bg-bg-elevated px-2 py-1 text-[11px] text-fg-default outline-none focus:border-accent-blue"
+              >
+                <option value="">未分類</option>
+                {TASK_CATEGORY_VALUES.map((value) => (
+                  <option key={value} value={value}>
+                    {TASK_CATEGORY_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         )}
 
@@ -393,6 +427,16 @@ function rawResponseFromLog(log: LatestDecomposeLog): string | null {
   // task_decompose_failed: raw_response は generate が応答を返した後に失敗した場合のみ存在
   return log.metadata.raw_response ?? null;
 }
+
+// ADR 0015 / #90: タスク種類 override の表示ラベル。値域 (TASK_CATEGORY_VALUES) は
+// DB の CHECK と single source of truth で揃え、ここでは表示用の和訳のみ持つ。
+const TASK_CATEGORY_LABELS: Record<TaskCategory, string> = {
+  coding: "コーディング",
+  doc: "ドキュメント",
+  research: "調査",
+  admin: "事務",
+  other: "その他",
+};
 
 const FAIL_REASON_MESSAGES: Record<DecomposeFailReason, string> = {
   quota_exhausted: "AI のクォータ上限に達しました。時間をおいて再実行してください",
