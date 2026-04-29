@@ -1,3 +1,4 @@
+import { SupabaseActionLogGateway } from "@/entities/action-log/supabase-gateway";
 import { SupabaseEventGateway } from "@/entities/event/supabase-gateway";
 import { SupabaseProjectGateway } from "@/entities/project/supabase-gateway";
 import { SupabaseTaskGateway } from "@/entities/task/supabase-gateway";
@@ -17,5 +18,6 @@ export function createSupabaseGateways(): GatewayBundle {
     taskTimeEntryGateway: new SupabaseTaskTimeEntryGateway(supabase),
     projectGateway: new SupabaseProjectGateway(supabase),
     eventGateway: new SupabaseEventGateway(supabase),
+    actionLogGateway: new SupabaseActionLogGateway(supabase),
   };
 }

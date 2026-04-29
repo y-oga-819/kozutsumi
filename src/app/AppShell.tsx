@@ -32,6 +32,7 @@ import type { PauseReason } from "@/entities/task/time-entries";
 import { historyData } from "@/mocks/history";
 import { clearAllUserData, seedSampleData } from "@/mocks/seed";
 import {
+  useActionLogGateway,
   useEventGateway,
   useProjectGateway,
   useTaskGateway,
@@ -44,6 +45,12 @@ type View = "stack" | "tree";
 
 type AppShellProps = {
   initialView: View;
+  /**
+   * `AI_ENABLED` kill-switch (`isAiEnabled()` の評価結果)。`/api/ai/*` の入口で
+   * 同じ値を見て early-return するため、UI 側でも一致させて再実行ボタンを
+   * 無駄に enable しないようにする。Server Component 側で `process.env` を読んで渡す。
+   */
+  aiEnabled: boolean;
   user: {
     email: string | null;
     avatarUrl: string | null;
@@ -58,13 +65,16 @@ const keys = {
   projects: ["projects"] as const,
   tasks: ["tasks"] as const,
   events: ["events"] as const,
+  /** 詳細パネル (P3-15) で fetch する AI 分解の最新試行ログ。タスク id 単位で分離する。 */
+  decomposeLog: (taskId: string) => ["actionLog", "decompose", taskId] as const,
 };
 
-export function AppShell({ initialView, user }: AppShellProps) {
+export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
   const view = initialView;
   const taskGateway = useTaskGateway();
   const projectGateway = useProjectGateway();
   const eventGateway = useEventGateway();
+  const actionLogGateway = useActionLogGateway();
   const queryClient = useQueryClient();
   const seedGateways = useMemo(
     () => ({ projectGateway, eventGateway, taskGateway }),
@@ -92,6 +102,17 @@ export function AppShell({ initialView, user }: AppShellProps) {
   const [eventDetailId, setEventDetailId] = useState<string | null>(null);
   const [projectDetailId, setProjectDetailId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+
+  // P3-15 / ADR 0021 §3: 詳細パネル open 時に当該タスクの AI 分解最新試行を 1 件だけ fetch。
+  // detailId が null の間は無効化して supabase を叩かない。
+  const decomposeLogQuery = useQuery({
+    queryKey: detailId ? keys.decomposeLog(detailId) : ["actionLog", "decompose", "_idle"],
+    queryFn: () => {
+      if (!detailId) return Promise.resolve(null);
+      return actionLogGateway.getLatestDecomposeForTask(detailId);
+    },
+    enabled: detailId !== null,
+  });
   // ms 表現の「今」。SSR は 0 placeholder で hydration mismatch を回避し、
   // mount 後に実時刻へ差し替える。nowMin (タイムライン用) と依存イベント比較用に共用する。
   const [nowMs, setNowMs] = useState<number>(0);
@@ -594,6 +615,21 @@ export function AppShell({ initialView, user }: AppShellProps) {
             onChangeDependency={(id, dependsOnEventId) =>
               updateDependencyMutation.mutate({ id, dependsOnEventId })
             }
+            aiEnabled={aiEnabled}
+            latestDecomposeLog={decomposeLogQuery.data ?? null}
+            isDecomposeLogLoading={decomposeLogQuery.isPending}
+            onTriggerDecompose={(id) => {
+              // P3-15 / ADR 0021 §4: optimistic に decomposing pill を出しつつ fire-and-forget。
+              // server 側でも `decompose_status='decomposing'` に倒す (重複設定は無害)。
+              queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
+                (prev ?? []).map((t) =>
+                  t.id === id ? { ...t, decomposeStatus: "decomposing" } : t,
+                ),
+              );
+              // 既存 log は陳腐化するので invalidate (新たな試行が完了したら再 fetch される)
+              queryClient.invalidateQueries({ queryKey: keys.decomposeLog(id) });
+              triggerDecompose(id);
+            }}
           />
         )}
 
