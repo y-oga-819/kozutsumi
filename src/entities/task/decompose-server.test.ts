@@ -255,14 +255,30 @@ describe("decomposeTask", () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
-  test("既に failed → 再分解しない (再実行は詳細パネルから明示的に行う想定 / ADR 0021)", async () => {
-    const { client } = makeSupabase(defaultPlan(makeParentRow({ decompose_status: "failed" })));
-    const generate = vi.fn();
+  test("既に failed → 詳細パネル「再実行」で再分解できる (ADR 0021 §1: failed → decomposing を許容)", async () => {
+    const { client, calls } = makeSupabase(
+      defaultPlan(makeParentRow({ decompose_status: "failed" })),
+    );
+    const rawResponse = JSON.stringify([
+      { title: "子A", estimated_minutes: 30 },
+      { title: "子B", estimated_minutes: 15 },
+    ]);
+    const generate = vi.fn(async () => rawResponse);
 
     const result = await decomposeTask(makeDeps({ client, generate }));
 
-    expect(result).toEqual({ kind: "skipped", reason: "already_resolved" });
-    expect(generate).not.toHaveBeenCalled();
+    expect(result).toEqual({ kind: "decomposed", childIds: ["child-1", "child-2"] });
+    expect(generate).toHaveBeenCalledOnce();
+    expect(calls.statusUpdates).toEqual([
+      { id: "parent-1", decompose_status: "decomposing" },
+      { id: "parent-1", decompose_status: "decomposed" },
+    ]);
+    // 再実行の試行履歴が action_logs に残る (#133 / ADR 0021)
+    expect(calls.actionLogs).toHaveLength(1);
+    expect(calls.actionLogs[0]).toMatchObject({
+      action_type: "task_decomposed",
+      task_id: "parent-1",
+    });
   });
 
   test("AI が parse 不能なテキストを返す → failed に倒し task_decompose_failed を記録 (ADR 0021)", async () => {
