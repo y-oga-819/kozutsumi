@@ -162,6 +162,21 @@ jobs:
       # ===== ADR 0023: PR migration diff comment =====
       # 以下のステップは pull_request イベントのみで動かす (main への push では diff 元がない)。
 
+      # Supabase local stack は PG 17 を使うので、pg_dump も 17 を入れる。
+      # Ubuntu runner default の 16 だと server version mismatch で aborting。
+      # db-migrate.yml と同じパターン (pgdg apt repo から install + PATH 先頭に追加)。
+      - name: Install PostgreSQL 17 client tools
+        if: github.event_name == 'pull_request'
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          test -x /usr/lib/postgresql/17/bin/pg_dump
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
       - name: Resolve local DB URL
         if: github.event_name == 'pull_request'
         run: |
