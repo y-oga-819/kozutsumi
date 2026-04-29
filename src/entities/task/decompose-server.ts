@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logServerSide } from "@/entities/action-log/server";
+import type { DecomposeFailReason } from "@/entities/action-log/types";
 import {
   buildDecomposePrompt,
   parseDecomposeResponse,
@@ -9,36 +10,31 @@ import {
 import type { Database, Tables, TablesInsert } from "@/shared/types/database";
 
 /**
- * AI タスク分解 (P3-6) の server 側 orchestrator。
+ * AI タスク分解 (P3-6 / ADR 0017 / 0018 / 0016 / 0021) の server 側 orchestrator。
  *
- * 流れ (ADR 0017 / 0018 / 0016):
+ * 流れ:
  * 1. 親タスクを userId スコープで取得 (RLS 前提だが defense in depth)。見つからなければ no-op
- * 2. race condition guard: 親が active/paused/done か、既に decomposed/skipped なら no-op
+ * 2. race condition guard: 親が active/paused/done か、既に decomposed/skipped/failed なら no-op
  *    (ADR 0017 Notes: 親 active 化済みは分解対象から外す。冪等性のため重複時もスキップ)
- * 3. 親の decompose_status を `decomposing` に倒す (client が optimistic に既に倒している
- *    可能性もあるが、server で再確定して fire-and-forget の重複呼びでも壊れないようにする)
- * 4. Gemini に prompt を投げて応答を取る (caller injected `generate` で境界を切る → ユニット可能)
- * 5. parser が null → `none` に戻す (失敗 = 親をそのまま残す)。空配列 → `skipped`
- * 6. children を bulk insert (parent_task_id = parent.id)。project_id / depends_on_event_id を
- *    親から継承、stack_order = parent.stack_order + i で割り当てる (P3-7 の UI が描画分岐する)
- * 7. 親を `decomposed` に倒し、`task_decomposed` action_log を書く
+ * 3. 親の decompose_status を `decomposing` に倒す
+ * 4. ここから先は ADR 0021 の不変条件: 「`decomposing` で固まらない」。
+ *    すべての失敗経路で parent を必ず終端 status (`failed` / `skipped` / `decomposed`) に倒し、
+ *    試行結果を `action_logs` に記録する。
  *
- * 純粋ではないが、Gemini 呼び出しを props で受け取ることでユニットテスト可能にしている。
- * Supabase 周辺は薄ラッパーなのでクエリチェーンを mock することで検証する。
+ * 失敗種別の reason は `DecomposeFailReason` (action-log/types) に定義。
+ * 例外発生時は `classifyGenerateError` で `error.status` / SDK error 型から分類する。
  */
 
 export type DecomposeTaskOutcome =
   | { kind: "decomposed"; childIds: string[] }
   | { kind: "skipped"; reason: SkipReason }
-  | { kind: "failed"; reason: FailReason };
+  | { kind: "failed"; reason: DecomposeFailReason };
 
 type SkipReason =
   | "task_not_found"
   | "parent_active_or_locked" // status=active/paused/done
-  | "already_resolved" // decompose_status=decomposed/skipped
+  | "already_resolved" // decompose_status=decomposed/skipped/failed
   | "ai_decided_not_to_split"; // 空配列 / 1 件
-
-type FailReason = "ai_response_unparseable" | "insert_failed";
 
 export type GenerateFn = (prompt: string) => Promise<string>;
 
@@ -50,7 +46,8 @@ export type DecomposeTaskDeps = {
 };
 
 const SKIP_STATUSES = new Set(["active", "paused", "done"]);
-const ALREADY_RESOLVED = new Set(["decomposed", "skipped"]);
+// `failed` も「終端」なので二重分解させない。再実行は詳細パネルから明示的に none → decomposing で行う (ADR 0021)。
+const ALREADY_RESOLVED = new Set(["decomposed", "skipped", "failed"]);
 
 export async function decomposeTask(deps: DecomposeTaskDeps): Promise<DecomposeTaskOutcome> {
   const { supabase, userId, taskId, generate } = deps;
@@ -70,19 +67,62 @@ export async function decomposeTask(deps: DecomposeTaskDeps): Promise<DecomposeT
   // 重複 fire-and-forget や client 側 optimistic ズレに耐えるよう、ここで decomposing に確定させる。
   await setDecomposeStatus(supabase, parent.id, "decomposing");
 
-  const prompt = buildDecomposePrompt(toPromptInput(parent));
-  const responseText = await generate(prompt);
+  try {
+    return await runDecompose(supabase, userId, parent, generate);
+  } catch (error) {
+    // Last-resort safety net (ADR 0021): runDecompose が想定外に throw しても
+    // parent を `decomposing` で固まらせない。internal_error として終端に倒す。
+    console.error("[ai/decompose] unexpected error", error);
+    await setDecomposeStatus(supabase, parent.id, "failed");
+    await logServerSide(supabase, userId, "task_decompose_failed", {
+      task_id: parent.id,
+      reason: "internal_error",
+      error_message: error instanceof Error ? error.message : String(error),
+    });
+    return { kind: "failed", reason: "internal_error" };
+  }
+}
+
+async function runDecompose(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  parent: ParentRow,
+  generate: GenerateFn,
+): Promise<DecomposeTaskOutcome> {
+  let responseText: string;
+  try {
+    const prompt = buildDecomposePrompt(toPromptInput(parent));
+    responseText = await generate(prompt);
+  } catch (error) {
+    const reason = classifyGenerateError(error);
+    console.error("[ai/decompose] generate failed", { reason, error });
+    await setDecomposeStatus(supabase, parent.id, "failed");
+    await logServerSide(supabase, userId, "task_decompose_failed", {
+      task_id: parent.id,
+      reason,
+      error_message: error instanceof Error ? error.message : String(error),
+    });
+    return { kind: "failed", reason };
+  }
+
   const parsed = parseDecomposeResponse(responseText);
 
   if (parsed === null) {
-    // ADR 0013 augmentation only: AI 失敗で core を止めない。none に戻して終わり
-    // (再試行は将来 issue。本実装ではユーザーが override で操作する)
-    await setDecomposeStatus(supabase, parent.id, "none");
+    await setDecomposeStatus(supabase, parent.id, "failed");
+    await logServerSide(supabase, userId, "task_decompose_failed", {
+      task_id: parent.id,
+      reason: "ai_response_unparseable",
+      raw_response: responseText,
+    });
     return { kind: "failed", reason: "ai_response_unparseable" };
   }
 
   if (parsed.length === 0) {
     await setDecomposeStatus(supabase, parent.id, "skipped");
+    await logServerSide(supabase, userId, "task_decompose_skipped", {
+      task_id: parent.id,
+      raw_response: responseText,
+    });
     return { kind: "skipped", reason: "ai_decided_not_to_split" };
   }
 
@@ -106,7 +146,13 @@ export async function decomposeTask(deps: DecomposeTaskDeps): Promise<DecomposeT
 
   if (insertErr || !insertedRows) {
     console.error("[ai/decompose] child insert failed", insertErr);
-    await setDecomposeStatus(supabase, parent.id, "none");
+    await setDecomposeStatus(supabase, parent.id, "failed");
+    await logServerSide(supabase, userId, "task_decompose_failed", {
+      task_id: parent.id,
+      reason: "insert_failed",
+      raw_response: responseText,
+      error_message: insertErr?.message,
+    });
     return { kind: "failed", reason: "insert_failed" };
   }
 
@@ -116,9 +162,40 @@ export async function decomposeTask(deps: DecomposeTaskDeps): Promise<DecomposeT
   await logServerSide(supabase, userId, "task_decomposed", {
     task_id: parent.id,
     child_ids: childIds,
+    raw_response: responseText,
   });
 
   return { kind: "decomposed", childIds };
+}
+
+/**
+ * Gemini 呼び出しの throw を ADR 0021 の reason 値域に分類する。
+ *
+ * - 429 (RESOURCE_EXHAUSTED) → quota_exhausted
+ * - 5xx / network / timeout → upstream_unavailable
+ * - それ以外 → internal_error
+ *
+ * `@google/generative-ai` SDK の `GoogleGenerativeAIFetchError` は `status` プロパティに
+ * HTTP status を持つので、まずそれで判定する。fetch failed / AbortError 等は Error の
+ * name / message から拾う。ここでは特定 SDK に強く依存しないよう duck-typing する。
+ */
+export function classifyGenerateError(error: unknown): DecomposeFailReason {
+  if (error && typeof error === "object" && "status" in error) {
+    const status = (error as { status?: unknown }).status;
+    if (typeof status === "number") {
+      if (status === 429) return "quota_exhausted";
+      if (status >= 500 && status < 600) return "upstream_unavailable";
+    }
+  }
+  if (error instanceof Error) {
+    if (error.name === "AbortError" || error.name === "TimeoutError") {
+      return "upstream_unavailable";
+    }
+    if (/fetch failed|network|timeout|ECONNRESET|ETIMEDOUT|ENOTFOUND/i.test(error.message)) {
+      return "upstream_unavailable";
+    }
+  }
+  return "internal_error";
 }
 
 type ParentRow = Pick<

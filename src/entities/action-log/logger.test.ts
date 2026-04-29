@@ -174,6 +174,8 @@ describe("ACTION_TYPES", () => {
       STACK_PROPOSAL_ACCEPTED: "stack_proposal_accepted",
       CALENDAR_SYNCED: "calendar_synced",
       TASK_DECOMPOSED: "task_decomposed",
+      TASK_DECOMPOSE_FAILED: "task_decompose_failed",
+      TASK_DECOMPOSE_SKIPPED: "task_decompose_skipped",
       DECOMPOSITION_MODIFIED: "decomposition_modified",
     });
   });
@@ -193,17 +195,107 @@ describe("log(task_decomposed)", () => {
     vi.restoreAllMocks();
   });
 
-  test("親の task_id を column に書き、metadata に child_ids を含める", async () => {
+  test("親の task_id を column に書き、metadata に child_ids と raw_response を含める (ADR 0021)", async () => {
     log(ACTION_TYPES.TASK_DECOMPOSED, {
       task_id: "parent-1",
       child_ids: ["child-a", "child-b"],
+      raw_response: '[{"title":"a"},{"title":"b"}]',
     });
     await flushMicrotasks();
     expect(insertMock).toHaveBeenCalledWith({
       user_id: "user-1",
       action_type: "task_decomposed",
       task_id: "parent-1",
-      metadata: { task_id: "parent-1", child_ids: ["child-a", "child-b"] },
+      metadata: {
+        task_id: "parent-1",
+        child_ids: ["child-a", "child-b"],
+        raw_response: '[{"title":"a"},{"title":"b"}]',
+      },
+    });
+  });
+});
+
+describe("log(task_decompose_failed)", () => {
+  beforeEach(() => {
+    clearLog();
+    __resetLoggerClientForTest();
+    insertMock.mockClear();
+    fromMock.mockClear();
+    getUserMock.mockClear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // ADR 0021: AI 分解の失敗種別ごとに reason を機械可読タグで残し、詳細パネル (P3-15) で
+  // recovery 文言を出すための一次データ。raw_response は generate が応答を返した後に
+  // 失敗した場合のみ存在する (quota / network 等で generate 自体が throw した場合は無し)。
+  test("metadata に reason / raw_response / error_message を含めて insert する", async () => {
+    log(ACTION_TYPES.TASK_DECOMPOSE_FAILED, {
+      task_id: "parent-1",
+      reason: "ai_response_unparseable",
+      raw_response: "I cannot decompose this",
+    });
+    await flushMicrotasks();
+    expect(insertMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      action_type: "task_decompose_failed",
+      task_id: "parent-1",
+      metadata: {
+        task_id: "parent-1",
+        reason: "ai_response_unparseable",
+        raw_response: "I cannot decompose this",
+      },
+    });
+  });
+
+  test("quota_exhausted: raw_response 無し、error_message 有りで insert する", async () => {
+    log(ACTION_TYPES.TASK_DECOMPOSE_FAILED, {
+      task_id: "parent-1",
+      reason: "quota_exhausted",
+      error_message: "RESOURCE_EXHAUSTED",
+    });
+    await flushMicrotasks();
+    expect(insertMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      action_type: "task_decompose_failed",
+      task_id: "parent-1",
+      metadata: {
+        task_id: "parent-1",
+        reason: "quota_exhausted",
+        error_message: "RESOURCE_EXHAUSTED",
+      },
+    });
+  });
+});
+
+describe("log(task_decompose_skipped)", () => {
+  beforeEach(() => {
+    clearLog();
+    __resetLoggerClientForTest();
+    insertMock.mockClear();
+    fromMock.mockClear();
+    getUserMock.mockClear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("metadata に raw_response を含めて insert する (= AI が分解不要と判断した根拠)", async () => {
+    log(ACTION_TYPES.TASK_DECOMPOSE_SKIPPED, {
+      task_id: "parent-1",
+      raw_response: "[]",
+    });
+    await flushMicrotasks();
+    expect(insertMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      action_type: "task_decompose_skipped",
+      task_id: "parent-1",
+      metadata: { task_id: "parent-1", raw_response: "[]" },
     });
   });
 });
