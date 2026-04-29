@@ -129,12 +129,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   supabase:
+    # ADR 0023: PR の場合は本 job 内で main / PR それぞれの schema snapshot を取り、
+    # 構造化 diff + 規約検査を sticky comment として投稿する。
+    # 別 workflow に切り出すと `supabase start` (2 分強) を二重に払うので、
+    # ここに集約することで追加コストは `db reset` 1 回 + snapshot + 投稿で +20 秒程度。
     name: Supabase migrations
     needs: changes
     if: needs.changes.outputs.supabase == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # sticky-pull-request-comment が PR にコメントを投稿するために必要。
+      # fork PR では GitHub 側で read に降格されるので、その場合は投稿が skip される (job 自体は通る)。
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # base SHA から `supabase/migrations/` をチェックアウトし直すために full history が要る
+          fetch-depth: 0
       - uses: supabase/setup-cli@v1
         with:
           version: latest
@@ -146,6 +158,98 @@ jobs:
         run: supabase db lint
       - name: Reset DB (re-apply all migrations from scratch)
         run: supabase db reset --no-seed
+
+      # ===== ADR 0023: PR migration diff comment =====
+      # 以下のステップは pull_request イベントのみで動かす (main への push では diff 元がない)。
+
+      - name: Resolve local DB URL
+        if: github.event_name == 'pull_request'
+        run: |
+          supabase status -o env > /tmp/sb.env
+          db_url=$(grep '^DB_URL=' /tmp/sb.env | cut -d= -f2- | tr -d '"')
+          echo "DATABASE_URL=$db_url" >> "$GITHUB_ENV"
+
+      - name: Snapshot PR-state (HEAD migrations applied)
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p /tmp/migration-diff
+          bash scripts/db-migration-diff/snapshot.sh \
+            "$DATABASE_URL" /tmp/migration-diff/pr.json
+          pg_dump --schema-only --schema=public --no-owner --no-privileges \
+            --dbname="$DATABASE_URL" > /tmp/migration-diff/pr.sql
+
+      - name: List new migration files in this PR
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git diff --name-only --diff-filter=A "$BASE_SHA"...HEAD -- supabase/migrations/ \
+            > /tmp/migration-diff/new_migrations.txt || true
+          echo "new migrations:"
+          cat /tmp/migration-diff/new_migrations.txt || true
+
+      - name: Checkout base migrations and reset DB
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # PR で追加 / 変更された migration ファイルを base 状態に巻き戻す
+          git checkout "$BASE_SHA" -- supabase/migrations/
+          supabase db reset --no-seed
+
+      - name: Snapshot base-state
+        if: github.event_name == 'pull_request'
+        run: |
+          bash scripts/db-migration-diff/snapshot.sh \
+            "$DATABASE_URL" /tmp/migration-diff/base.json
+          pg_dump --schema-only --schema=public --no-owner --no-privileges \
+            --dbname="$DATABASE_URL" > /tmp/migration-diff/base.sql
+
+      - name: Restore HEAD migrations
+        if: github.event_name == 'pull_request'
+        run: |
+          git checkout HEAD -- supabase/migrations/
+
+      - name: Compute schema diff
+        if: github.event_name == 'pull_request'
+        run: |
+          # diff は差分があれば exit 1。`|| true` で workflow を落とさない
+          diff -u /tmp/migration-diff/base.sql /tmp/migration-diff/pr.sql \
+            > /tmp/migration-diff/schema.diff || true
+
+      - name: Render comment markdown
+        if: github.event_name == 'pull_request'
+        id: render
+        run: |
+          # compare.mjs は規約違反があると exit 1。コメント投稿後に fail させたいので
+          # ここではいったん exit code を握りつぶし、output に保存する。
+          set +e
+          node scripts/db-migration-diff/compare.mjs \
+            /tmp/migration-diff/base.json \
+            /tmp/migration-diff/pr.json \
+            /tmp/migration-diff/schema.diff \
+            /tmp/migration-diff/new_migrations.txt \
+            > /tmp/migration-diff/comment.md
+          rc=$?
+          set -e
+          echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
+          echo "::group::Rendered comment"
+          cat /tmp/migration-diff/comment.md
+          echo "::endgroup::"
+
+      - name: Post sticky comment to PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: db-migration-diff
+          path: /tmp/migration-diff/comment.md
+
+      - name: Fail if migration assertions raised errors
+        if: github.event_name == 'pull_request' && steps.render.outputs.exit_code != '0'
+        run: |
+          echo "::error::Migration diff の規約チェックで ❌ が検出されました。投稿された PR コメントを確認してください"
+          exit 1
+
       - name: Stop Supabase
         if: always()
         run: supabase stop --no-backup || true
