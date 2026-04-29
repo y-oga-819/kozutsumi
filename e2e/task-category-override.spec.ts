@@ -62,10 +62,11 @@ test.describe("task_category override (TaskDetailPanel → DB → action_log)", 
     // (dependency-event.spec.ts と同じパターン)。
     await row.getByText(taskTitle).first().click();
 
-    // <label> wrap の semantic 構造で取る (kozutsumi-frontend-a11y skill 2.3)。
-    const select = page.getByLabel("タスク種類");
-    await expect(select).toBeVisible();
-    await select.selectOption({ value: "doc" });
+    // 依存イベントと同じ「ボタン → select」パターン。デフォルトは「未分類 を変更」。
+    // 依存編集の「なし を変更」と substring で衝突しないので role + name で取れる。
+    await page.getByRole("button", { name: /未分類\s+を変更/ }).click();
+    // editingCategory=true で <select autoFocus> が render される。
+    await page.locator("select").first().selectOption({ value: "doc" });
 
     // --- DB: tasks.task_category 更新 --------------------------------------
     await expect
@@ -111,8 +112,9 @@ test.describe("task_category override (TaskDetailPanel → DB → action_log)", 
     const row = stack.getByRole("listitem").filter({ hasText: taskTitle });
     await row.getByText(taskTitle).first().click();
 
-    const select = page.getByLabel("タスク種類");
-    await select.selectOption({ value: "research" });
+    // 1 回目の override: 未分類 → research
+    await page.getByRole("button", { name: /未分類\s+を変更/ }).click();
+    await page.locator("select").first().selectOption({ value: "research" });
 
     const created = await getTaskByTitle(admin, userId, taskTitle);
     await expect
@@ -121,8 +123,9 @@ test.describe("task_category override (TaskDetailPanel → DB → action_log)", 
       })
       .toBe("research");
 
-    // 同じ値を再選択 (no-op) — onChange は発火しないはずなので追加 log は無い
-    await select.selectOption({ value: "research" });
+    // 2 回目: ボタン文言は「調査 を変更」になっているはず。同じ値で確定 (no-op)
+    await page.getByRole("button", { name: /調査\s+を変更/ }).click();
+    await page.locator("select").first().selectOption({ value: "research" });
 
     // 少し待って action_logs を取得
     await page.waitForTimeout(500);

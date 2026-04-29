@@ -64,6 +64,7 @@ export function TaskDetailPanel({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.body || "");
   const [editingDep, setEditingDep] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(false);
   // パネル open 時刻を「今」として固定する。パネル中に分跨ぎしても候補や相対時刻が
   // ばたつかないようにするのが目的 (相対時刻はあくまで判断補助)。
   const [openedAt] = useState<number>(() => now ?? Date.now());
@@ -178,26 +179,40 @@ export function TaskDetailPanel({
 
         {onChangeCategory && (
           <div className="px-5 pb-2">
-            <label className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <span className="font-jp text-[10px] text-fg-weak">タスク種類</span>
-              <select
-                value={task.taskCategory ?? ""}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  const next = raw === "" ? null : (raw as TaskCategory);
-                  if (next === (task.taskCategory ?? null)) return;
-                  onChangeCategory(task.id, next);
-                }}
-                className="flex-1 rounded border border-bg-divider bg-bg-elevated px-2 py-1 text-[11px] text-fg-default outline-none focus:border-accent-blue"
-              >
-                <option value="">未分類</option>
-                {TASK_CATEGORY_VALUES.map((value) => (
-                  <option key={value} value={value}>
-                    {TASK_CATEGORY_LABELS[value]}
-                  </option>
-                ))}
-              </select>
-            </label>
+              {editingCategory ? (
+                <select
+                  autoFocus
+                  value={task.taskCategory ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const next = raw === "" ? null : (raw as TaskCategory);
+                    if (next !== (task.taskCategory ?? null)) {
+                      onChangeCategory(task.id, next);
+                    }
+                    setEditingCategory(false);
+                  }}
+                  onBlur={() => setEditingCategory(false)}
+                  className="flex-1 rounded border border-bg-divider bg-bg-elevated px-2 py-1 text-[11px] text-fg-default outline-none focus:border-accent-blue"
+                >
+                  <option value="">未分類</option>
+                  {TASK_CATEGORY_VALUES.map((value) => (
+                    <option key={value} value={value}>
+                      {TASK_CATEGORY_LABELS[value]}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingCategory(true)}
+                  className="cursor-pointer rounded-[4px] border border-bg-divider bg-transparent px-2 py-[3px] font-jp text-[10px] text-fg-subtle"
+                >
+                  {task.taskCategory ? TASK_CATEGORY_LABELS[task.taskCategory] : "未分類"} を変更
+                </button>
+              )}
+            </div>
           </div>
         )}
 
