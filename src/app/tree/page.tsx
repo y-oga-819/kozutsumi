@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { GatewayProvider } from "@/shared/gateway/GatewayContext";
+import { isAiEnabled } from "@/shared/ai/env";
 import { createClient } from "@/shared/supabase/server";
 
 import { AppShell } from "../AppShell";
@@ -20,6 +21,7 @@ export default async function TreePage() {
     <GatewayProvider>
       <AppShell
         initialView="tree"
+        aiEnabled={isAiEnabled()}
         user={{
           email: user.email ?? null,
           avatarUrl: typeof meta.avatar_url === "string" ? meta.avatar_url : null,

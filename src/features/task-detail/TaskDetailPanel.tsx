@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
-import type { Task } from "../../entities/task/types";
+import type { LatestDecomposeLog } from "../../entities/action-log/gateway";
+import type { DecomposeFailReason } from "../../entities/action-log/types";
 import type { Event } from "../../entities/event/types";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
+import type { Task } from "../../entities/task/types";
+import { renderMarkdown } from "../../shared/lib/markdown";
 import { isDone } from "../../shared/lib/task";
 import { fmtDuration, formatRelativeTime } from "../../shared/lib/time";
-import { renderMarkdown } from "../../shared/lib/markdown";
 
 export type TaskDetailPanelProps = {
   task: Task;
@@ -21,6 +23,18 @@ export type TaskDetailPanelProps = {
    * 未指定なら依存編集 UI も表示しない (テストや特殊呼び出しで省略可)。
    */
   onChangeDependency?: (id: string, eventId: string | null) => void;
+  /**
+   * AI 分解の最新試行ログ (`task_decomposed` / `task_decompose_failed` /
+   * `task_decompose_skipped` の最新 1 件)。なければ null。
+   * 親が undefined を渡した場合は AI 分解情報エリアを描画しない (旧呼び出し互換)。
+   */
+  latestDecomposeLog?: LatestDecomposeLog | null;
+  /** action_log fetch 中フラグ。spinner 表示判定に使う。 */
+  isDecomposeLogLoading?: boolean;
+  /** AI_ENABLED kill-switch。false のとき「AI 分解を実行」/「再実行」を disable する (ADR 0021)。 */
+  aiEnabled?: boolean;
+  /** 「AI 分解を実行」/「再実行」押下時の callback。fire-and-forget で server に投げる。 */
+  onTriggerDecompose?: (id: string) => void;
 };
 
 export function TaskDetailPanel({
@@ -32,6 +46,10 @@ export function TaskDetailPanel({
   onToggleDone,
   onDelete,
   onChangeDependency,
+  latestDecomposeLog,
+  isDecomposeLogLoading,
+  aiEnabled = true,
+  onTriggerDecompose,
 }: TaskDetailPanelProps) {
   const { projectsById } = useProjects();
   const [editing, setEditing] = useState(false);
@@ -61,6 +79,8 @@ export function TaskDetailPanel({
     onUpdate(task.id, draft);
     setEditing(false);
   };
+
+  const showDecomposeSection = latestDecomposeLog !== undefined || onTriggerDecompose !== undefined;
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col">
@@ -147,6 +167,16 @@ export function TaskDetailPanel({
           </div>
         )}
 
+        {showDecomposeSection && (
+          <DecomposeInfoSection
+            task={task}
+            log={latestDecomposeLog}
+            isLoading={isDecomposeLogLoading ?? false}
+            aiEnabled={aiEnabled}
+            onTriggerDecompose={onTriggerDecompose}
+          />
+        )}
+
         <div className="mx-5 h-px bg-bg-border" />
 
         <div className="flex-1 overflow-auto px-5 pb-6 pt-3">
@@ -228,4 +258,151 @@ export function TaskDetailPanel({
       </div>
     </div>
   );
+}
+
+/**
+ * AI 分解情報エリア (P3-15 / ADR 0021 §3)。
+ * `decompose_status` 別に状態 / recovery ボタン / raw response を出し分ける。
+ */
+function DecomposeInfoSection({
+  task,
+  log,
+  isLoading,
+  aiEnabled,
+  onTriggerDecompose,
+}: {
+  task: Task;
+  log: LatestDecomposeLog | null | undefined;
+  isLoading: boolean;
+  aiEnabled: boolean;
+  onTriggerDecompose: ((id: string) => void) | undefined;
+}) {
+  const status = task.decomposeStatus;
+  const canTrigger = (status === "none" || status === "failed") && onTriggerDecompose !== undefined;
+  const buttonLabel = status === "failed" ? "再実行" : "AI 分解を実行";
+
+  // raw_response が期待される状態 (decomposed / skipped / failed)。
+  // none / decomposing は終端 log を持たないので raw 表示自体を出さない。
+  const showLogArea = status === "decomposed" || status === "skipped" || status === "failed";
+
+  return (
+    <section aria-label="AI 分解情報" className="px-5 pb-2 pt-1">
+      <div className="mb-1 font-jp text-[10px] text-fg-weak">AI 分解</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <DecomposeStatusLabel status={status} log={log} />
+        {canTrigger && onTriggerDecompose ? (
+          <button
+            type="button"
+            onClick={() => onTriggerDecompose(task.id)}
+            disabled={!aiEnabled}
+            className="cursor-pointer rounded-[4px] border border-bg-divider bg-transparent px-2.5 py-[3px] font-jp text-[10px] text-fg-subtle disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {buttonLabel}
+          </button>
+        ) : null}
+      </div>
+      {showLogArea ? (
+        <div className="mt-2">
+          {isLoading ? (
+            <span role="status" className="font-jp text-[10px] text-fg-faint">
+              読み込み中…
+            </span>
+          ) : log === null || log === undefined ? (
+            <span className="font-jp text-[10px] text-fg-faint">履歴なし</span>
+          ) : (
+            <RawResponseDetails log={log} />
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function DecomposeStatusLabel({
+  status,
+  log,
+}: {
+  status: Task["decomposeStatus"];
+  log: LatestDecomposeLog | null | undefined;
+}) {
+  if (status === "decomposing") {
+    return (
+      <span
+        role="status"
+        aria-live="polite"
+        className="inline-flex items-center gap-1 rounded-[3px] bg-accent-blue/15 px-1.5 py-px font-jp text-[10px] text-accent-blue"
+      >
+        <span className="h-1 w-1 animate-pulse rounded-full bg-accent-blue" aria-hidden="true" />
+        分解中…
+      </span>
+    );
+  }
+  if (status === "decomposed") {
+    const childCount =
+      log?.action_type === "task_decomposed" ? log.metadata.child_ids.length : null;
+    return (
+      <span className="rounded-[3px] bg-fg-weak/10 px-1.5 py-px font-jp text-[10px] text-fg-subtle">
+        {childCount !== null ? `分解完了（子タスク ${childCount} 件）` : "分解完了"}
+      </span>
+    );
+  }
+  if (status === "skipped") {
+    return (
+      <span className="rounded-[3px] bg-fg-weak/15 px-1.5 py-px font-jp text-[10px] text-fg-weak">
+        AI が分解不要と判断
+      </span>
+    );
+  }
+  if (status === "failed") {
+    const reason =
+      log?.action_type === "task_decompose_failed" ? log.metadata.reason : null;
+    return (
+      <span
+        role="alert"
+        className="rounded-[3px] bg-accent-red/15 px-1.5 py-px font-jp text-[10px] text-accent-red"
+      >
+        {reason ? `分解失敗 — ${failedReasonText(reason)}` : "分解失敗"}
+      </span>
+    );
+  }
+  // status === "none"
+  return (
+    <span className="rounded-[3px] bg-fg-weak/10 px-1.5 py-px font-jp text-[10px] text-fg-faint">
+      AI 分解未試行
+    </span>
+  );
+}
+
+function RawResponseDetails({ log }: { log: LatestDecomposeLog }) {
+  const raw = rawResponseFromLog(log);
+  if (raw === null || raw.length === 0) {
+    return <span className="font-jp text-[10px] text-fg-faint">AI 応答なし</span>;
+  }
+  return (
+    <details className="font-jp text-[10px] text-fg-subtle">
+      <summary className="cursor-pointer select-none text-fg-weak">AI 応答を表示</summary>
+      <pre className="mt-1 whitespace-pre-wrap rounded border border-bg-divider bg-bg-elevated p-2 font-mono text-[10px] leading-[1.5] text-fg-default">
+        {raw}
+      </pre>
+    </details>
+  );
+}
+
+function rawResponseFromLog(log: LatestDecomposeLog): string | null {
+  if (log.action_type === "task_decomposed") return log.metadata.raw_response;
+  if (log.action_type === "task_decompose_skipped") return log.metadata.raw_response;
+  // task_decompose_failed: raw_response は generate が応答を返した後に失敗した場合のみ存在
+  return log.metadata.raw_response ?? null;
+}
+
+const FAIL_REASON_MESSAGES: Record<DecomposeFailReason, string> = {
+  quota_exhausted: "AI のクォータ上限に達しました。時間をおいて再実行してください",
+  upstream_unavailable: "AI サービスに一時的に接続できませんでした",
+  ai_response_unparseable: "AI の応答を解釈できませんでした",
+  insert_failed: "タスクの保存に失敗しました",
+  internal_error: "予期しないエラーが発生しました",
+};
+
+function failedReasonText(reason: DecomposeFailReason): string {
+  return FAIL_REASON_MESSAGES[reason];
 }

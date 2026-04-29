@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
+import type { ActionLogGateway } from "@/entities/action-log/gateway";
 import type { EventGateway } from "@/entities/event/gateway";
 import type { ProjectGateway } from "@/entities/project/gateway";
 import type { TaskGateway } from "@/entities/task/gateway";
@@ -30,6 +31,7 @@ export type GatewayOverrides = {
   taskTimeEntryGateway?: Partial<TaskTimeEntryGateway>;
   projectGateway?: Partial<ProjectGateway>;
   eventGateway?: Partial<EventGateway>;
+  actionLogGateway?: Partial<ActionLogGateway>;
 };
 
 export type WithGatewaysResult = {
@@ -52,6 +54,10 @@ export function withGateways(overrides: GatewayOverrides = {}): WithGatewaysResu
     ),
     projectGateway: strictMockGateway<ProjectGateway>("ProjectGateway", overrides.projectGateway),
     eventGateway: strictMockGateway<EventGateway>("EventGateway", overrides.eventGateway),
+    actionLogGateway: strictMockGateway<ActionLogGateway>(
+      "ActionLogGateway",
+      overrides.actionLogGateway,
+    ),
   };
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },

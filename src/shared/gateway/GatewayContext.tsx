@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 
+import type { ActionLogGateway } from "@/entities/action-log/gateway";
 import type { EventGateway } from "@/entities/event/gateway";
 import type { ProjectGateway } from "@/entities/project/gateway";
 import type { TaskGateway } from "@/entities/task/gateway";
@@ -14,6 +15,7 @@ export type GatewayBundle = {
   taskTimeEntryGateway: TaskTimeEntryGateway;
   projectGateway: ProjectGateway;
   eventGateway: EventGateway;
+  actionLogGateway: ActionLogGateway;
 };
 
 const GatewayContext = createContext<GatewayBundle | null>(null);
@@ -64,4 +66,8 @@ export function useProjectGateway(): ProjectGateway {
 
 export function useEventGateway(): EventGateway {
   return useGatewayBundle().eventGateway;
+}
+
+export function useActionLogGateway(): ActionLogGateway {
+  return useGatewayBundle().actionLogGateway;
 }
