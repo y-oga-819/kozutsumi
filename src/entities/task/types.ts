@@ -3,15 +3,16 @@ import type { TaskCategoryValue } from "@/shared/types/database";
 export type TaskStatus = "idle" | "active" | "paused" | "done";
 
 /**
- * AI 分解 (ADR 0017 / 0018) における親タスクの状態。
+ * AI 分解 (ADR 0017 / 0018 / 0021) における親タスクの状態。
  * - none        : 分解未試行 (Phase 1〜2 由来の既存タスク含む)
  * - decomposing : AI 分解 fire-and-forget 中
  * - decomposed  : 子レコードが parent_task_id 経由で存在
  * - skipped     : AI が分解不要と判断 / AI_ENABLED=false 等
+ * - failed      : AI 分解失敗 (ADR 0021)。終端 status、再実行で decomposing に戻る
  *
  * Stack View (ADR 0016 Variant E) は decomposed の親を出さず、子だけを並べる。
  */
-export type DecomposeStatus = "none" | "decomposing" | "decomposed" | "skipped";
+export type DecomposeStatus = "none" | "decomposing" | "decomposed" | "skipped" | "failed";
 
 /**
  * タスク種別 (ADR 0015 / #87)。
