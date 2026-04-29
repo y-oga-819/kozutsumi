@@ -1,3 +1,4 @@
+import { aggregateChildren } from "@/entities/task/aggregations";
 import type { Task } from "@/entities/task/types";
 
 /**
@@ -77,38 +78,33 @@ export function computeChildProgress(
   allTasks: readonly Task[],
   pendingItems: readonly StackItem[],
 ): Progress {
-  const siblings = allTasks.filter((t) => t.parentTaskId === parent.id);
-  const total = siblings.length;
-  const doneCount = siblings.filter((t) => t.status === "done").length;
-  const totalMinutes = sumEstimatedMinutes(siblings);
+  const { total, doneCount, totalEstimatedMinutes } = aggregateChildren(parent.id, allTasks);
   let position = 0;
   for (const it of pendingItems) {
     if (it.kind === "leaf-child" && it.parent.id === parent.id) {
       position++;
       if (it.task.id === child.id) {
-        return { total, doneCount, currentIndex: doneCount + position, totalMinutes };
+        return {
+          total,
+          doneCount,
+          currentIndex: doneCount + position,
+          totalMinutes: totalEstimatedMinutes,
+        };
       }
     }
   }
-  return { total, doneCount, currentIndex: 0, totalMinutes };
-}
-
-function sumEstimatedMinutes(tasks: readonly Task[]): number | null {
-  return tasks.reduce<number | null>((acc, t) => {
-    if (t.estimatedMinutes === null) return acc;
-    return (acc ?? 0) + t.estimatedMinutes;
-  }, null);
+  return { total, doneCount, currentIndex: 0, totalMinutes: totalEstimatedMinutes };
 }
 
 /**
  * Done セクション用の進捗。current 強調なし (Stack 側の current と被らない)。
  */
 export function computeDoneProgress(parent: Task, allTasks: readonly Task[]): Progress {
-  const siblings = allTasks.filter((t) => t.parentTaskId === parent.id);
+  const { total, doneCount, totalEstimatedMinutes } = aggregateChildren(parent.id, allTasks);
   return {
-    total: siblings.length,
-    doneCount: siblings.filter((t) => t.status === "done").length,
+    total,
+    doneCount,
     currentIndex: 0,
-    totalMinutes: sumEstimatedMinutes(siblings),
+    totalMinutes: totalEstimatedMinutes,
   };
 }
