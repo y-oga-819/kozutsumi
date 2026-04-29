@@ -123,6 +123,8 @@ export type TimeEntryRow = {
   duration_seconds: number | null;
 };
 
+export type DecomposeStatus = "none" | "decomposing" | "decomposed" | "skipped" | "failed";
+
 export type TaskRow = {
   id: string;
   user_id: string;
@@ -134,6 +136,8 @@ export type TaskRow = {
   stack_order: number | null;
   depends_on_event_id: string | null;
   task_category: "coding" | "doc" | "research" | "admin" | "other" | null;
+  parent_task_id: string | null;
+  decompose_status: DecomposeStatus;
   completed_at: string | null;
 };
 
@@ -226,6 +230,78 @@ export async function getTimeEntries(
   return (data ?? []) as TimeEntryRow[];
 }
 
+/**
+ * UI を経由せずに tasks 行を 1 件 insert する (P3-11)。
+ *
+ * AddPanel 経路は AppShell の triggerDecompose / triggerCategorize を巻き込むため、
+ * `decompose_status` や `parent_task_id` を狙った状態で seed したいケース
+ * (例: `decomposed` 親 + 子、`none` の leaf-parent) ではこちらを使う。
+ *
+ * RLS は service_role でバイパスされる。
+ */
+export async function seedTask(
+  admin: SupabaseClient,
+  input: {
+    userId: string;
+    projectId: string;
+    title: string;
+    stackOrder: number;
+    parentTaskId?: string | null;
+    decomposeStatus?: DecomposeStatus;
+    estimatedMinutes?: number | null;
+    status?: TaskRow["status"];
+    taskCategory?: TaskRow["task_category"];
+    body?: string;
+    completedAt?: string | null;
+  },
+): Promise<TaskRow> {
+  const { data, error } = await admin
+    .from("tasks")
+    .insert({
+      user_id: input.userId,
+      project_id: input.projectId,
+      title: input.title,
+      body: input.body ?? "",
+      stack_order: input.stackOrder,
+      parent_task_id: input.parentTaskId ?? null,
+      decompose_status: input.decomposeStatus ?? "none",
+      estimated_minutes: input.estimatedMinutes ?? null,
+      status: input.status ?? "idle",
+      task_category: input.taskCategory ?? null,
+      completed_at: input.completedAt ?? null,
+    })
+    .select("*")
+    .single();
+  if (error || !data) {
+    throw new Error(`[e2e] seedTask(${input.title}) failed: ${error?.message ?? "no row"}`);
+  }
+  return data as TaskRow;
+}
+
+/**
+ * UI を経由せずに projects 行を 1 件 insert する (P3-11)。
+ * seedTask と組で使い、AddPanel を踏まずに DB を準備する。
+ */
+export async function seedProject(
+  admin: SupabaseClient,
+  input: { userId: string; name: string; color?: string; isPrimary?: boolean },
+): Promise<ProjectRow> {
+  const { data, error } = await admin
+    .from("projects")
+    .insert({
+      user_id: input.userId,
+      name: input.name,
+      color: input.color ?? "#5B8DEF",
+      is_primary: input.isPrimary ?? false,
+    })
+    .select("*")
+    .single();
+  if (error || !data) {
+    throw new Error(`[e2e] seedProject(${input.name}) failed: ${error?.message ?? "no row"}`);
+  }
+  return data as ProjectRow;
+}
+
 export async function getTaskByTitle(
   admin: SupabaseClient,
   userId: string,
@@ -241,6 +317,21 @@ export async function getTaskByTitle(
     throw new Error(`[e2e] getTaskByTitle(${title}) failed: ${error?.message ?? "not found"}`);
   }
   return data as TaskRow;
+}
+
+/**
+ * ユーザーの tasks を一括取得する (P3-11 で「子レコードが作られないこと」を踏むのに使う)。
+ */
+export async function getTasksForUser(admin: SupabaseClient, userId: string): Promise<TaskRow[]> {
+  const { data, error } = await admin
+    .from("tasks")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+  if (error) {
+    throw new Error(`[e2e] getTasksForUser failed: ${error.message}`);
+  }
+  return (data ?? []) as TaskRow[];
 }
 
 export async function getProjectByName(
