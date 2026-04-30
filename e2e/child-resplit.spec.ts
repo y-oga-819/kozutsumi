@@ -269,7 +269,7 @@ test.describe("fn_resplit_child_task RPC 不変条件 (ADR 0027 / 0028)", () => 
       stackOrder: 0,
       decomposeStatus: "decomposed",
     });
-    await seedTask(admin, {
+    const child = await seedTask(admin, {
       userId,
       projectId: project.id,
       title: "子",
@@ -281,12 +281,14 @@ test.describe("fn_resplit_child_task RPC 不変条件 (ADR 0027 / 0028)", () => 
     // (本テストの目的は「security invoker = RLS 適用」の動作確認 + 副作用ゼロ)
     // service_role は全行アクセス可なので、ここでは「target_id が存在しない」exception で
     // 弾かれることを確認する (= raise exception path)。
+    // shift_amount は new_children.length - 1 と一致させて HC-3 SQL ガードに引っかからない
+    // ようにしておき、target 不在の検証を確実に発火させる。
     const fakeId = "00000000-0000-0000-0000-000000000000";
     const { error } = await admin.rpc("fn_resplit_child_task", {
       p_target_id: fakeId,
       p_parent_id: parent.id,
       p_base_stack_order: 0,
-      p_shift_amount: 0,
+      p_shift_amount: 1,
       p_new_children: [
         { title: "x", body: "", estimated_minutes: null, task_category: null },
         { title: "y", body: "", estimated_minutes: null, task_category: null },
@@ -295,9 +297,15 @@ test.describe("fn_resplit_child_task RPC 不変条件 (ADR 0027 / 0028)", () => 
     expect(error).not.toBeNull();
     expect(error?.message ?? "").toMatch(/target task not found|not authorized/);
 
-    // 元の DB は破壊されない (target が見つからず exception で巻き戻る)
-    const tasks = await getTasksForUser(admin, userId);
-    expect(tasks).toHaveLength(2); // 親 + 子 1 件
+    // 元の project の tasks は破壊されない (target が見つからず exception で巻き戻る)。
+    // 同じ testUserId で並列実行される他テスト (flatten / 末尾再分解 等) も同じ userId 配下に
+    // 別 project でタスクを seed するため、project_id でスコープしてから件数を主張する。
+    const tasksInProject = (await getTasksForUser(admin, userId)).filter(
+      (t) => t.project_id === project.id,
+    );
+    expect(tasksInProject).toHaveLength(2);
+    expect(tasksInProject.find((t) => t.id === parent.id)).toBeTruthy();
+    expect(tasksInProject.find((t) => t.id === child.id)).toBeTruthy();
   });
 
   test("空の new_children 配列を渡すと exception で弾かれる (= 不正な呼び出しは破壊しない)", async ({
