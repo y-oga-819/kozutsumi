@@ -97,9 +97,9 @@ test.describe("Variant E core path 不変条件 (ADR 0016)", () => {
     await expect(top.getByText("未分解", { exact: true })).toBeVisible();
 
     // 補正後見積もり無しの fallback: aria-label="見積もり" の単独 span (CorrectedEstimate `correctedMinutes === null`)。
-    // raw は fmtDuration(25) → "25分"。これが表示されればタイマー / 状態遷移以前に
+    // raw は fmtDuration(25) → "25m"。これが表示されればタイマー / 状態遷移以前に
     // 描画段階でも raw 値で fallback できている (ADR 0013 縮退の UI 確認)。
-    await expect(top.getByLabel("見積もり")).toHaveText("25分");
+    await expect(top.getByLabel("見積もり")).toHaveText("25m");
 
     // 表示されているのは leaf-parent 1 件だけ (decomposed 親の子フラット化が起きない)。
     await expect(stack.getByRole("listitem")).toHaveCount(1);
