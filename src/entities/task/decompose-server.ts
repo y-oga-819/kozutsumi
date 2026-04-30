@@ -236,7 +236,15 @@ async function fetchParent(
   return (data as ParentRow | null) ?? null;
 }
 
-async function setDecomposeStatus(
+/**
+ * `tasks.decompose_status` を更新する低レベル helper。
+ *
+ * resplit-server.ts (子の再分解、ADR 0027) でも同じ書き込みパスを共有するために export する。
+ * 失敗時は console.error に留め、呼び出し元のロジックは止めない (ADR 0021 の不変条件:
+ * 親 / 子は終端 status に必ず倒すが、その「倒す」操作自体が失敗しても last-resort safety
+ * net で internal_error 経路に流す前提)。
+ */
+export async function setDecomposeStatus(
   supabase: SupabaseClient<Database>,
   taskId: string,
   status: Tables<"tasks">["decompose_status"],

@@ -658,3 +658,110 @@ describe("TaskDetailPanel: 見積もり補正 (P3-9 / #93、ADR 0026)", () => {
     expect(queryByText(/あなたの見積もり/)).toBeNull();
   });
 });
+
+// 子タスクの再分解 (Issue #121 / ADR 0027): 親 (parentTaskId=null) と子 (parentTaskId 有り) で
+// 同じ AI 分解情報スロットを共用しつつ、ボタン文言と handler が切り替わる。
+const childTask: Task = {
+  ...baseTask,
+  id: "child-B",
+  parentTaskId: "parent-1",
+  title: "本文を書く",
+};
+
+describe("TaskDetailPanel - 子タスクの再分解 (Issue #121 / ADR 0027)", () => {
+  test("子タスク + onTriggerResplit 指定: 「もっと細かく」ボタンを表示する", () => {
+    const onTriggerResplit = vi.fn();
+    const { getByRole, queryByRole } = renderPanel({
+      task: { ...childTask, decomposeStatus: "none" },
+      latestDecomposeLog: null,
+      onTriggerResplit,
+    });
+    const btn = getByRole("button", { name: "もっと細かく" });
+    expect(btn).toBeTruthy();
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
+    // 親側の文言は出ない
+    expect(queryByRole("button", { name: "AI 分解を実行" })).toBeNull();
+  });
+
+  test("「もっと細かく」押下で onTriggerResplit(taskId) を呼ぶ", () => {
+    const onTriggerResplit = vi.fn();
+    const { getByRole } = renderPanel({
+      task: { ...childTask, decomposeStatus: "none" },
+      latestDecomposeLog: null,
+      onTriggerResplit,
+    });
+    fireEvent.click(getByRole("button", { name: "もっと細かく" }));
+    expect(onTriggerResplit).toHaveBeenCalledWith("child-B");
+  });
+
+  test("子タスク + decomposeStatus=failed: 「もっと細かく」が引き続き出てリトライを兼ねる", () => {
+    const log: LatestDecomposeLog = {
+      action_type: "task_decompose_failed",
+      metadata: { task_id: "child-B", reason: "upstream_unavailable" },
+      created_at: "2026-04-30T09:30:00.000Z",
+    };
+    const onTriggerResplit = vi.fn();
+    const { getByRole, queryByRole } = renderPanel({
+      task: { ...childTask, decomposeStatus: "failed" },
+      latestDecomposeLog: log,
+      onTriggerResplit,
+    });
+    expect(getByRole("button", { name: "もっと細かく" })).toBeTruthy();
+    // 親側の「再実行」文言は出ない (子は 1 つのボタンで初回 / リトライを兼ねる)
+    expect(queryByRole("button", { name: "再実行" })).toBeNull();
+  });
+
+  test("子タスク + onTriggerResplit 未指定: ボタンを出さない (旧呼び出し互換)", () => {
+    const { queryByRole } = renderPanel({
+      task: { ...childTask, decomposeStatus: "none" },
+      latestDecomposeLog: null,
+    });
+    expect(queryByRole("button", { name: "もっと細かく" })).toBeNull();
+    expect(queryByRole("button", { name: "AI 分解を実行" })).toBeNull();
+  });
+
+  test("子タスクで onTriggerDecompose のみ渡されてもボタンは出ない (親の handler は子に流用しない)", () => {
+    const onTriggerDecompose = vi.fn();
+    const { queryByRole } = renderPanel({
+      task: { ...childTask, decomposeStatus: "none" },
+      latestDecomposeLog: null,
+      onTriggerDecompose,
+    });
+    expect(queryByRole("button", { name: "もっと細かく" })).toBeNull();
+    expect(queryByRole("button", { name: "AI 分解を実行" })).toBeNull();
+  });
+
+  test("子タスク + aiEnabled=false: 「もっと細かく」が disabled", () => {
+    const onTriggerResplit = vi.fn();
+    const { getByRole } = renderPanel({
+      task: { ...childTask, decomposeStatus: "none" },
+      latestDecomposeLog: null,
+      aiEnabled: false,
+      onTriggerResplit,
+    });
+    expect((getByRole("button", { name: "もっと細かく" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  test("子タスク + decomposeStatus=decomposing: ボタンを出さず「分解中…」のみ", () => {
+    const { getByText, queryByRole } = renderPanel({
+      task: { ...childTask, decomposeStatus: "decomposing" },
+      latestDecomposeLog: null,
+      onTriggerResplit: vi.fn(),
+    });
+    expect(getByText("分解中…")).toBeTruthy();
+    expect(queryByRole("button", { name: "もっと細かく" })).toBeNull();
+  });
+
+  test("親タスク (parentTaskId=null) + onTriggerResplit のみ: 「もっと細かく」は出ない (親は decompose 経路)", () => {
+    const onTriggerResplit = vi.fn();
+    const { queryByRole } = renderPanel({
+      task: { ...baseTask, decomposeStatus: "none" }, // baseTask は parentTaskId: null
+      latestDecomposeLog: null,
+      onTriggerResplit,
+    });
+    expect(queryByRole("button", { name: "もっと細かく" })).toBeNull();
+    expect(queryByRole("button", { name: "AI 分解を実行" })).toBeNull();
+  });
+});

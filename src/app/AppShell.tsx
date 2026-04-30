@@ -29,6 +29,7 @@ import { reorderTasksById } from "@/features/task-stack/reorderTasks";
 import { TaskStack, type TopTimerBinding } from "@/features/task-stack/TaskStack";
 import { triggerCategorize } from "@/features/task-stack/triggerCategorize";
 import { triggerDecompose } from "@/features/task-stack/triggerDecompose";
+import { triggerResplit } from "@/features/task-stack/triggerResplit";
 import { useTaskTimer } from "@/features/task-stack/useTaskTimer";
 import { TreeView } from "@/features/tree-view/TreeView";
 import { UserMenu } from "@/features/user-menu/UserMenu";
@@ -686,6 +687,21 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
                 // 既存 log は陳腐化するので invalidate (新たな試行が完了したら再 fetch される)
                 queryClient.invalidateQueries({ queryKey: keys.decomposeLog(id) });
                 triggerDecompose(id);
+              }}
+              onTriggerResplit={(id) => {
+                // Issue #121 / ADR 0027: 子の再分解。optimistic に decomposing pill を出す。
+                queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
+                  (prev ?? []).map((t) =>
+                    t.id === id ? { ...t, decomposeStatus: "decomposing" } : t,
+                  ),
+                );
+                queryClient.invalidateQueries({ queryKey: keys.decomposeLog(id) });
+                // server 側で target が delete される + 新規子が insert されるので、
+                // 完了後 (成功 / 失敗 / skipped 問わず) に tasks を invalidate して refetch する。
+                // .finally は fire-and-forget の void 返却と互換 (例外は triggerResplit 内で潰している)。
+                void triggerResplit(id).finally(() => {
+                  queryClient.invalidateQueries({ queryKey: keys.tasks });
+                });
               }}
             />
           )}

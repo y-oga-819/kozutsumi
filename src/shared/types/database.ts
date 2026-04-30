@@ -249,7 +249,21 @@ export type Database = {
         Relationships: [];
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      // ADR 0027 / 0028 / Issue #121: 子タスクの再分解 flatten 用 PL/pgSQL function。
+      // delete 元の子 + insert 新規子 + 後続兄弟の stack_order シフトを 1 トランザクションで行う。
+      // 戻り値は新規子の id 配列 (jsonb 入力順 = stack_order 昇順)。
+      fn_resplit_child_task: {
+        Args: {
+          p_target_id: string;
+          p_parent_id: string;
+          p_base_stack_order: number;
+          p_shift_amount: number;
+          p_new_children: Json;
+        };
+        Returns: string[];
+      };
+    };
     Enums: {
       task_status: "idle" | "active" | "paused" | "done";
       event_source: "manual" | "google_calendar";
