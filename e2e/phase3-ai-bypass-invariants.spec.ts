@@ -93,7 +93,8 @@ test.describe("Variant E core path 不変条件 (ADR 0016)", () => {
     await expect(top).toBeVisible();
 
     // 「未分解」pill (StatusPill, status='none')。Top カード下ゾーン Row 3 右詰スロット。
-    await expect(top.getByText("未分解")).toBeVisible();
+    // exact=true でプロジェクト名 / タイトルへの substring 衝突を避ける (StatusPill は raw "未分解" のみ)。
+    await expect(top.getByText("未分解", { exact: true })).toBeVisible();
 
     // 補正後見積もり無しの fallback: aria-label="見積もり" の単独 span (CorrectedEstimate `correctedMinutes === null`)。
     // raw は fmtDuration(25) → "25分"。これが表示されればタイマー / 状態遷移以前に
@@ -140,11 +141,12 @@ test.describe("Variant E core path 不変条件 (ADR 0016)", () => {
     const stack = page.getByRole("list", { name: "タスクスタック" });
 
     // 親 (decomposed) は Stack から消え、子 3 件だけがフラットに並ぶ (ADR 0016 §1)。
+    // listitem 数 = 3 と各子の可視性で「親が listitem として描画されていない」が担保される
+    // (子の下ゾーンには `⤷ ${parent.title}` が出るので親 title での filter は使えない)。
     await expect(stack.getByRole("listitem")).toHaveCount(3);
     for (const t of childTitles) {
       await expect(stack.getByRole("listitem").filter({ hasText: t })).toBeVisible();
     }
-    await expect(stack.getByRole("listitem").filter({ hasText: parent.title })).toHaveCount(0);
 
     // Top カードの平行四辺形プログレス (ADR 0016 §5)。
     // doneCount=0、currentIndex = 0 + (1 番目) = 1、total = 3。
