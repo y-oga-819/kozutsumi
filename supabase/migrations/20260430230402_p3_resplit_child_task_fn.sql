@@ -53,15 +53,16 @@ declare
   v_user_id uuid;
   v_project_id uuid;
   v_depends_on_event_id uuid;
+  v_target_parent_id uuid;
   v_idx int;
   v_count int;
   v_child jsonb;
   v_new_id uuid;
   v_new_ids uuid[] := '{}';
 begin
-  -- 1. target row の継承用属性を取得
-  select user_id, project_id, depends_on_event_id
-    into v_user_id, v_project_id, v_depends_on_event_id
+  -- 1. target row の継承用属性を取得 (parent_task_id も併せて取り、HC-1 検証に使う)
+  select user_id, project_id, depends_on_event_id, parent_task_id
+    into v_user_id, v_project_id, v_depends_on_event_id, v_target_parent_id
     from public.tasks
    where id = p_target_id;
 
@@ -69,10 +70,25 @@ begin
     raise exception 'fn_resplit_child_task: target task not found or not authorized: %', p_target_id;
   end if;
 
+  -- 1.1 HC-1 (孫禁止) の SQL 防衛層: target の親と caller が指定する親が一致することを確認。
+  --     これが破れると新規子が target の兄弟ではなく孫として配置されてしまう。
+  if v_target_parent_id is null or v_target_parent_id <> p_parent_id then
+    raise exception 'fn_resplit_child_task: HC-1 violation: target.parent_task_id (%) does not match p_parent_id (%)',
+      v_target_parent_id, p_parent_id;
+  end if;
+
   -- 2. 新規子配列のサイズを確認 (空配列禁止)
   v_count := jsonb_array_length(p_new_children);
   if v_count < 1 then
     raise exception 'fn_resplit_child_task: new_children must be non-empty (got %)', v_count;
+  end if;
+
+  -- 2.1 HC-3 (並び順決定論性) の SQL 防衛層: caller が渡す shift_amount は new_children の数 - 1
+  --     と一致しなければならない (= 元の target 1 件を消した分だけ後続兄弟が前にずれる)。
+  --     orchestrator が誤った計算を渡したり、将来の別 caller がここを破る余地を SQL で塞ぐ。
+  if p_shift_amount <> v_count - 1 then
+    raise exception 'fn_resplit_child_task: shift_amount (%) must equal new_children length (%) - 1',
+      p_shift_amount, v_count;
   end if;
 
   -- 3. 後続兄弟 (stack_order > base) を p_shift_amount だけシフト

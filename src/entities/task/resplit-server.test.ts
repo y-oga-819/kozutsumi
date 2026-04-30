@@ -13,6 +13,12 @@ type Plan = {
   rpc: { data: string[] | null; error: { message: string } | null };
   insertActionLogs: { error: { message: string } | null };
   rpcThrow?: unknown; // rpc が throw する想定 (last-resort safety net テスト用)
+  /**
+   * Issue #121 race ケース: tryClaimDecomposing で「既に decomposing」を疑似する。
+   * true のとき maybeSingle が { data: null } を返し、orchestrator は skipped/already_decomposing
+   * に倒す (race window が閉じていることのテスト)。
+   */
+  claimReturnsExisting?: boolean;
 };
 
 function makeSupabase(plan: Plan): {
@@ -104,7 +110,28 @@ function makeSupabase(plan: Plan): {
       update: (patch: { decompose_status?: unknown }) => ({
         eq: (_col: string, val: unknown) => {
           calls.statusUpdates.push({ id: val, decompose_status: patch.decompose_status });
-          return Promise.resolve({ error: plan.update.error });
+          // 2 系統の chain を同じ shape で返す:
+          //   (a) `.eq()` を await: setDecomposeStatus (failed / skipped) 用、{ error } を解決
+          //   (b) `.eq().neq().select().maybeSingle()`: tryClaimDecomposing 用、
+          //       race 主張に成功すれば { data: { id }, error: null }、
+          //       既に decomposing なら mock 側で plan.claimReturnsExisting = true を立てて { data: null }
+          const promise = Promise.resolve({ error: plan.update.error });
+          return Object.assign(promise, {
+            neq: () => ({
+              select: () => ({
+                maybeSingle: () =>
+                  Promise.resolve({
+                    data:
+                      plan.claimReturnsExisting === true
+                        ? null
+                        : plan.update.error
+                          ? null
+                          : { id: val },
+                    error: plan.update.error,
+                  }),
+              }),
+            }),
+          });
         },
       }),
     };
@@ -310,6 +337,23 @@ describe("resplitChildTask", () => {
     expect(result).toEqual({ kind: "skipped", reason: "already_decomposing" });
     expect(generate).not.toHaveBeenCalled();
     expect(calls.statusUpdates).toHaveLength(0); // 既に decomposing なので追加更新しない
+  });
+
+  // Issue #121 (review iteration 2): fetchTarget→setDecomposeStatus の race window を
+  // 条件付き update で閉じた。並行 click や fire-and-forget の重複起動でも、後勝ちの 1 本だけが
+  // 進み、もう 1 本は skipped/already_decomposing で潰れることをテストする。
+  test("並行起動: claim が「既に decomposing」を返したら skipped/already_decomposing", async () => {
+    const plan = defaultPlan(makeTargetRow());
+    plan.claimReturnsExisting = true;
+    const { client, calls } = makeSupabase(plan);
+    const generate = vi.fn();
+
+    const result = await resplitChildTask(makeDeps({ client, generate }));
+
+    expect(result).toEqual({ kind: "skipped", reason: "already_decomposing" });
+    expect(generate).not.toHaveBeenCalled();
+    expect(calls.rpcCalls).toHaveLength(0);
+    expect(calls.actionLogs).toHaveLength(0);
   });
 
   test("decompose_status=failed (リトライ) は許可される", async () => {

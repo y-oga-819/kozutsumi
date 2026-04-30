@@ -79,9 +79,15 @@ export async function resplitChildTask(
   // 兄弟 title 取得 (ADR 0029)。partial failure でも空配列で続行
   const siblings = await fetchSiblings(supabase, userId, target.parent_task_id, target.id);
 
-  // ADR 0021 の不変条件: 終端 status に倒すまでの過渡を表す。target が削除されると
-  // この row は消えるので、success path では追加更新は不要 (rpc が delete する)。
-  await setDecomposeStatus(supabase, target.id, "decomposing");
+  // 条件付き update で「decomposing への遷移を排他的に主張」する (race window 対策)。
+  // fetchTarget → setDecomposeStatus の TOCTOU 間に同じ taskId への 2 重 click が来ても、
+  // 後勝ちの 1 本だけが先に進み、もう 1 本は already_decomposing で skipped に倒す。
+  // これにより 1 本目成功後の 2 本目が target_not_found 経由の spurious failed log を
+  // action_logs に残すノイズ (HC-4 学習素材の品質劣化) を防ぐ。
+  const claimed = await tryClaimDecomposing(supabase, target.id);
+  if (!claimed) {
+    return { kind: "skipped", reason: "already_decomposing" };
+  }
 
   try {
     return await runResplit(supabase, userId, target, siblings, generate);
@@ -212,6 +218,35 @@ async function runResplit(
   });
 
   return { kind: "resplit_succeeded", newChildIds };
+}
+
+/**
+ * `decompose_status='decomposing'` への条件付き遷移を試みる (Issue #121 race 対策)。
+ *
+ * 既に `decomposing` の row には update が一致しないので 0 行更新になり、`null` を返す。
+ * これにより 2 重 click や fire-and-forget 経路の重複起動でも、orchestrator は 1 本だけ
+ * 実 AI 経路に進める。setDecomposeStatus と違って「無条件に上書き」ではなく「レース時の
+ * 排他主張」を担う。
+ *
+ * 失敗 (例外 / supabase error) は `false` で握って safe-side に倒す。orchestrator は skipped
+ * を返し core 操作には影響を与えない (ADR 0013 augmentation only)。
+ */
+async function tryClaimDecomposing(
+  supabase: SupabaseClient<Database>,
+  taskId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("tasks")
+    .update({ decompose_status: "decomposing" })
+    .eq("id", taskId)
+    .neq("decompose_status", "decomposing")
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    console.error("[ai/resplit] claim decomposing failed", error);
+    return false;
+  }
+  return data !== null;
 }
 
 async function fetchTarget(

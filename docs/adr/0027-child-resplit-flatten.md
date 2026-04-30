@@ -92,6 +92,7 @@ ADR 0016 §5 の `ParallelogramProgress` は `total = 親の全子数` を渡せ
 ## Notes
 
 - 削除前 snapshot のフィールド (id / title / body / estimated_minutes / task_category / created_at) は、Phase 4 の暗黙フィードバック分析で必要になりそうな最小セット。それ以外 (status / decompose_status / completed_at 等) は学習素材として価値が低いと判断した。観測の結果フィールドが足りなければ別 ADR で拡張する
+- 新規子の `depends_on_event_id` は **target (再分解対象の子) のものを継承** する (RPC 内で `select depends_on_event_id from tasks where id = p_target_id` で取得)。親分解 (`decomposeTask`) では parent の dependency を継承するが、resplit は target を 1:N に置き換える操作なので「target に紐づく依存関係を引き継ぐ」方が一貫する (子が手動で親と異なる依存先を持つケースに対応)。target.depends_on_event_id が null (= 通常の AI 生成子) なら新規子もすべて null になる
 - 本 ADR を supersede する trigger:
   - **孫を許容する判断に戻す**: 例えば多階層 (epic / story) を Stack View で扱う必要が出た場合 (ADR 0016 の見直し条件と連動)
   - **元の子を archive 状態で残す方針に切り替える**: Phase 4 集計で dangling task_id の解決コストが想定より高いと判明した場合

@@ -689,16 +689,19 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
                 triggerDecompose(id);
               }}
               onTriggerResplit={(id) => {
-                // Issue #121 / ADR 0027: 子の再分解。optimistic に decomposing pill を出しつつ
-                // fire-and-forget。成功時は server 側で target が delete される + 新規子が
-                // insert されるので、tasks query を invalidate して反映する。
+                // Issue #121 / ADR 0027: 子の再分解。optimistic に decomposing pill を出す。
                 queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
                   (prev ?? []).map((t) =>
                     t.id === id ? { ...t, decomposeStatus: "decomposing" } : t,
                   ),
                 );
                 queryClient.invalidateQueries({ queryKey: keys.decomposeLog(id) });
-                triggerResplit(id);
+                // server 側で target が delete される + 新規子が insert されるので、
+                // 完了後 (成功 / 失敗 / skipped 問わず) に tasks を invalidate して refetch する。
+                // .finally は fire-and-forget の void 返却と互換 (例外は triggerResplit 内で潰している)。
+                void triggerResplit(id).finally(() => {
+                  queryClient.invalidateQueries({ queryKey: keys.tasks });
+                });
               }}
             />
           )}
