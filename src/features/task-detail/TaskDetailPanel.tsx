@@ -41,10 +41,19 @@ export type TaskDetailPanelProps = {
   latestDecomposeLog?: LatestDecomposeLog | null;
   /** action_log fetch 中フラグ。spinner 表示判定に使う。 */
   isDecomposeLogLoading?: boolean;
-  /** AI_ENABLED kill-switch。false のとき「AI 分解を実行」/「再実行」を disable する (ADR 0021)。 */
+  /** AI_ENABLED kill-switch。false のとき「AI 分解を実行」/「再実行」/「もっと細かく」を disable する (ADR 0021)。 */
   aiEnabled?: boolean;
-  /** 「AI 分解を実行」/「再実行」押下時の callback。fire-and-forget で server に投げる。 */
+  /**
+   * 親タスクの「AI 分解を実行」/「再実行」押下時の callback。fire-and-forget で server に投げる。
+   * task.parentTaskId が null (= 親自身) のときに有効。
+   */
   onTriggerDecompose?: (id: string) => void;
+  /**
+   * Issue #121 / ADR 0027: 子タスクの「もっと細かく」(再分解) 押下時の callback。
+   * task.parentTaskId が non-null (= 子) のときに有効。失敗時は再実行に該当する操作を
+   * 同じ button が担う (子では 1 つのボタンで初回 / リトライを兼ねる)。
+   */
+  onTriggerResplit?: (id: string) => void;
 };
 
 export function TaskDetailPanel({
@@ -61,6 +70,7 @@ export function TaskDetailPanel({
   isDecomposeLogLoading,
   aiEnabled = true,
   onTriggerDecompose,
+  onTriggerResplit,
 }: TaskDetailPanelProps) {
   const { projectsById } = useProjects();
   const [editing, setEditing] = useState(false);
@@ -99,7 +109,10 @@ export function TaskDetailPanel({
     setEditing(false);
   };
 
-  const showDecomposeSection = latestDecomposeLog !== undefined || onTriggerDecompose !== undefined;
+  const showDecomposeSection =
+    latestDecomposeLog !== undefined ||
+    onTriggerDecompose !== undefined ||
+    onTriggerResplit !== undefined;
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col">
@@ -248,6 +261,7 @@ export function TaskDetailPanel({
             isLoading={isDecomposeLogLoading ?? false}
             aiEnabled={aiEnabled}
             onTriggerDecompose={onTriggerDecompose}
+            onTriggerResplit={onTriggerResplit}
           />
         )}
 
@@ -335,8 +349,12 @@ export function TaskDetailPanel({
 }
 
 /**
- * AI 分解情報エリア (P3-15 / ADR 0021 §3)。
+ * AI 分解情報エリア (P3-15 / ADR 0021 §3、Issue #121 / ADR 0027 で子の再分解にも拡張)。
  * `decompose_status` 別に状態 / recovery ボタン / raw response を出し分ける。
+ *
+ * 親タスク (parentTaskId === null) → 「AI 分解を実行」 / 「再実行」 (onTriggerDecompose)
+ * 子タスク (parentTaskId !== null) → 「もっと細かく」 (onTriggerResplit)。
+ * 子では 1 つのボタンで初回 (none) / リトライ (failed) を兼ねる。
  */
 function DecomposeInfoSection({
   task,
@@ -344,16 +362,23 @@ function DecomposeInfoSection({
   isLoading,
   aiEnabled,
   onTriggerDecompose,
+  onTriggerResplit,
 }: {
   task: Task;
   log: LatestDecomposeLog | null | undefined;
   isLoading: boolean;
   aiEnabled: boolean;
   onTriggerDecompose: ((id: string) => void) | undefined;
+  onTriggerResplit: ((id: string) => void) | undefined;
 }) {
   const status = task.decomposeStatus;
-  const canTrigger = (status === "none" || status === "failed") && onTriggerDecompose !== undefined;
-  const buttonLabel = status === "failed" ? "再実行" : "AI 分解を実行";
+  const isChild = task.parentTaskId !== null;
+  // 親 / 子で trigger handler を切り替える。同じ button slot を使うが、呼び出し先 endpoint が
+  // 異なる (/api/ai/decompose vs /api/ai/decompose/resplit)。
+  const triggerHandler = isChild ? onTriggerResplit : onTriggerDecompose;
+  const canTrigger = (status === "none" || status === "failed") && triggerHandler !== undefined;
+
+  const buttonLabel = isChild ? "もっと細かく" : status === "failed" ? "再実行" : "AI 分解を実行";
 
   // raw_response が期待される状態 (decomposed / skipped / failed)。
   // none / decomposing は終端 log を持たないので raw 表示自体を出さない。
@@ -364,10 +389,10 @@ function DecomposeInfoSection({
       <div className="mb-1 font-jp text-[10px] text-fg-weak">AI 分解</div>
       <div className="flex flex-wrap items-center gap-2">
         <DecomposeStatusLabel status={status} log={log} />
-        {canTrigger && onTriggerDecompose ? (
+        {canTrigger && triggerHandler ? (
           <button
             type="button"
-            onClick={() => onTriggerDecompose(task.id)}
+            onClick={() => triggerHandler(task.id)}
             disabled={!aiEnabled}
             className="cursor-pointer rounded-[4px] border border-bg-divider bg-transparent px-2.5 py-[3px] font-jp text-[10px] text-fg-subtle disabled:cursor-not-allowed disabled:opacity-50"
           >
