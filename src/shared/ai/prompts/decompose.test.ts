@@ -70,6 +70,44 @@ describe("buildDecomposePrompt", () => {
     // 出力例に body フィールドが含まれる
     expect(prompt).toContain('"body"');
   });
+
+  // ADR 0029 / Issue #121: 子の再分解時に兄弟 title を渡し、粒度合わせを誘導する。
+  // 新規分解 (siblings 未指定 / 空) では従来通り兄弟セクションを出さないことで、
+  // 既存呼び出し側に影響を与えない。
+  test("siblings を渡すと「既存の兄弟タスク」セクションが prompt に現れる", () => {
+    const prompt = buildDecomposePrompt({
+      title: "本文を書く",
+      body: "ドキュメント本文",
+      estimatedMinutes: 30,
+      siblings: ["導入部の構成を決める", "最終確認"],
+    });
+
+    expect(prompt).toContain("既存の兄弟タスク");
+    expect(prompt).toContain("同じ粒度感");
+    expect(prompt).toContain("- 導入部の構成を決める");
+    expect(prompt).toContain("- 最終確認");
+  });
+
+  test("siblings を渡さなければ「既存の兄弟タスク」セクションは出ない", () => {
+    const prompt = buildDecomposePrompt({
+      title: "x",
+      body: "",
+      estimatedMinutes: null,
+    });
+
+    expect(prompt).not.toContain("既存の兄弟タスク");
+  });
+
+  test("siblings が空配列なら section を出さない (= 新規分解と同じ prompt)", () => {
+    const prompt = buildDecomposePrompt({
+      title: "x",
+      body: "",
+      estimatedMinutes: null,
+      siblings: [],
+    });
+
+    expect(prompt).not.toContain("既存の兄弟タスク");
+  });
 });
 
 describe("parseDecomposeResponse", () => {

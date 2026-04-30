@@ -21,6 +21,13 @@ export type DecomposeInput = {
   title: string;
   body: string;
   estimatedMinutes: number | null;
+  /**
+   * ADR 0029 / Issue #121: 子の再分解時のみ、再分解対象の子の兄弟 title を渡す。
+   * AI に「同じ粒度感で分解する」よう誘導するための文脈情報。
+   * 新規分解 (親 1 回目) では undefined / 空配列 → 従来 prompt と同一。
+   * 順序は stack_order 昇順 (= Stack View 表示順) を想定。再分解対象自身は含まない。
+   */
+  siblings?: string[];
 };
 
 export type DecomposedChild = {
@@ -52,6 +59,17 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
   const bodyText = parent.body.trim().length > 0 ? parent.body.trim() : "(本文なし)";
   const estimateText = parent.estimatedMinutes !== null ? `${parent.estimatedMinutes}分` : "未設定";
 
+  // ADR 0029: siblings が渡されたら「兄弟タスクと同じ粒度感」で分解する誘導文を挿入する。
+  // undefined / 空配列なら従来 prompt と同一になる (新規分解への影響をゼロに保つ)。
+  const siblingsSection: string[] =
+    parent.siblings && parent.siblings.length > 0
+      ? [
+          "",
+          "# 既存の兄弟タスク (これらと同じ粒度感で分解する)",
+          ...parent.siblings.map((title) => `- ${title}`),
+        ]
+      : [];
+
   return [
     "あなたは個人特化のタスク管理アシスタント。次の親タスクを、実行可能な粒度の子タスクに分解する。",
     "",
@@ -79,6 +97,7 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
     `title: ${parent.title}`,
     `body: ${bodyText}`,
     `estimated_minutes: ${estimateText}`,
+    ...siblingsSection,
     "",
     "# 出力形式",
     "JSON 配列のみを返す。前後に説明文や markdown fence を付けない。",
