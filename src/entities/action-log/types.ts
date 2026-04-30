@@ -17,6 +17,7 @@ export type ActionType =
   | "task_decomposed"
   | "task_decompose_failed"
   | "task_decompose_skipped"
+  | "task_child_resplit"
   | "decomposition_modified";
 
 /**
@@ -42,17 +43,13 @@ export type DecomposeFailReason =
  *
  * - child_deleted : 分解結果の子が削除された (= 分解粒度が細かすぎた示唆)
  * - child_edited  : 分解結果の子のタイトル / 見積もりが書き換えられた
- * - child_resplit : 子に対してさらに AI 分解 / 手動分割が走った
  * - parent_merged : 親が削除されて子が孤児化した (= ADR 0018 の「親統合」)
  *
- * task_merged / task_split を独立 ACTION_TYPE に切り出す判断は P3-7 以降の
- * 操作 UI 設計時に再評価する (issue #88 の非スコープ)。
+ * 「子の再分解」は ADR 0030 で独立した action_type `task_child_resplit` に切り出した
+ * (metadata に snapshot / new_child_ids / raw_response を inline で持つ必要があり、
+ *  decomposition_modified の薄い metadata 構造に乗せると型の一貫性が崩れるため)。
  */
-export type DecompositionModifiedKind =
-  | "child_deleted"
-  | "child_edited"
-  | "child_resplit"
-  | "parent_merged";
+export type DecompositionModifiedKind = "child_deleted" | "child_edited" | "parent_merged";
 
 export type PauseReason = "meeting" | "interruption" | "voluntary";
 
@@ -128,6 +125,27 @@ export type ActionMetadataMap = {
   // 詳細パネルで「AI が分解不要と判断」+ raw_response (判断理由) を表示する。
   task_decompose_skipped: {
     task_id: string;
+    raw_response: string;
+  };
+  // ADR 0030 / Issue #121: 子タスクの再分解 (flatten) 時に発火。
+  // task_id は新規子のうち先頭 (action_log の column 値、= 主体行)。
+  // parent_id は元の親 (= flatten で配置先になる親)。
+  // resplit_target_snapshot は削除直前の元の子の主要属性。Phase 4 の暗黙フィードバック
+  // 分析で「ユーザーが粒度を変えた」シグナル + dangling task_id 解決のために inline で保存する。
+  // new_child_ids は再分解で生まれた子 id 配列 (順序は stack_order 昇順)。
+  // raw_response は Gemini の生応答 (詳細パネルの折りたたみ表示 / 学習素材)。
+  task_child_resplit: {
+    task_id: string;
+    parent_id: string;
+    resplit_target_snapshot: {
+      id: string;
+      title: string;
+      body: string;
+      estimated_minutes: number | null;
+      task_category: string | null;
+      created_at: string;
+    };
+    new_child_ids: string[];
     raw_response: string;
   };
   // Phase 3 #88: 分解後に親子関係が動いた事象の総称 (ADR 0018 Notes)。

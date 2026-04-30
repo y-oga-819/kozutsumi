@@ -35,6 +35,7 @@ export const ACTION_TYPES = Object.freeze({
   TASK_DECOMPOSED: "task_decomposed",
   TASK_DECOMPOSE_FAILED: "task_decompose_failed",
   TASK_DECOMPOSE_SKIPPED: "task_decompose_skipped",
+  TASK_CHILD_RESPLIT: "task_child_resplit",
   DECOMPOSITION_MODIFIED: "decomposition_modified",
 }) satisfies Readonly<Record<string, ActionType>>;
 

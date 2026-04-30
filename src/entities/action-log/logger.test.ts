@@ -176,6 +176,7 @@ describe("ACTION_TYPES", () => {
       TASK_DECOMPOSED: "task_decomposed",
       TASK_DECOMPOSE_FAILED: "task_decompose_failed",
       TASK_DECOMPOSE_SKIPPED: "task_decompose_skipped",
+      TASK_CHILD_RESPLIT: "task_child_resplit",
       DECOMPOSITION_MODIFIED: "decomposition_modified",
     });
   });
@@ -296,6 +297,61 @@ describe("log(task_decompose_skipped)", () => {
       action_type: "task_decompose_skipped",
       task_id: "parent-1",
       metadata: { task_id: "parent-1", raw_response: "[]" },
+    });
+  });
+});
+
+describe("log(task_child_resplit)", () => {
+  beforeEach(() => {
+    clearLog();
+    __resetLoggerClientForTest();
+    insertMock.mockClear();
+    fromMock.mockClear();
+    getUserMock.mockClear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // ADR 0030: 子の再分解時、column.task_id は新規子のうち先頭 (= 主体行)。
+  // 削除された子の属性は metadata.resplit_target_snapshot に inline で保存し、
+  // Phase 4 の暗黙フィードバック分析で「ユーザーが粒度を変えた」シグナルとして使う。
+  test("metadata に parent_id / resplit_target_snapshot / new_child_ids / raw_response を含めて insert する", async () => {
+    log(ACTION_TYPES.TASK_CHILD_RESPLIT, {
+      task_id: "new-child-1",
+      parent_id: "parent-1",
+      resplit_target_snapshot: {
+        id: "deleted-child",
+        title: "本文を書く",
+        body: "",
+        estimated_minutes: 30,
+        task_category: "doc",
+        created_at: "2026-04-30T10:00:00.000Z",
+      },
+      new_child_ids: ["new-child-1", "new-child-2", "new-child-3"],
+      raw_response: '[{"title":"導入部の構成"},{"title":"本文を書く"},{"title":"最終確認"}]',
+    });
+    await flushMicrotasks();
+    expect(insertMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      action_type: "task_child_resplit",
+      task_id: "new-child-1",
+      metadata: {
+        task_id: "new-child-1",
+        parent_id: "parent-1",
+        resplit_target_snapshot: {
+          id: "deleted-child",
+          title: "本文を書く",
+          body: "",
+          estimated_minutes: 30,
+          task_category: "doc",
+          created_at: "2026-04-30T10:00:00.000Z",
+        },
+        new_child_ids: ["new-child-1", "new-child-2", "new-child-3"],
+        raw_response: '[{"title":"導入部の構成"},{"title":"本文を書く"},{"title":"最終確認"}]',
+      },
     });
   });
 });
