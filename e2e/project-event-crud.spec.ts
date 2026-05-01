@@ -355,12 +355,21 @@ test.describe("プロジェクト削除 (cascade SET NULL)", () => {
 
     // 4. DB 検証
     // - projects 行が消えている
-    const { data: remaining, error } = await admin
-      .from("projects")
-      .select("*")
-      .eq("id", project.id);
-    expect(error).toBeNull();
-    expect(remaining).toEqual([]);
+    //   AppShell の deleteProjectMutation は onMutate で楽観的に
+    //   keys.projects キャッシュから対象 project を消す。`projectDetail` は
+    //   projects.find(...) で導出されているため ProjectDetailPanel は実際の
+    //   Supabase delete 完了前に unmount される。`editDialog` の消失だけでは
+    //   DB 反映を保証できないので poll で待つ (task-crud.spec.ts と同方針)。
+    await expect
+      .poll(
+        async () => {
+          const { data, error } = await admin.from("projects").select("id").eq("id", project.id);
+          if (error) throw error;
+          return data ?? [];
+        },
+        { message: "projects row should be deleted", timeout: 5_000 },
+      )
+      .toEqual([]);
 
     // - tasks.project_id が null になっている (cascade SET NULL)
     const task = await getTaskByTitle(admin, userId, taskTitle);
