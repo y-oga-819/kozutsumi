@@ -22,6 +22,15 @@ export function formatClock(iso: string): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+/** ISO 8601 文字列をローカル時刻の "YYYY-MM-DD" に整形する。 */
+export function localDateOf(iso: string): string {
+  const d = new Date(iso);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 /**
  * ISO 8601 文字列を `<input type="datetime-local">` の value 形式 (`YYYY-MM-DDTHH:MM`)
  * にローカル時刻で整形する。タイムゾーン情報は落ちる (input は tz-naive)。
