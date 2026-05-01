@@ -4,6 +4,7 @@ import {
   formatRelativeTime,
   fmtDuration,
   fmtMin,
+  localDateOf,
   timeToMin,
   toDateTimeLocalInput,
 } from "./time";
@@ -81,6 +82,17 @@ describe("formatRelativeTime", () => {
   test("2日以上先は「M/D HH:MM」", () => {
     expect(formatRelativeTime("2026-04-15T10:00:00", now)).toBe("4/15 10:00");
     expect(formatRelativeTime("2026-05-02T18:30:00", now)).toBe("5/2 18:30");
+  });
+});
+
+describe("localDateOf", () => {
+  test("ISO 8601 文字列のローカル日付を YYYY-MM-DD で返す", () => {
+    expect(localDateOf("2026-04-11T09:00:00")).toBe("2026-04-11");
+    expect(localDateOf("2026-04-11T23:59:59")).toBe("2026-04-11");
+  });
+
+  test("月日は 2 桁ゼロ埋めする", () => {
+    expect(localDateOf("2026-01-02T03:04:05")).toBe("2026-01-02");
   });
 });
 

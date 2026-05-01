@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { Event } from "../../entities/event/types";
-import { fmtDuration, fmtMin, formatDate, minutesOfDay } from "../../shared/lib/time";
+import { fmtDuration, fmtMin, formatDate, localDateOf, minutesOfDay } from "../../shared/lib/time";
 import { buildSlots, computeDayBounds } from "./buildSlots";
 import { EventCard } from "./EventCard";
 import { TimelineBar } from "./TimelineBar";
@@ -13,11 +13,21 @@ type DayTimelineProps = {
 };
 
 export function DayTimeline({ events, nowMin, today, onOpenEvent }: DayTimelineProps) {
-  const { dayStart, dayEnd } = computeDayBounds(events, nowMin);
-  const slots = useMemo(() => buildSlots(events, dayStart, dayEnd), [events, dayStart, dayEnd]);
+  // 呼び出し側 (AppShell) は events を全期間取得して渡す。タイムラインは today に始まる
+  // event だけを対象にする (minutesOfDay は HH:MM のみ抽出するため、日付フィルタが
+  // 抜けると昨日 / 明日の event が今日のバーに重なる)。
+  const todayEvents = useMemo(
+    () => events.filter((e) => localDateOf(e.startTime) === today),
+    [events, today],
+  );
+  const { dayStart, dayEnd } = computeDayBounds(todayEvents, nowMin);
+  const slots = useMemo(
+    () => buildSlots(todayEvents, dayStart, dayEnd),
+    [todayEvents, dayStart, dayEnd],
+  );
   const sortedEvents = useMemo(
-    () => [...events].sort((a, b) => minutesOfDay(a.startTime) - minutesOfDay(b.startTime)),
-    [events],
+    () => [...todayEvents].sort((a, b) => minutesOfDay(a.startTime) - minutesOfDay(b.startTime)),
+    [todayEvents],
   );
 
   const currentSlot = slots.find((s) => s.start <= nowMin && s.end > nowMin);

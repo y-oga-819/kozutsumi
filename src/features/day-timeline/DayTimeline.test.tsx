@@ -4,21 +4,21 @@ import { DayTimeline } from "./DayTimeline";
 
 import type { Event } from "../../entities/event/types";
 
-const events: Event[] = [
-  {
-    id: "e1",
-    title: "Meeting A",
-    startTime: "2026-04-11T10:00:00",
-    endTime: "2026-04-11T11:00:00",
-    projectId: "slo",
-    meetUrl: null,
-    hasAttachments: false,
-    description: "",
-    source: "manual",
-    externalId: null,
-    createdAt: "2026-04-11T00:00:00",
-  },
-];
+const ev = (id: string, title: string, startTime: string, endTime: string): Event => ({
+  id,
+  title,
+  startTime,
+  endTime,
+  projectId: "slo",
+  meetUrl: null,
+  hasAttachments: false,
+  description: "",
+  source: "manual",
+  externalId: null,
+  createdAt: "2026-04-11T00:00:00",
+});
+
+const events: Event[] = [ev("e1", "Meeting A", "2026-04-11T10:00:00", "2026-04-11T11:00:00")];
 
 describe("DayTimeline", () => {
   test("today を formatDate して表示する", () => {
@@ -51,5 +51,21 @@ describe("DayTimeline", () => {
     );
     // 9:30 (nowMin) から 10:00 (イベント開始) まで 30分の空き
     expect(getByText(/空き 30m/)).toBeTruthy();
+  });
+
+  test("today に開始しない event はタイムラインに含めない (昨日 / 明日 / 先週は除外)", () => {
+    const mixed: Event[] = [
+      ev("e1", "Today event", "2026-04-11T10:00:00", "2026-04-11T11:00:00"),
+      ev("yesterday", "Yesterday event", "2026-04-10T14:00:00", "2026-04-10T15:00:00"),
+      ev("tomorrow", "Tomorrow event", "2026-04-12T09:00:00", "2026-04-12T10:00:00"),
+      ev("last-week", "Last week event", "2026-04-04T10:00:00", "2026-04-04T11:00:00"),
+    ];
+    const { getByText, queryByText } = render(
+      <DayTimeline events={mixed} nowMin={9 * 60 + 30} today="2026-04-11" onOpenEvent={() => {}} />,
+    );
+    expect(getByText("Today event")).toBeTruthy();
+    expect(queryByText("Yesterday event")).toBeNull();
+    expect(queryByText("Tomorrow event")).toBeNull();
+    expect(queryByText("Last week event")).toBeNull();
   });
 });
