@@ -1,8 +1,8 @@
 # ADR 0008: 同期対象は primary カレンダーのみ
 
-- **Status**: Accepted
+- **Status**: Superseded by [ADR 0031](./0031-calendar-subscription-and-event-promotion.md)
 - **Date**: 2026-04-22
-- **Related**: [ADR 0005](./0005-google-calendar-sync-via-route-handler.md)
+- **Related**: [ADR 0005](./0005-google-calendar-sync-via-route-handler.md) / Superseded by [ADR 0031](./0031-calendar-subscription-and-event-promotion.md)
 
 ## Context
 
