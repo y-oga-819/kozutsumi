@@ -2,8 +2,10 @@
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
+import { useAutoSeed } from "./useAutoSeed";
+import { useNowClock } from "./useNowClock";
 import { ACTION_TYPES, log } from "@/entities/action-log/logger";
 import type { CreateEventInput, UpdateEventInput } from "@/entities/event/gateway";
 import type { Event } from "@/entities/event/types";
@@ -31,6 +33,7 @@ import { triggerCategorize } from "@/features/task-stack/triggerCategorize";
 import { triggerDecompose } from "@/features/task-stack/triggerDecompose";
 import { triggerResplit } from "@/features/task-stack/triggerResplit";
 import { useTaskTimer } from "@/features/task-stack/useTaskTimer";
+import { computeProjectOrderForTree, mergeTreeProjects } from "@/features/tree-view/fallback";
 import { TreeView } from "@/features/tree-view/TreeView";
 import { UserMenu } from "@/features/user-menu/UserMenu";
 import type { PauseReason } from "@/entities/task/time-entries";
@@ -42,7 +45,7 @@ import {
   useProjectGateway,
   useTaskGateway,
 } from "@/shared/gateway/GatewayContext";
-import { readSampleDataMode, writeSampleDataMode } from "@/shared/lib/sample-data";
+import { writeSampleDataMode } from "@/shared/lib/sample-data";
 import { isDone } from "@/shared/lib/task";
 import { todayIso } from "@/shared/lib/time";
 
@@ -133,57 +136,16 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
     },
     enabled: detailId !== null,
   });
-  // ms 表現の「今」。SSR は 0 placeholder で hydration mismatch を回避し、
-  // mount 後に実時刻へ差し替える。nowMin (タイムライン用) と依存イベント比較用に共用する。
-  const [nowMs, setNowMs] = useState<number>(0);
+  const { nowMs, nowMin } = useNowClock();
   const today = useMemo(() => todayIso(), []);
 
-  useEffect(() => {
-    // マウント後にローカル時刻と同期する。SSR 時 nowMinutesOfDay() はブラウザ API 依存のため不可。
-    /* eslint-disable react-hooks/set-state-in-effect */
-    setNowMs(Date.now());
-    /* eslint-enable react-hooks/set-state-in-effect */
-    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  const nowMin = useMemo(() => {
-    if (nowMs === 0) return 9 * 60;
-    const d = new Date(nowMs);
-    return d.getHours() * 60 + d.getMinutes();
-  }, [nowMs]);
-
-  // 初回ログイン時に自動 seed: 全テーブル空かつ「cleared」フラグ無しなら投入する。
-  // ref ガードでストリクトモードでの 2 重 fire を防ぎつつ、ローディング完了後 1 回だけ実行。
-  const seedingRef = useRef(false);
-  useEffect(() => {
-    if (seedingRef.current) return;
-    if (!projectsQuery.isSuccess || !tasksQuery.isSuccess || !eventsQuery.isSuccess) {
-      return;
-    }
-    if (readSampleDataMode() === "cleared") return;
-    if (projects.length > 0 || tasks.length > 0 || events.length > 0) return;
-    seedingRef.current = true;
-    seedSampleData(seedGateways)
-      .then(() => {
-        writeSampleDataMode("default");
-        return invalidateAll(queryClient);
-      })
-      .catch((err) => {
-        // 失敗時に再試行ループへ入らないよう seedingRef は立てたまま。
-        // ユーザー明示操作「サンプル再投入」で再試行できる。
-        console.error("[seed] failed", err);
-      });
-  }, [
-    projectsQuery.isSuccess,
-    tasksQuery.isSuccess,
-    eventsQuery.isSuccess,
-    projects.length,
-    tasks.length,
-    events.length,
-    seedGateways,
-    queryClient,
-  ]);
+  const onSeeded = useCallback(() => invalidateAll(queryClient), [queryClient]);
+  useAutoSeed({
+    ready: projectsQuery.isSuccess && tasksQuery.isSuccess && eventsQuery.isSuccess,
+    isEmpty: projects.length === 0 && tasks.length === 0 && events.length === 0,
+    gateways: seedGateways,
+    onSeeded,
+  });
 
   // ---- Mutations (optimistic) ---------------------------------------------
 
@@ -585,13 +547,11 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
 
   // Tree View は Phase 1 PoC では現行 mock history をそのまま描画する。
   // 将来: tasks where status='done' から生成する (docs/specs/phase1.md Tree View)
-  const projectOrderForTree = useMemo(() => {
-    if (projects.length === 0) {
-      // history mock の projectId (slug) を fallback として並べる
-      return Array.from(new Set(historyData.map((h) => h.projectId)));
-    }
-    return projects.map((p) => p.id);
-  }, [projects]);
+  const projectOrderForTree = useMemo(
+    () => computeProjectOrderForTree(projects, historyData),
+    [projects],
+  );
+  const treeProjects = useMemo(() => mergeTreeProjects(projects, historyData), [projects]);
 
   const tabs: { key: View; label: string; href: string }[] = [
     { key: "stack", label: "Stack", href: "/" },
@@ -599,7 +559,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
   ];
 
   return (
-    <ProjectsProvider projects={mergeTreeProjects(projects, historyData)}>
+    <ProjectsProvider projects={treeProjects}>
       <CorrectionFactorsProvider factors={correctionFactors}>
         <div className="relative select-none">
           {/* Header */}
@@ -802,47 +762,6 @@ async function invalidateAll(queryClient: QueryClient): Promise<void> {
     queryClient.invalidateQueries({ queryKey: keys.events }),
   ]);
 }
-
-/**
- * Tree View の mock history が参照する旧 slug (`career` 等) を、
- * 同名シードが DB にある場合はその Project として、
- * 無い場合は PROJECT_SEEDS 由来の fallback Project として補完する。
- */
-function mergeTreeProjects(
-  projects: readonly Project[],
-  history: readonly { projectId: string }[],
-): Project[] {
-  const known = new Set(projects.map((p) => p.id));
-  const missing = Array.from(
-    new Set(history.map((h) => h.projectId).filter((id) => !known.has(id))),
-  );
-  const result = [...projects];
-  for (const slug of missing) {
-    const seed = TREE_FALLBACK_BY_SLUG.get(slug);
-    result.push(
-      seed ?? {
-        id: slug,
-        name: slug,
-        color: "#52525b",
-        isPrimary: false,
-        createdAt: "",
-      },
-    );
-  }
-  return result;
-}
-
-// PROJECT_SEEDS を import すると循環が見えにくくなるので、slug→Project をここで簡易定義。
-// history (mock) に現れる slug 群だけ埋めれば十分。
-const TREE_FALLBACK_BY_SLUG: ReadonlyMap<string, Project> = new Map([
-  ["career", { id: "career", name: "転職活動", color: "#E85D04", isPrimary: false, createdAt: "" }],
-  [
-    "loadtest",
-    { id: "loadtest", name: "負荷試験", color: "#0096C7", isPrimary: false, createdAt: "" },
-  ],
-  ["slo", { id: "slo", name: "SLO推進", color: "#2D9F45", isPrimary: true, createdAt: "" }],
-  ["tasuki", { id: "tasuki", name: "Tasuki", color: "#9B5DE5", isPrimary: false, createdAt: "" }],
-]);
 
 type StackViewProps = {
   events: Event[];
