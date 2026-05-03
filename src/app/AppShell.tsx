@@ -12,6 +12,7 @@ import {
 } from "./useDashboardQueries";
 import { useDashboardMutations } from "./useDashboardMutations";
 import { useNowClock } from "./useNowClock";
+import { useTopTaskTimer } from "./useTopTaskTimer";
 import type { Event } from "@/entities/event/types";
 import { ProjectsProvider } from "@/entities/project/ProjectsContext";
 import { CorrectionFactorsProvider } from "@/entities/task/CorrectionFactorsContext";
@@ -28,11 +29,9 @@ import { useLazyCalendarSync } from "@/features/sync/useLazyCalendarSync";
 import { TaskDetailPanel } from "@/features/task-detail/TaskDetailPanel";
 import { PauseReasonModal } from "@/features/task-stack/PauseReasonModal";
 import { TaskStack, type TopTimerBinding } from "@/features/task-stack/TaskStack";
-import { useTaskTimer } from "@/features/task-stack/useTaskTimer";
 import { computeProjectOrderForTree, mergeTreeProjects } from "@/features/tree-view/fallback";
 import { TreeView } from "@/features/tree-view/TreeView";
 import { UserMenu } from "@/features/user-menu/UserMenu";
-import type { PauseReason } from "@/entities/task/time-entries";
 import { historyData } from "@/mocks/history";
 import { clearAllUserData, seedSampleData } from "@/mocks/seed";
 import {
@@ -159,38 +158,12 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
 
   // タスクスタックのトップタスク = タイマー対象。
   // pendingTasks は stack_order 昇順なので [0] がトップ。
-  const topTask = pendingTasks[0] ?? null;
-  const timer = useTaskTimer(topTask);
-  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+  const { topTimer, pauseModalOpen, setPauseModalOpen, handlePauseSelect } = useTopTaskTimer(
+    pendingTasks[0] ?? null,
+  );
 
   const calendarSync = useCalendarSync();
   useLazyCalendarSync({ triggerSync: calendarSync.triggerSync });
-
-  const topTimer = useMemo<TopTimerBinding>(
-    () => ({
-      elapsedSeconds: timer.elapsedSeconds,
-      pauseReason: timer.pauseReason,
-      onStart: () => {
-        void timer.start();
-      },
-      onPauseRequest: () => setPauseModalOpen(true),
-      onResume: () => {
-        void timer.resume();
-      },
-      onComplete: () => {
-        void timer.complete();
-      },
-    }),
-    [timer],
-  );
-
-  const handlePauseSelect = useCallback(
-    (reason: PauseReason) => {
-      setPauseModalOpen(false);
-      void timer.pause(reason);
-    },
-    [timer],
-  );
 
   // Tree View は Phase 1 PoC では現行 mock history をそのまま描画する。
   // 将来: tasks where status='done' から生成する (docs/specs/phase1.md Tree View)
