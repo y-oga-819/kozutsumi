@@ -92,17 +92,21 @@ describe("extractMeetUrl", () => {
 
 describe("mapGoogleEventToUpsertInput", () => {
   test("必要フィールドをすべてマップする", () => {
-    const result = mapGoogleEventToUpsertInput({
-      id: "evt-1",
-      summary: "1on1",
-      description: "議題: 進捗",
-      start: { dateTime: "2026-04-23T10:00:00+09:00" },
-      end: { dateTime: "2026-04-23T11:00:00+09:00" },
-      hangoutLink: "https://meet.google.com/xyz",
-      attachments: [{ fileUrl: "https://drive.example/abc" }],
-    });
+    const result = mapGoogleEventToUpsertInput(
+      {
+        id: "evt-1",
+        summary: "1on1",
+        description: "議題: 進捗",
+        start: { dateTime: "2026-04-23T10:00:00+09:00" },
+        end: { dateTime: "2026-04-23T11:00:00+09:00" },
+        hangoutLink: "https://meet.google.com/xyz",
+        attachments: [{ fileUrl: "https://drive.example/abc" }],
+      },
+      "primary",
+    );
 
     expect(result).toEqual<UpsertGoogleCalendarEventInput>({
+      externalCalendarId: "primary",
       externalId: "evt-1",
       title: "1on1",
       startTime: "2026-04-23T01:00:00.000Z",
@@ -114,13 +118,17 @@ describe("mapGoogleEventToUpsertInput", () => {
   });
 
   test("summary が無い場合はデフォルトタイトル、description / meet_url が無ければ空 / null", () => {
-    const result = mapGoogleEventToUpsertInput({
-      id: "evt-2",
-      start: { dateTime: "2026-04-23T10:00:00Z" },
-      end: { dateTime: "2026-04-23T11:00:00Z" },
-    });
+    const result = mapGoogleEventToUpsertInput(
+      {
+        id: "evt-2",
+        start: { dateTime: "2026-04-23T10:00:00Z" },
+        end: { dateTime: "2026-04-23T11:00:00Z" },
+      },
+      "primary",
+    );
 
     expect(result).toEqual<UpsertGoogleCalendarEventInput>({
+      externalCalendarId: "primary",
       externalId: "evt-2",
       title: "(タイトルなし)",
       startTime: "2026-04-23T10:00:00.000Z",
@@ -132,7 +140,7 @@ describe("mapGoogleEventToUpsertInput", () => {
   });
 
   test("時刻が無い壊れたイベントは null を返す", () => {
-    expect(mapGoogleEventToUpsertInput({ id: "bad", start: {}, end: {} })).toBeNull();
+    expect(mapGoogleEventToUpsertInput({ id: "bad", start: {}, end: {} }, "primary")).toBeNull();
   });
 });
 
@@ -157,7 +165,7 @@ describe("partitionEvents", () => {
       { id: "broken", start: {}, end: {} },
     ];
 
-    const result = partitionEvents(events);
+    const result = partitionEvents(events, "primary");
 
     expect(result.cancelled).toEqual(["deleted-1", "deleted-2"]);
     expect(result.upserts.map((u) => u.externalId)).toEqual(["active-1", "active-2"]);
@@ -172,7 +180,7 @@ type ListEventsFn = (params: ListEventsParams) => Promise<GoogleCalendarEventsLi
 
 function makeFakeGateway() {
   const upsertCalls: UpsertGoogleCalendarEventInput[][] = [];
-  const deleteCalls: string[][] = [];
+  const deleteCalls: { externalCalendarId: string; ids: string[] }[] = [];
   const gateway: EventGateway = {
     list: vi.fn(),
     create: vi.fn(),
@@ -183,8 +191,8 @@ function makeFakeGateway() {
       upsertCalls.push(inputs);
       return inputs.length;
     }),
-    deleteByGoogleExternalIds: vi.fn(async (ids) => {
-      deleteCalls.push(ids);
+    deleteByGoogleExternalIds: vi.fn(async (externalCalendarId, ids) => {
+      deleteCalls.push({ externalCalendarId, ids });
       return ids.length;
     }),
   };
@@ -197,11 +205,12 @@ function makeFakeSyncStateGateway(
     syncToken: string | null;
   } | null = null,
 ) {
-  const get = vi.fn<() => Promise<typeof initial>>(async () => initial);
-  const saveSyncState = vi.fn<
-    (input: { lastSyncedAt: string; syncToken: string | null }) => Promise<void>
-  >(async () => {});
-  const gateway: CalendarSyncStateGateway = { get, saveSyncState };
+  const get = vi.fn(async () => initial);
+  const saveSyncState = vi.fn(async () => {});
+  const gateway: CalendarSyncStateGateway = {
+    get: get as unknown as CalendarSyncStateGateway["get"],
+    saveSyncState: saveSyncState as unknown as CalendarSyncStateGateway["saveSyncState"],
+  };
   return { gateway, get, saveSyncState };
 }
 
@@ -240,6 +249,7 @@ function makeDeps(overrides: {
     refreshAccessToken: overrides.refreshAccessToken
       ? vi.fn(overrides.refreshAccessToken)
       : vi.fn(),
+    resolvePrimaryExternalAccountId: vi.fn(async () => "ext-acc-id"),
     now: overrides.now ?? DEFAULT_NOW,
   };
 }
@@ -324,7 +334,10 @@ describe("syncGoogleCalendar (full sync)", () => {
     expect(result.synced).toBe(1);
     expect(result.deleted).toBe(2);
     expect(upsertCalls[0]!.map((e) => e.externalId)).toEqual(["keep"]);
-    expect(deleteCalls[0]).toEqual(["gone-1", "gone-2"]);
+    expect(deleteCalls[0]).toEqual({
+      externalCalendarId: "primary",
+      ids: ["gone-1", "gone-2"],
+    });
   });
 
   test("空結果の時は upsert/delete を呼ばない", async () => {
@@ -432,10 +445,14 @@ describe("syncGoogleCalendar (full sync)", () => {
 
     expect(result.lastSyncedAt).toBe("2026-04-24T01:30:00.000Z");
     expect(saveSyncState).toHaveBeenCalledTimes(1);
-    expect(saveSyncState).toHaveBeenCalledWith({
-      lastSyncedAt: "2026-04-24T01:30:00.000Z",
-      syncToken: "fresh-tok",
-    });
+    expect(saveSyncState).toHaveBeenCalledWith(
+      {
+        source: "google_calendar",
+        externalAccountId: "ext-acc-id",
+        externalCalendarId: "primary",
+      },
+      { lastSyncedAt: "2026-04-24T01:30:00.000Z", syncToken: "fresh-tok" },
+    );
   });
 
   test("nextSyncToken が無いレスポンスは syncToken: null で保存する", async () => {
@@ -445,10 +462,14 @@ describe("syncGoogleCalendar (full sync)", () => {
 
     await syncGoogleCalendar(FAKE_SUPABASE, makeDeps({ gateway, syncStateGateway, listEvents }));
 
-    expect(saveSyncState).toHaveBeenCalledWith({
-      lastSyncedAt: expect.any(String),
-      syncToken: null,
-    });
+    expect(saveSyncState).toHaveBeenCalledWith(
+      {
+        source: "google_calendar",
+        externalAccountId: "ext-acc-id",
+        externalCalendarId: "primary",
+      },
+      { lastSyncedAt: expect.any(String), syncToken: null },
+    );
   });
 
   test("401 retry 後も失敗する場合は sync state を上書きしない (stale syncToken を保持)", async () => {
@@ -513,10 +534,14 @@ describe("syncGoogleCalendar (incremental sync via syncToken)", () => {
     expect(call.timeMax).toBeUndefined();
     expect(call.orderBy).toBeUndefined();
     expect(upsertCalls[0]!.map((e) => e.externalId)).toEqual(["incr-1"]);
-    expect(saveSyncState).toHaveBeenCalledWith({
-      lastSyncedAt: "2026-04-24T00:00:00.000Z",
-      syncToken: "tok-next",
-    });
+    expect(saveSyncState).toHaveBeenCalledWith(
+      {
+        source: "google_calendar",
+        externalAccountId: "ext-acc-id",
+        externalCalendarId: "primary",
+      },
+      { lastSyncedAt: "2026-04-24T00:00:00.000Z", syncToken: "tok-next" },
+    );
   });
 
   test("incremental sync でも cancelled は削除に回る (差分削除が機能する)", async () => {
@@ -536,7 +561,10 @@ describe("syncGoogleCalendar (incremental sync via syncToken)", () => {
     );
 
     expect(result.deleted).toBe(1);
-    expect(deleteCalls[0]).toEqual(["gone-incr"]);
+    expect(deleteCalls[0]).toEqual({
+      externalCalendarId: "primary",
+      ids: ["gone-incr"],
+    });
   });
 
   test("incremental sync のページングは中間ページの nextSyncToken を無視し最終ページのみ採用する", async () => {
@@ -560,10 +588,14 @@ describe("syncGoogleCalendar (incremental sync via syncToken)", () => {
 
     await syncGoogleCalendar(FAKE_SUPABASE, makeDeps({ gateway, syncStateGateway, listEvents }));
 
-    expect(saveSyncState).toHaveBeenCalledWith({
-      lastSyncedAt: expect.any(String),
-      syncToken: "final-only",
-    });
+    expect(saveSyncState).toHaveBeenCalledWith(
+      {
+        source: "google_calendar",
+        externalAccountId: "ext-acc-id",
+        externalCalendarId: "primary",
+      },
+      { lastSyncedAt: expect.any(String), syncToken: "final-only" },
+    );
   });
 
   test("410 Gone を受けたら syncToken を捨てて full sync に fallback する", async () => {
@@ -602,10 +634,14 @@ describe("syncGoogleCalendar (incremental sync via syncToken)", () => {
     expect(listEvents.mock.calls[1]![0].orderBy).toBe("startTime");
     expect(upsertCalls[0]!.map((e) => e.externalId)).toEqual(["after-fallback"]);
     // fallback 後の full sync で得た新しい syncToken を保存
-    expect(saveSyncState).toHaveBeenCalledWith({
-      lastSyncedAt: "2026-04-24T05:00:00.000Z",
-      syncToken: "fresh-after-fallback",
-    });
+    expect(saveSyncState).toHaveBeenCalledWith(
+      {
+        source: "google_calendar",
+        externalAccountId: "ext-acc-id",
+        externalCalendarId: "primary",
+      },
+      { lastSyncedAt: "2026-04-24T05:00:00.000Z", syncToken: "fresh-after-fallback" },
+    );
   });
 
   test("full sync 中の 410 は fallback せず素通しで throw (syncToken なしの 410 は想定外)", async () => {

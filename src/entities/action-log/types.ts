@@ -18,7 +18,29 @@ export type ActionType =
   | "task_decompose_failed"
   | "task_decompose_skipped"
   | "task_child_resplit"
-  | "decomposition_modified";
+  | "decomposition_modified"
+  // ADR 0034 / 0035: calendar / event 関連 type (発火実装は #144 / #145 / #146)。
+  // user actor:
+  | "calendar_subscribed"
+  | "calendar_unsubscribed"
+  | "calendar_auto_promote_changed"
+  | "event_promoted"
+  | "event_demoted"
+  | "event_override_cleared"
+  | "external_account_added"
+  | "external_account_removed"
+  // system actor:
+  | "event_visibility_frozen_by_subscription_toggle"
+  | "event_deleted_by_source"
+  | "task_event_dependency_lost"
+  | "external_account_reauth_required";
+
+/**
+ * action_logs.actor_type の値域 (ADR 0035)。
+ * DB は CHECK 制約を貼らない (ADR 0001) ので、型側で固定する。
+ * 値追加 (将来 'ai' 等) は ADR 0035 の supersede ではなく追加判断として扱える。
+ */
+export type ActorType = "user" | "system";
 
 /**
  * AI 分解の失敗種別 (ADR 0021)。詳細パネル (P3-15) で reason ごとに recovery 文言を出すため
@@ -70,7 +92,19 @@ export type ActionMetadataMap = {
     from_position: number;
     to_position: number;
   };
-  task_deleted: { task_id: string };
+  // ADR 0035 §5: 削除系は元 entity が物理削除されるため snapshot を必須化する。
+  // 過去ログ (snapshot 列が無かった頃) は backfill しない (ADR 0035 §6)。
+  // Phase 4 の回避パターン分析: 「どんな未着手タスクが削除されたか」を再構成可能にする。
+  task_deleted: {
+    task_id: string;
+    snapshot: {
+      title: string;
+      estimated_minutes: number | null;
+      task_category: string | null;
+      status: "idle" | "active" | "paused" | "done";
+      parent_task_id: string | null;
+    };
+  };
   task_title_changed: {
     task_id: string;
     old_title: string;
@@ -155,6 +189,125 @@ export type ActionMetadataMap = {
     task_id: string;
     parent_id: string;
     kind: DecompositionModifiedKind;
+  };
+
+  // ===== ADR 0035 §4: calendar / event 関連 type (発火実装は #144 / #145 / #146) =====
+  //
+  // 全てに共通の triple `(source, external_calendar_id, external_id)` を必須含める (ADR 0033)。
+  // 削除系は snapshot 必須 (ADR 0035 §2 ii)。
+  // event_promoted / event_demoted は `is_override_of_default` を Phase 4 学習素材として持つ。
+
+  calendar_subscribed: {
+    source: string;
+    external_account_id: string;
+    external_calendar_id: string;
+    auto_promote_to_timeline: boolean;
+  };
+  calendar_unsubscribed: {
+    source: string;
+    external_account_id: string;
+    external_calendar_id: string;
+    deleted_events: Array<{
+      external_id: string;
+      title: string;
+      start_time: string;
+      end_time: string;
+      visibility_override: "none" | "shown" | "hidden";
+    }>;
+  };
+  calendar_auto_promote_changed: {
+    source: string;
+    external_account_id: string;
+    external_calendar_id: string;
+    from: boolean;
+    to: boolean;
+  };
+  event_promoted: {
+    source: string;
+    external_account_id: string;
+    external_calendar_id: string;
+    external_id: string;
+    from: "none" | "shown" | "hidden";
+    to: "shown";
+    subscription_auto_promote: boolean;
+    is_override_of_default: boolean;
+  };
+  event_demoted: {
+    source: string;
+    external_account_id: string;
+    external_calendar_id: string;
+    external_id: string;
+    from: "none" | "shown" | "hidden";
+    to: "hidden";
+    subscription_auto_promote: boolean;
+    is_override_of_default: boolean;
+  };
+  event_override_cleared: {
+    source: string;
+    external_account_id: string;
+    external_calendar_id: string;
+    external_id: string;
+    from: "shown" | "hidden";
+    subscription_auto_promote: boolean;
+  };
+  external_account_added: {
+    source: string;
+    external_account_id: string;
+    display_name: string | null;
+  };
+  external_account_removed: {
+    source: string;
+    external_account_id: string;
+    display_name: string | null;
+    cascaded_unsubscribes: Array<{
+      external_calendar_id: string;
+      deleted_events: Array<{
+        external_id: string;
+        title: string;
+        start_time: string;
+        end_time: string;
+        visibility_override: "none" | "shown" | "hidden";
+      }>;
+    }>;
+  };
+  // system actor types
+  event_visibility_frozen_by_subscription_toggle: {
+    source: string;
+    external_account_id: string;
+    external_calendar_id: string;
+    external_id: string;
+    frozen_to: "shown" | "hidden";
+    triggered_by: string;
+  };
+  event_deleted_by_source: {
+    source: string;
+    external_account_id: string;
+    external_calendar_id: string;
+    external_id: string;
+    snapshot: {
+      title: string;
+      start_time: string;
+      end_time: string;
+      visibility_override: "none" | "shown" | "hidden";
+    };
+  };
+  task_event_dependency_lost: {
+    task_id: string;
+    source: string;
+    external_account_id: string;
+    external_calendar_id: string;
+    external_id: string;
+    deletion_reason: "deleted_by_source" | "unsubscribed";
+    event_snapshot: {
+      title: string;
+      start_time: string;
+      end_time: string;
+    };
+  };
+  external_account_reauth_required: {
+    source: string;
+    external_account_id: string;
+    error_kind: string;
   };
 };
 

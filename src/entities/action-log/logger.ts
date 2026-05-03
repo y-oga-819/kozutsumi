@@ -1,7 +1,7 @@
 import { createClient } from "@/shared/supabase/client";
 import type { Json } from "@/shared/types/database";
 
-import type { ActionLogEntry, ActionMetadataMap, ActionType } from "./types";
+import type { ActionLogEntry, ActionMetadataMap, ActionType, ActorType } from "./types";
 
 /**
  * action-log logger
@@ -37,6 +37,20 @@ export const ACTION_TYPES = Object.freeze({
   TASK_DECOMPOSE_SKIPPED: "task_decompose_skipped",
   TASK_CHILD_RESPLIT: "task_child_resplit",
   DECOMPOSITION_MODIFIED: "decomposition_modified",
+  // ADR 0034 / 0035: calendar / event 関連 type。
+  // 値は ADR 0035 §4 で確定済みだが、発火実装は #144 / #145 / #146 のスコープ。
+  CALENDAR_SUBSCRIBED: "calendar_subscribed",
+  CALENDAR_UNSUBSCRIBED: "calendar_unsubscribed",
+  CALENDAR_AUTO_PROMOTE_CHANGED: "calendar_auto_promote_changed",
+  EVENT_PROMOTED: "event_promoted",
+  EVENT_DEMOTED: "event_demoted",
+  EVENT_OVERRIDE_CLEARED: "event_override_cleared",
+  EXTERNAL_ACCOUNT_ADDED: "external_account_added",
+  EXTERNAL_ACCOUNT_REMOVED: "external_account_removed",
+  EVENT_VISIBILITY_FROZEN_BY_SUBSCRIPTION_TOGGLE: "event_visibility_frozen_by_subscription_toggle",
+  EVENT_DELETED_BY_SOURCE: "event_deleted_by_source",
+  TASK_EVENT_DEPENDENCY_LOST: "task_event_dependency_lost",
+  EXTERNAL_ACCOUNT_REAUTH_REQUIRED: "external_account_reauth_required",
 }) satisfies Readonly<Record<string, ActionType>>;
 
 const KNOWN_TYPES = new Set<ActionType>(Object.values(ACTION_TYPES));
@@ -84,7 +98,10 @@ function extractTaskId(actionType: ActionType, metadata: Record<string, unknown>
   return typeof v === "string" ? v : null;
 }
 
-async function persist<T extends ActionType>(entry: ActionLogEntry<T>): Promise<void> {
+async function persist<T extends ActionType>(
+  entry: ActionLogEntry<T>,
+  actorType: ActorType,
+): Promise<void> {
   const supabase = getClient();
   if (!supabase) return;
 
@@ -101,6 +118,7 @@ async function persist<T extends ActionType>(entry: ActionLogEntry<T>): Promise<
     action_type: entry.action_type,
     task_id: extractTaskId(entry.action_type, entry.metadata as unknown as Record<string, unknown>),
     metadata: entry.metadata as unknown as Json,
+    actor_type: actorType,
   });
   if (error) {
     console.error("[action-log] insert failed", error);
@@ -110,6 +128,7 @@ async function persist<T extends ActionType>(entry: ActionLogEntry<T>): Promise<
 export function log<T extends ActionType>(
   actionType: T,
   metadata?: ActionMetadataMap[T],
+  actorType: ActorType = "user",
 ): ActionLogEntry<T> {
   if (!KNOWN_TYPES.has(actionType)) {
     throw new Error(`unknown action_type: ${actionType}`);
@@ -122,8 +141,8 @@ export function log<T extends ActionType>(
   memoryLog.push(entry);
   console.log("[action-log]", actionType, entry.metadata);
 
-  // fire-and-forget: ここで await しないのが肝
-  void persist(entry).catch((err) => {
+  // fire-and-forget: ここで await しないのが肝 (ADR 0035: actor_type は明示渡し、default 'user')
+  void persist(entry, actorType).catch((err) => {
     console.error("[action-log] persist error", err);
   });
 
