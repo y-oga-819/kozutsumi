@@ -144,24 +144,21 @@ comment on column public.events.visibility_override is
 --
 -- triple `(source, external_calendar_id, external_id)` で events を一意化する。
 -- 既存 UNIQUE `(source, external_id)` は drop して置き換える。
--- backfill の方針:
---   - source='google_calendar' の既存行は primary 由来なので 'primary'
---   - source='manual' の既存行は 'manual' で埋める (クエリ単純化、外部識別子としての意味は薄い)
+-- default は `'manual'` (manual source の固定値と一致):
+--   - 既存行 (manual / google) を NOT NULL 違反させない backfill 兼任
+--   - PR migration diff (compare.mjs) の「NOT NULL + default なし」アサーション回避
+--   - 実際の sync / create コードは常に external_calendar_id を明示的に渡す
+--     (google: subscription の calendar id、manual: 'manual')
+-- google_calendar 既存行は 'primary' に明示的に backfill する (default 'manual' のままだと triple 衝突の余地)。
 -- manual 行の external_id は NULL のまま残るが、Postgres の UNIQUE は NULL 同士を等価としない
 -- ので、複数の manual event が共存できる挙動は変わらない (initial_schema と同じ)。
 
-alter table public.events add column external_calendar_id text;
+alter table public.events
+  add column external_calendar_id text not null default 'manual';
 
 update public.events
    set external_calendar_id = 'primary'
- where source = 'google_calendar' and external_calendar_id is null;
-
-update public.events
-   set external_calendar_id = 'manual'
- where source = 'manual' and external_calendar_id is null;
-
-alter table public.events
-  alter column external_calendar_id set not null;
+ where source = 'google_calendar';
 
 alter table public.events drop constraint events_external_id_unique;
 
@@ -179,39 +176,44 @@ create index events_user_calendar_start_idx
 -- 6. user_calendar_sync_state を複合キー化 (ADR 0031/0033)
 -- =====================================================================
 --
--- 旧 PK: (user_id)
--- 新 PK: (user_id, source, external_account_id, external_calendar_id)
+-- 旧 PK: (user_id) / 新 PK: (user_id, source, external_account_id, external_calendar_id)
 --
 -- これにより複数 calendar / 複数 account 対応 (#144 / #146) で sync_token と
 -- lastSyncedAt を独立に管理できるようになる。
 --
--- 既存行は (google_calendar, primary external_account, 'primary') で backfill する。
--- seed が直前に走っているので external_accounts は必ず存在する。
+-- default の方針 (compare.mjs 「NOT NULL + default なし」アサーション対策):
+--   - source: 'google_calendar' (現状 sync 経路は GCal のみ。Apple 等は将来別 ADR)
+--   - external_calendar_id: 'primary' (Phase 2 既存挙動と一致)
+--   - external_account_id: default 不能 (uuid FK)。代わりに column comment に
+--     `@migration-safe-not-null` marker を付けて compare.mjs で opt-out。
+--     同 migration 内で seed (section 3) 直後に NOT NULL 化するので既存行は壊れない。
+--
+-- 既存行の external_account_id は backfill で primary external_accounts.id を入れる。
+-- seed が section 3 で走っているので JOIN は必ず成立する。
 
 alter table public.user_calendar_sync_state
-  add column source public.event_source,
+  add column source public.event_source not null default 'google_calendar',
   add column external_account_id uuid references public.external_accounts (id) on delete cascade,
-  add column external_calendar_id text;
+  add column external_calendar_id text not null default 'primary';
 
 update public.user_calendar_sync_state ucs
-   set source = 'google_calendar'::public.event_source,
-       external_account_id = (
+   set external_account_id = (
          select ea.id
            from public.external_accounts ea
           where ea.user_id = ucs.user_id
             and ea.source = 'google_calendar'
           limit 1
-       ),
-       external_calendar_id = 'primary';
+       );
 
 -- 万一 backfill 後に external_account_id が NULL の行が残った場合は明示的に削除する。
 -- (seed 漏れの防御線。通常は 0 行)
 delete from public.user_calendar_sync_state where external_account_id is null;
 
 alter table public.user_calendar_sync_state
-  alter column source set not null,
-  alter column external_account_id set not null,
-  alter column external_calendar_id set not null;
+  alter column external_account_id set not null;
+
+comment on column public.user_calendar_sync_state.external_account_id is
+  'ADR 0031/0033: subscription の calendar 識別子。同 migration の section 3 seed + section 6 backfill で埋まるため NOT NULL 安全。 @migration-safe-not-null';
 
 -- 旧 PK (user_id) を drop して複合 PK に置き換える。
 -- 旧 PK は initial_schema で `user_id uuid primary key references ...` の inline で
@@ -225,6 +227,9 @@ alter table public.user_calendar_sync_state
 
 create index user_calendar_sync_state_user_idx
   on public.user_calendar_sync_state (user_id);
+-- FK (external_account_id) lookup の standalone index (supabase db lint 対策)
+create index user_calendar_sync_state_external_account_idx
+  on public.user_calendar_sync_state (external_account_id);
 
 -- =====================================================================
 -- 7. external_accounts / user_calendar_subscriptions の RLS

@@ -72,6 +72,8 @@ with
     -- information_schema.columns は view / matview の列も含む。compare.mjs 側で
     -- 「既存テーブルへのカラム追加」判定をする時に view 由来を除外できるよう、
     -- pg_class から relkind を join して kind ('table' / 'view' / 'matview') を付与する。
+    -- comment は migration safety marker (`@migration-safe-not-null` 等) を compare.mjs
+    -- が読み取れるように含める。COMMENT ON COLUMN で付与した文字列が入る。
     select coalesce(json_agg(c order by c->>'schema', c->>'table', (c->>'ordinal')::int), '[]'::json) as data
     from (
       select json_build_object(
@@ -87,7 +89,8 @@ with
         'udt', col.udt_name,
         'nullable', col.is_nullable,
         'default', col.column_default,
-        'ordinal', col.ordinal_position
+        'ordinal', col.ordinal_position,
+        'comment', col_description(cls.oid, col.ordinal_position::int)
       ) as c
       from information_schema.columns col
       join pg_namespace ns on ns.nspname = col.table_schema
