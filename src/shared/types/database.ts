@@ -263,6 +263,18 @@ export type Database = {
         };
         Returns: string[];
       };
+      // ADR 0021 / Issue #150: AI 分解の子 insert + 親 decompose_status='decomposed' 更新を
+      // 1 トランザクションで行う PL/pgSQL function。
+      // 中間 failure (子 insert 成功 + 親 status 更新失敗) で decomposing 固まりを起こさない。
+      // 戻り値は新規子の id 配列 (jsonb 入力順 = stack_order 昇順)。
+      fn_decompose_parent_task: {
+        Args: {
+          p_parent_id: string;
+          p_base_stack_order: number;
+          p_new_children: Json;
+        };
+        Returns: string[];
+      };
     };
     Enums: {
       task_status: "idle" | "active" | "paused" | "done";
