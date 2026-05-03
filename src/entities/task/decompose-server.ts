@@ -7,7 +7,7 @@ import {
   parseDecomposeResponse,
   type DecomposeInput,
 } from "@/shared/ai/prompts/decompose";
-import type { Database, Tables, TablesInsert } from "@/shared/types/database";
+import type { Database, Json, Tables } from "@/shared/types/database";
 
 /**
  * AI タスク分解 (P3-6 / ADR 0017 / 0018 / 0016 / 0021) の server 側 orchestrator。
@@ -130,39 +130,35 @@ async function runDecompose(
   const baseStackOrder = parent.stack_order ?? 0;
   // 子の task_category は decompose プロンプトが同時推論する (ADR 0022 Decision 2)。
   // categorize の fan-out を避けることで 1 親あたりの Gemini 呼び出しを最大 2 回に固定する。
-  const childPayloads: TablesInsert<"tasks">[] = parsed.map((child, idx) => ({
-    user_id: userId,
-    project_id: parent.project_id,
+  const newChildren: Json = parsed.map((child) => ({
     title: child.title,
     body: child.body,
     estimated_minutes: child.estimatedMinutes,
     task_category: child.taskCategory,
-    parent_task_id: parent.id,
-    depends_on_event_id: parent.depends_on_event_id,
-    stack_order: baseStackOrder + idx,
-    decompose_status: "none",
   }));
 
-  const { data: insertedRows, error: insertErr } = await supabase
-    .from("tasks")
-    .insert(childPayloads)
-    .select("id");
+  // ADR 0021 / Issue #150: 子 insert + 親 decompose_status 更新を 1 トランザクションで行う。
+  // 旧実装は 2 クエリに分かれており、子 insert 成功後の status 更新失敗 (接続断 / タイムアウト)
+  // で親が `decomposing` で固まる経路があった。RPC 化することで中間 failure を構造的に消す。
+  // RPC が error を返す / throw した場合は orchestrator 側 (catch / 後段) で `failed` に倒す。
+  const { data: childIds, error: rpcError } = await supabase.rpc("fn_decompose_parent_task", {
+    p_parent_id: parent.id,
+    p_base_stack_order: baseStackOrder,
+    p_new_children: newChildren,
+  });
 
-  if (insertErr || !insertedRows) {
-    console.error("[ai/decompose] child insert failed", insertErr);
+  if (rpcError || !childIds || childIds.length === 0) {
+    console.error("[ai/decompose] rpc failed", rpcError);
     await setDecomposeStatus(supabase, parent.id, "failed");
     await logServerSide(supabase, userId, "task_decompose_failed", {
       task_id: parent.id,
       reason: "insert_failed",
       raw_response: responseText,
-      error_message: insertErr?.message,
+      error_message: rpcError?.message,
     });
     return { kind: "failed", reason: "insert_failed" };
   }
 
-  const childIds = insertedRows.map((r) => r.id);
-
-  await setDecomposeStatus(supabase, parent.id, "decomposed");
   await logServerSide(supabase, userId, "task_decomposed", {
     task_id: parent.id,
     child_ids: childIds,
