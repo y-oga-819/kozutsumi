@@ -1,10 +1,15 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
 import { useAutoSeed } from "./useAutoSeed";
+import {
+  dashboardKeys as keys,
+  invalidateDashboardData as invalidateAll,
+  useDashboardQueries,
+} from "./useDashboardQueries";
 import { useNowClock } from "./useNowClock";
 import { ACTION_TYPES, log } from "@/entities/action-log/logger";
 import type { CreateEventInput, UpdateEventInput } from "@/entities/event/gateway";
@@ -13,7 +18,6 @@ import type { CreateProjectInput, UpdateProjectInput } from "@/entities/project/
 import { ProjectsProvider } from "@/entities/project/ProjectsContext";
 import type { Project } from "@/entities/project/types";
 import { CorrectionFactorsProvider } from "@/entities/task/CorrectionFactorsContext";
-import type { CorrectionFactor } from "@/entities/task/correction";
 import type { CreateTaskInput } from "@/entities/task/gateway";
 import type { Task, TaskCategory } from "@/entities/task/types";
 import { AddButton } from "@/features/add-forms/AddButton";
@@ -65,20 +69,6 @@ type AppShellProps = {
   };
 };
 
-/**
- * Query key と「どの queryClient から書き換えるか」をここに集約する。
- * 各ミューテーションは optimistic update を同じキーに対して適用する。
- */
-const keys = {
-  projects: ["projects"] as const,
-  tasks: ["tasks"] as const,
-  events: ["events"] as const,
-  /** 詳細パネル (P3-15) で fetch する AI 分解の最新試行ログ。タスク id 単位で分離する。 */
-  decomposeLog: (taskId: string) => ["actionLog", "decompose", taskId] as const,
-  /** 見積もり補正倍率 (P3-9 / #93、ADR 0025): user-scoped、view 経由で取る。 */
-  correctionFactors: ["correctionFactors"] as const,
-};
-
 export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
   const view = initialView;
   const taskGateway = useTaskGateway();
@@ -91,35 +81,17 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
     [projectGateway, eventGateway, taskGateway],
   );
 
-  const projectsQuery = useQuery({
-    queryKey: keys.projects,
-    queryFn: () => projectGateway.list(),
-  });
-  const tasksQuery = useQuery({
-    queryKey: keys.tasks,
-    queryFn: () => taskGateway.list(),
-  });
-  const eventsQuery = useQuery({
-    queryKey: keys.events,
-    queryFn: () => eventGateway.list(),
-  });
-
-  const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
-  const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
-  const events = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data]);
-
-  // P3-9 / #93: 見積もり補正倍率 (ADR 0024 / 0025)。
-  // 補正は augmentation (ADR 0013) なので未取得 / fetch 失敗は空配列扱い (= 全タスク補正なし)。
-  // staleTime を長めにして、タスク完了のたびに再取得しない (補正値の鋭敏な更新は不要)。
-  const correctionFactorsQuery = useQuery({
-    queryKey: keys.correctionFactors,
-    queryFn: () => taskGateway.listCorrectionFactors(),
-    staleTime: 5 * 60_000,
-  });
-  const correctionFactors = useMemo<readonly CorrectionFactor[]>(
-    () => correctionFactorsQuery.data ?? [],
-    [correctionFactorsQuery.data],
-  );
+  const {
+    projectsQuery,
+    tasksQuery,
+    eventsQuery,
+    projects,
+    tasks,
+    events,
+    correctionFactors,
+    pendingTasks,
+    doneTasks,
+  } = useDashboardQueries();
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [eventDetailId, setEventDetailId] = useState<string | null>(null);
@@ -503,8 +475,6 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
     }
   }, [seedGateways, queryClient]);
 
-  const pendingTasks = useMemo(() => tasks.filter((t) => !isDone(t)), [tasks]);
-  const doneTasks = useMemo(() => tasks.filter((t) => isDone(t)), [tasks]);
   const detailTask = detailId ? tasks.find((t) => t.id === detailId) : null;
   const projectDetail = projectDetailId
     ? (projects.find((p) => p.id === projectDetailId) ?? null)
@@ -753,14 +723,6 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
       </CorrectionFactorsProvider>
     </ProjectsProvider>
   );
-}
-
-async function invalidateAll(queryClient: QueryClient): Promise<void> {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: keys.projects }),
-    queryClient.invalidateQueries({ queryKey: keys.tasks }),
-    queryClient.invalidateQueries({ queryKey: keys.events }),
-  ]);
 }
 
 type StackViewProps = {
