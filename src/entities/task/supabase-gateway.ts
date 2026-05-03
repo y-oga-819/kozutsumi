@@ -107,10 +107,26 @@ export class SupabaseTaskGateway implements TaskGateway {
   }
 
   async delete(id: string): Promise<void> {
+    // ADR 0035 §5: task_deleted は snapshot 必須化された (Phase 4 回避パターン分析の素材)。
+    // 物理削除前に主要属性を読んでおき、削除後に snapshot 込みで log する。
+    // select は必要列のみで軽い (RLS 経由で 1 行)。失敗しても delete は強行する。
+    const { data: snapshotRow } = await this.supabase
+      .from("tasks")
+      .select("title, estimated_minutes, task_category, status, parent_task_id")
+      .eq("id", id)
+      .maybeSingle();
     const { error } = await this.supabase.from("tasks").delete().eq("id", id);
     if (error) throw error;
-    // 行動ログ欠損を防ぐため delete 成功後に TASK_DELETED を記録する (vision.md / ADR-0001)
-    log(ACTION_TYPES.TASK_DELETED, { task_id: id });
+    log(ACTION_TYPES.TASK_DELETED, {
+      task_id: id,
+      snapshot: {
+        title: snapshotRow?.title ?? "",
+        estimated_minutes: snapshotRow?.estimated_minutes ?? null,
+        task_category: snapshotRow?.task_category ?? null,
+        status: snapshotRow?.status ?? "idle",
+        parent_task_id: snapshotRow?.parent_task_id ?? null,
+      },
+    });
   }
 
   async deleteAllForCurrentUser(): Promise<void> {

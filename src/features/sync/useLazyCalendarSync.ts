@@ -60,6 +60,26 @@ export function shouldTriggerLazy(state: CalendarSyncState | null, now: Date): b
 
 async function defaultGetState(): Promise<CalendarSyncState | null> {
   const supabase = createClient();
+  // ADR 0031/0033: sync_state は (source, external_account_id, external_calendar_id) で識別する。
+  // client 側では read-only に primary Google account を解決し、未存在なら null を返して
+  // 「sync が一度も走っていない」(= trigger 候補) として扱う。
+  // external_accounts の lazy 作成は server 側 sync 経路 (sync.ts) で行う。
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: account } = await supabase
+    .from("external_accounts")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("source", "google_calendar")
+    .limit(1)
+    .maybeSingle();
+  if (!account) return null;
   const gateway: CalendarSyncStateGateway = new SupabaseCalendarSyncStateGateway(supabase);
-  return gateway.get();
+  return gateway.get({
+    source: "google_calendar",
+    externalAccountId: account.id,
+    externalCalendarId: "primary",
+  });
 }

@@ -131,6 +131,8 @@ describe("TaskDetailPanel", () => {
         description: "",
         source: "manual",
         externalId: null,
+        externalCalendarId: "manual",
+        visibilityOverride: "none",
         createdAt: "2026-04-11T00:00:00",
       },
     ];
@@ -166,6 +168,8 @@ describe("TaskDetailPanel", () => {
         description: "",
         source: "manual",
         externalId: null,
+        externalCalendarId: "manual",
+        visibilityOverride: "none",
         createdAt: "2026-04-11T00:00:00",
       },
     ];
@@ -192,6 +196,8 @@ describe("TaskDetailPanel", () => {
         description: "",
         source: "manual",
         externalId: null,
+        externalCalendarId: "manual",
+        visibilityOverride: "none",
         createdAt: "2026-04-11T00:00:00",
       },
     ];
@@ -217,6 +223,8 @@ describe("TaskDetailPanel", () => {
       description: "",
       source: "manual",
       externalId: null,
+      externalCalendarId: "manual",
+      visibilityOverride: "none",
       createdAt: "2026-04-09T00:00:00",
     };
     const future: Event = {
@@ -230,6 +238,8 @@ describe("TaskDetailPanel", () => {
       description: "",
       source: "manual",
       externalId: null,
+      externalCalendarId: "manual",
+      visibilityOverride: "none",
       createdAt: "2026-04-09T00:00:00",
     };
     const { getByText, queryByText } = renderPanel({
@@ -253,6 +263,8 @@ describe("TaskDetailPanel", () => {
       description: "",
       source: "manual",
       externalId: null,
+      externalCalendarId: "manual",
+      visibilityOverride: "none",
       createdAt: "2026-04-09T00:00:00",
     };
     const future: Event = {
@@ -266,6 +278,8 @@ describe("TaskDetailPanel", () => {
       description: "",
       source: "manual",
       externalId: null,
+      externalCalendarId: "manual",
+      visibilityOverride: "none",
       createdAt: "2026-04-09T00:00:00",
     };
     const { getByText, getAllByRole } = renderPanel({

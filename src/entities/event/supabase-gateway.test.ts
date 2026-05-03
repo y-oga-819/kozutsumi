@@ -22,6 +22,8 @@ function makeRow(overrides: Partial<EventRow> = {}): EventRow {
     description: "",
     source: "manual",
     external_id: null,
+    external_calendar_id: "manual",
+    visibility_override: "none",
     created_at: "2026-04-23T00:00:00.000Z",
     ...overrides,
   };

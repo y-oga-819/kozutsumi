@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { CalendarSyncStateGateway } from "@/entities/calendar-sync/gateway";
+import type {
+  CalendarSyncStateGateway,
+  CalendarSyncStateKey,
+} from "@/entities/calendar-sync/gateway";
 import { SupabaseCalendarSyncStateGateway } from "@/entities/calendar-sync/supabase-gateway";
 import {
   GoogleApiError,
@@ -17,6 +20,7 @@ import {
 } from "@/shared/google/token";
 import type { Database } from "@/shared/types/database";
 
+import { EVENT_SOURCE } from "./types";
 import type { EventGateway, UpsertGoogleCalendarEventInput } from "./gateway";
 import { SupabaseEventGateway } from "./supabase-gateway";
 
@@ -54,6 +58,12 @@ export type SyncGoogleCalendarDeps = {
   listEvents: (params: ListEventsParams) => Promise<GoogleCalendarEventsListResponse>;
   getValidAccessToken: (supabase: SupabaseClient<Database>) => Promise<GoogleProviderAccess>;
   refreshAccessToken: (supabase: SupabaseClient<Database>) => Promise<GoogleProviderAccess>;
+  /**
+   * 現在ユーザーの primary Google account に対応する `external_accounts.id` を返す。
+   * 未存在なら lazy upsert する (Issue #159 §8 の最小コード変更スコープ)。
+   * Issue #144 / #146 で複数 account / 複数 calendar 対応時に置き換える。
+   */
+  resolvePrimaryExternalAccountId: (supabase: SupabaseClient<Database>) => Promise<string>;
   now: () => Date;
 };
 
@@ -67,14 +77,23 @@ export async function syncGoogleCalendar(
     listEvents: overrides.listEvents ?? defaultListEvents,
     getValidAccessToken: overrides.getValidAccessToken ?? defaultGetValidAccessToken,
     refreshAccessToken: overrides.refreshAccessToken ?? defaultRefreshAccessToken,
+    resolvePrimaryExternalAccountId:
+      overrides.resolvePrimaryExternalAccountId ?? defaultResolvePrimaryExternalAccountId,
     now: overrides.now ?? (() => new Date()),
+  };
+
+  const externalAccountId = await deps.resolvePrimaryExternalAccountId(supabase);
+  const syncStateKey: CalendarSyncStateKey = {
+    source: EVENT_SOURCE.GOOGLE_CALENDAR,
+    externalAccountId,
+    externalCalendarId: PRIMARY_CALENDAR_ID,
   };
 
   const nowDate = deps.now();
   const timeMin = new Date(nowDate.getTime() - SYNC_WINDOW_PAST_DAYS * MS_PER_DAY).toISOString();
   const timeMax = new Date(nowDate.getTime() + SYNC_WINDOW_FUTURE_DAYS * MS_PER_DAY).toISOString();
 
-  const initialState = await deps.syncStateGateway.get();
+  const initialState = await deps.syncStateGateway.get(syncStateKey);
   let activeSyncToken: string | undefined = initialState?.syncToken ?? undefined;
 
   const initial = await deps.getValidAccessToken(supabase);
@@ -136,7 +155,7 @@ export async function syncGoogleCalendar(
     break;
   }
 
-  const { upserts, cancelled } = partitionEvents(collected);
+  const { upserts, cancelled } = partitionEvents(collected, PRIMARY_CALENDAR_ID);
 
   let synced = 0;
   if (upserts.length > 0) {
@@ -144,13 +163,13 @@ export async function syncGoogleCalendar(
   }
   let deleted = 0;
   if (cancelled.length > 0) {
-    deleted = await deps.gateway.deleteByGoogleExternalIds(cancelled);
+    deleted = await deps.gateway.deleteByGoogleExternalIds(PRIMARY_CALENDAR_ID, cancelled);
   }
 
   const lastSyncedAt = nowDate.toISOString();
   // 成功したときだけ atomic に lastSyncedAt + syncToken を記録する。
   // listEvents が最後まで throw した経路ではここに来ないので、stale な syncToken は上書きされない。
-  await deps.syncStateGateway.saveSyncState({
+  await deps.syncStateGateway.saveSyncState(syncStateKey, {
     lastSyncedAt,
     syncToken: nextSyncToken ?? null,
   });
@@ -160,6 +179,49 @@ export async function syncGoogleCalendar(
     deleted,
     lastSyncedAt,
   };
+}
+
+/**
+ * 現在ユーザーの primary Google account を `external_accounts` で確保する (lazy upsert)。
+ *
+ * - 既存ユーザーは migration の seed で行が存在する。
+ * - 新規ユーザー (migration 後に Google ログインしたが #159 の seed 対象外) はここで作る。
+ * - `external_account_id` (text) は auth.users.email を優先、fallback で user.id を使う
+ *   (migration の seed と同じ規約)。Google API で google_user_id を取得する経路は #146 で扱う。
+ */
+async function defaultResolvePrimaryExternalAccountId(
+  supabase: SupabaseClient<Database>,
+): Promise<string> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("not authenticated");
+
+  // 既存行を探す: (user_id, source) で limit 1 (現状 1 user に primary 1 account)
+  const { data: existing, error: selectErr } = await supabase
+    .from("external_accounts")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("source", EVENT_SOURCE.GOOGLE_CALENDAR)
+    .limit(1)
+    .maybeSingle();
+  if (selectErr) throw selectErr;
+  if (existing) return existing.id;
+
+  // 無ければ作る (UNIQUE (user_id, source, external_account_id) の重複は起きない前提)
+  const externalAccountIdValue = user.email ?? user.id;
+  const { data: inserted, error: insertErr } = await supabase
+    .from("external_accounts")
+    .insert({
+      user_id: user.id,
+      source: EVENT_SOURCE.GOOGLE_CALENDAR,
+      external_account_id: externalAccountIdValue,
+      display_name: "(primary)",
+    })
+    .select("id")
+    .single();
+  if (insertErr) throw insertErr;
+  return inserted.id;
 }
 
 /**
@@ -195,7 +257,10 @@ function buildListParams(args: {
   };
 }
 
-export function partitionEvents(events: GoogleCalendarEvent[]): {
+export function partitionEvents(
+  events: GoogleCalendarEvent[],
+  externalCalendarId: string,
+): {
   upserts: UpsertGoogleCalendarEventInput[];
   cancelled: string[];
 } {
@@ -206,7 +271,7 @@ export function partitionEvents(events: GoogleCalendarEvent[]): {
       cancelled.push(ev.id);
       continue;
     }
-    const mapped = mapGoogleEventToUpsertInput(ev);
+    const mapped = mapGoogleEventToUpsertInput(ev, externalCalendarId);
     if (mapped) upserts.push(mapped);
   }
   return { upserts, cancelled };
@@ -214,11 +279,13 @@ export function partitionEvents(events: GoogleCalendarEvent[]): {
 
 export function mapGoogleEventToUpsertInput(
   event: GoogleCalendarEvent,
+  externalCalendarId: string,
 ): UpsertGoogleCalendarEventInput | null {
   const times = resolveEventTimes(event);
   if (!times) return null;
 
   return {
+    externalCalendarId,
     externalId: event.id,
     title: event.summary ?? DEFAULT_TITLE,
     startTime: times.start,

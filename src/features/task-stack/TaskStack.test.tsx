@@ -56,6 +56,8 @@ const baseEvent: Event = {
   description: "",
   source: "manual",
   externalId: null,
+  externalCalendarId: "manual",
+  visibilityOverride: "none",
   createdAt: "2026-04-11T00:00:00",
 };
 

@@ -180,6 +180,11 @@ function runAssertions(report, prSnapshot) {
   }
 
   // ❌ NOT NULL かつ default なしのカラム追加 (既存行で fail) — 通常 table のみ対象
+  // 例外: column comment に `@migration-safe-not-null` marker が含まれる場合は skip。
+  // 「同一 migration 内で nullable で追加 → backfill → NOT NULL 化を完結させた」ケースを
+  // 明示的にオプトアウトするための仕組み (default を付けようがない uuid FK 列など)。
+  // marker を使う時は comment に backfill ロジックの所在 (migration ファイル名等) も書くこと。
+  const SAFE_NOT_NULL_MARKER = "@migration-safe-not-null";
   for (const c of report.columns.added) {
     if (c.schema !== "public") continue;
     if ((c.kind ?? "table") !== "table") continue; // view / matview の列は対象外
@@ -189,10 +194,16 @@ function runAssertions(report, prSnapshot) {
     );
     if (isNewTable) continue;
     if (c.nullable === "NO" && c.default === null) {
+      if (typeof c.comment === "string" && c.comment.includes(SAFE_NOT_NULL_MARKER)) {
+        oks.push(
+          `\`${c.schema}.${c.table}.${c.column}\` は NOT NULL + default なしだが column comment の \`${SAFE_NOT_NULL_MARKER}\` で同 migration 内 backfill が宣言されている`,
+        );
+        continue;
+      }
       errors.push({
         kind: "not-null-no-default",
         message: `\`${c.schema}.${c.table}.${c.column}\` を NOT NULL かつ default なしで追加 (既存行で違反)`,
-        fix: "default 値を付けるか、まず NULL 可で追加 → backfill → NOT NULL 化に分割",
+        fix: `default 値を付けるか、まず NULL 可で追加 → backfill → NOT NULL 化に分割。同一 migration 内で安全に backfill 完結する場合は column comment に \`${SAFE_NOT_NULL_MARKER}\` を含めて opt-out できる`,
       });
     }
   }

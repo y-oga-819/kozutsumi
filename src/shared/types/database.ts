@@ -119,6 +119,8 @@ export type Database = {
           description: string;
           source: Database["public"]["Enums"]["event_source"];
           external_id: string | null;
+          external_calendar_id: string;
+          visibility_override: Database["public"]["Enums"]["event_visibility_override"];
           created_at: string;
         };
         Insert: {
@@ -133,6 +135,8 @@ export type Database = {
           description?: string;
           source?: Database["public"]["Enums"]["event_source"];
           external_id?: string | null;
+          external_calendar_id: string;
+          visibility_override?: Database["public"]["Enums"]["event_visibility_override"];
           created_at?: string;
         };
         Update: {
@@ -147,6 +151,8 @@ export type Database = {
           description?: string;
           source?: Database["public"]["Enums"]["event_source"];
           external_id?: string | null;
+          external_calendar_id?: string;
+          visibility_override?: Database["public"]["Enums"]["event_visibility_override"];
           created_at?: string;
         };
         Relationships: [];
@@ -185,6 +191,7 @@ export type Database = {
           action_type: string;
           task_id: string | null;
           metadata: Json;
+          actor_type: string;
           created_at: string;
         };
         Insert: {
@@ -193,6 +200,7 @@ export type Database = {
           action_type: string;
           task_id?: string | null;
           metadata?: Json;
+          actor_type?: string;
           created_at?: string;
         };
         Update: {
@@ -201,6 +209,7 @@ export type Database = {
           action_type?: string;
           task_id?: string | null;
           metadata?: Json;
+          actor_type?: string;
           created_at?: string;
         };
         Relationships: [];
@@ -208,21 +217,93 @@ export type Database = {
       user_calendar_sync_state: {
         Row: {
           user_id: string;
+          source: Database["public"]["Enums"]["event_source"];
+          external_account_id: string;
+          external_calendar_id: string;
           last_synced_at: string;
           sync_token: string | null;
           updated_at: string;
         };
         Insert: {
           user_id: string;
+          source: Database["public"]["Enums"]["event_source"];
+          external_account_id: string;
+          external_calendar_id: string;
           last_synced_at: string;
           sync_token?: string | null;
           updated_at?: string;
         };
         Update: {
           user_id?: string;
+          source?: Database["public"]["Enums"]["event_source"];
+          external_account_id?: string;
+          external_calendar_id?: string;
           last_synced_at?: string;
           sync_token?: string | null;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      external_accounts: {
+        Row: {
+          id: string;
+          user_id: string;
+          source: Database["public"]["Enums"]["event_source"];
+          external_account_id: string;
+          display_name: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          source: Database["public"]["Enums"]["event_source"];
+          external_account_id: string;
+          display_name?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          source?: Database["public"]["Enums"]["event_source"];
+          external_account_id?: string;
+          display_name?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      user_calendar_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          external_account_id: string;
+          source: Database["public"]["Enums"]["event_source"];
+          external_calendar_id: string;
+          auto_promote_to_timeline: boolean;
+          display_name: string | null;
+          color: string | null;
+          subscribed_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          external_account_id: string;
+          source: Database["public"]["Enums"]["event_source"];
+          external_calendar_id: string;
+          auto_promote_to_timeline?: boolean;
+          display_name?: string | null;
+          color?: string | null;
+          subscribed_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          external_account_id?: string;
+          source?: Database["public"]["Enums"]["event_source"];
+          external_calendar_id?: string;
+          auto_promote_to_timeline?: boolean;
+          display_name?: string | null;
+          color?: string | null;
+          subscribed_at?: string;
         };
         Relationships: [];
       };
@@ -281,6 +362,7 @@ export type Database = {
       event_source: "manual" | "google_calendar";
       pause_reason: "meeting" | "interruption" | "voluntary";
       decompose_status: "none" | "decomposing" | "decomposed" | "skipped" | "failed";
+      event_visibility_override: "none" | "shown" | "hidden";
     };
   };
 };

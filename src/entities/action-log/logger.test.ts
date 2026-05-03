@@ -66,7 +66,7 @@ describe("log()", () => {
     ).toThrow(/unknown action_type/i);
   });
 
-  test("Supabase action_logs に user_id / action_type / metadata を insert する", async () => {
+  test("Supabase action_logs に user_id / action_type / metadata / actor_type を insert する", async () => {
     log(ACTION_TYPES.TASK_REORDERED, {
       task_id: "t1",
       from_position: 0,
@@ -79,6 +79,7 @@ describe("log()", () => {
       action_type: "task_reordered",
       task_id: "t1",
       metadata: { task_id: "t1", from_position: 0, to_position: 2 },
+      actor_type: "user",
     });
   });
 
@@ -88,13 +89,32 @@ describe("log()", () => {
   // task_deleted は metadata.task_id を一次の真実として残しつつ column は
   // null で書く。
   test("task_deleted は column.task_id を null にして insert する (FK 違反回避)", async () => {
-    log(ACTION_TYPES.TASK_DELETED, { task_id: "deleted-task" });
+    log(ACTION_TYPES.TASK_DELETED, {
+      task_id: "deleted-task",
+      snapshot: {
+        title: "old title",
+        estimated_minutes: 30,
+        task_category: "coding",
+        status: "idle",
+        parent_task_id: null,
+      },
+    });
     await flushMicrotasks();
     expect(insertMock).toHaveBeenCalledWith({
       user_id: "user-1",
       action_type: "task_deleted",
       task_id: null,
-      metadata: { task_id: "deleted-task" },
+      metadata: {
+        task_id: "deleted-task",
+        snapshot: {
+          title: "old title",
+          estimated_minutes: 30,
+          task_category: "coding",
+          status: "idle",
+          parent_task_id: null,
+        },
+      },
+      actor_type: "user",
     });
   });
 
@@ -130,7 +150,16 @@ describe("getLog()", () => {
     const snapshot = getLog();
     snapshot.push({
       action_type: "task_deleted",
-      metadata: { task_id: "fake" },
+      metadata: {
+        task_id: "fake",
+        snapshot: {
+          title: "fake",
+          estimated_minutes: null,
+          task_category: null,
+          status: "idle",
+          parent_task_id: null,
+        },
+      },
       created_at: "fake",
     });
     expect(getLog()).toHaveLength(1);
@@ -156,7 +185,7 @@ describe("clearLog()", () => {
 });
 
 describe("ACTION_TYPES", () => {
-  test("Phase 1 / Phase 2 / Phase 3 の action_type をすべて含む", () => {
+  test("Phase 1 / Phase 2 / Phase 3 / calendar 拡張の action_type をすべて含む", () => {
     expect(ACTION_TYPES).toEqual({
       TASK_STARTED: "task_started",
       TASK_PAUSED: "task_paused",
@@ -178,6 +207,19 @@ describe("ACTION_TYPES", () => {
       TASK_DECOMPOSE_SKIPPED: "task_decompose_skipped",
       TASK_CHILD_RESPLIT: "task_child_resplit",
       DECOMPOSITION_MODIFIED: "decomposition_modified",
+      CALENDAR_SUBSCRIBED: "calendar_subscribed",
+      CALENDAR_UNSUBSCRIBED: "calendar_unsubscribed",
+      CALENDAR_AUTO_PROMOTE_CHANGED: "calendar_auto_promote_changed",
+      EVENT_PROMOTED: "event_promoted",
+      EVENT_DEMOTED: "event_demoted",
+      EVENT_OVERRIDE_CLEARED: "event_override_cleared",
+      EXTERNAL_ACCOUNT_ADDED: "external_account_added",
+      EXTERNAL_ACCOUNT_REMOVED: "external_account_removed",
+      EVENT_VISIBILITY_FROZEN_BY_SUBSCRIPTION_TOGGLE:
+        "event_visibility_frozen_by_subscription_toggle",
+      EVENT_DELETED_BY_SOURCE: "event_deleted_by_source",
+      TASK_EVENT_DEPENDENCY_LOST: "task_event_dependency_lost",
+      EXTERNAL_ACCOUNT_REAUTH_REQUIRED: "external_account_reauth_required",
     });
   });
 });
@@ -212,6 +254,7 @@ describe("log(task_decomposed)", () => {
         child_ids: ["child-a", "child-b"],
         raw_response: '[{"title":"a"},{"title":"b"}]',
       },
+      actor_type: "user",
     });
   });
 });
@@ -249,6 +292,7 @@ describe("log(task_decompose_failed)", () => {
         reason: "ai_response_unparseable",
         raw_response: "I cannot decompose this",
       },
+      actor_type: "user",
     });
   });
 
@@ -268,6 +312,7 @@ describe("log(task_decompose_failed)", () => {
         reason: "quota_exhausted",
         error_message: "RESOURCE_EXHAUSTED",
       },
+      actor_type: "user",
     });
   });
 });
@@ -297,6 +342,7 @@ describe("log(task_decompose_skipped)", () => {
       action_type: "task_decompose_skipped",
       task_id: "parent-1",
       metadata: { task_id: "parent-1", raw_response: "[]" },
+      actor_type: "user",
     });
   });
 });
@@ -352,6 +398,7 @@ describe("log(task_child_resplit)", () => {
         new_child_ids: ["new-child-1", "new-child-2", "new-child-3"],
         raw_response: '[{"title":"導入部の構成"},{"title":"本文を書く"},{"title":"最終確認"}]',
       },
+      actor_type: "user",
     });
   });
 });
@@ -384,6 +431,7 @@ describe("log(decomposition_modified)", () => {
       action_type: "decomposition_modified",
       task_id: null,
       metadata: { task_id: "child-a", parent_id: "parent-1", kind: "child_deleted" },
+      actor_type: "user",
     });
   });
 });
@@ -414,6 +462,7 @@ describe("log(task_category_changed)", () => {
       action_type: "task_category_changed",
       task_id: "t1",
       metadata: { task_id: "t1", from: null, to: "coding" },
+      actor_type: "user",
     });
   });
 
@@ -429,6 +478,7 @@ describe("log(task_category_changed)", () => {
       action_type: "task_category_changed",
       task_id: "t1",
       metadata: { task_id: "t1", from: "doc", to: "research" },
+      actor_type: "user",
     });
   });
 });
@@ -459,6 +509,7 @@ describe("log(calendar_synced)", () => {
       action_type: "calendar_synced",
       task_id: null,
       metadata: { synced: 5, deleted: 1, trigger: "manual" },
+      actor_type: "user",
     });
   });
 });
