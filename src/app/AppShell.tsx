@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
@@ -10,16 +10,12 @@ import {
   invalidateDashboardData as invalidateAll,
   useDashboardQueries,
 } from "./useDashboardQueries";
+import { useDashboardMutations } from "./useDashboardMutations";
 import { useNowClock } from "./useNowClock";
-import { ACTION_TYPES, log } from "@/entities/action-log/logger";
-import type { CreateEventInput, UpdateEventInput } from "@/entities/event/gateway";
 import type { Event } from "@/entities/event/types";
-import type { CreateProjectInput, UpdateProjectInput } from "@/entities/project/gateway";
 import { ProjectsProvider } from "@/entities/project/ProjectsContext";
-import type { Project } from "@/entities/project/types";
 import { CorrectionFactorsProvider } from "@/entities/task/CorrectionFactorsContext";
-import type { CreateTaskInput } from "@/entities/task/gateway";
-import type { Task, TaskCategory } from "@/entities/task/types";
+import type { Task } from "@/entities/task/types";
 import { AddButton } from "@/features/add-forms/AddButton";
 import { AddPanel } from "@/features/add-forms/AddPanel";
 import { DayTimeline } from "@/features/day-timeline/DayTimeline";
@@ -31,11 +27,7 @@ import { useCalendarSync } from "@/features/sync/useCalendarSync";
 import { useLazyCalendarSync } from "@/features/sync/useLazyCalendarSync";
 import { TaskDetailPanel } from "@/features/task-detail/TaskDetailPanel";
 import { PauseReasonModal } from "@/features/task-stack/PauseReasonModal";
-import { reorderTasksById } from "@/features/task-stack/reorderTasks";
 import { TaskStack, type TopTimerBinding } from "@/features/task-stack/TaskStack";
-import { triggerCategorize } from "@/features/task-stack/triggerCategorize";
-import { triggerDecompose } from "@/features/task-stack/triggerDecompose";
-import { triggerResplit } from "@/features/task-stack/triggerResplit";
 import { useTaskTimer } from "@/features/task-stack/useTaskTimer";
 import { computeProjectOrderForTree, mergeTreeProjects } from "@/features/tree-view/fallback";
 import { TreeView } from "@/features/tree-view/TreeView";
@@ -50,7 +42,6 @@ import {
   useTaskGateway,
 } from "@/shared/gateway/GatewayContext";
 import { writeSampleDataMode } from "@/shared/lib/sample-data";
-import { isDone } from "@/shared/lib/task";
 import { todayIso } from "@/shared/lib/time";
 
 type View = "stack" | "tree";
@@ -119,338 +110,24 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
     onSeeded,
   });
 
-  // ---- Mutations (optimistic) ---------------------------------------------
-
-  const toggleDoneMutation = useMutation({
-    mutationFn: (id: string) => {
-      const target = tasks.find((t) => t.id === id);
-      if (!target) throw new Error("task not found");
-      const nextDone = !isDone(target);
-      return taskGateway.update(id, {
-        status: nextDone ? "done" : "idle",
-        completedAt: nextDone ? new Date().toISOString() : null,
-      });
-    },
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: keys.tasks });
-      const previous = queryClient.getQueryData<Task[]>(keys.tasks);
-      const target = previous?.find((t) => t.id === id);
-      if (target && !isDone(target)) {
-        log(ACTION_TYPES.TASK_COMPLETED, { task_id: id });
-      }
-      queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
-        (prev ?? []).map((t) =>
-          t.id === id
-            ? {
-                ...t,
-                status: isDone(t) ? "idle" : "done",
-                completedAt: isDone(t) ? null : new Date().toISOString(),
-              }
-            : t,
-        ),
-      );
-      return { previous };
-    },
-    onError: (_err, _id, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(keys.tasks, ctx.previous);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: keys.tasks });
-    },
-  });
-
-  const updateBodyMutation = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: string }) => taskGateway.update(id, { body }),
-    onMutate: async ({ id, body }) => {
-      await queryClient.cancelQueries({ queryKey: keys.tasks });
-      const previous = queryClient.getQueryData<Task[]>(keys.tasks);
-      queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
-        (prev ?? []).map((t) => (t.id === id ? { ...t, body } : t)),
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(keys.tasks, ctx.previous);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: keys.tasks });
-    },
-  });
-
-  // P2-5 (#53): タスクの依存イベント設定。set / cleared を action_log に残し、
-  // Phase 4 で「依存設定が着手順に効いたか」の分析データに使う。
-  const updateDependencyMutation = useMutation({
-    mutationFn: ({ id, dependsOnEventId }: { id: string; dependsOnEventId: string | null }) =>
-      taskGateway.update(id, { dependsOnEventId }),
-    onMutate: async ({ id, dependsOnEventId }) => {
-      await queryClient.cancelQueries({ queryKey: keys.tasks });
-      const previous = queryClient.getQueryData<Task[]>(keys.tasks);
-      const target = previous?.find((t) => t.id === id);
-      const was = target?.dependsOnEventId ?? null;
-      if (was !== dependsOnEventId) {
-        if (dependsOnEventId) {
-          log(ACTION_TYPES.TASK_DEPENDENCY_SET, {
-            task_id: id,
-            event_id: dependsOnEventId,
-            was,
-          });
-        } else if (was) {
-          log(ACTION_TYPES.TASK_DEPENDENCY_CLEARED, { task_id: id, was });
-        }
-      }
-      queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
-        (prev ?? []).map((t) => (t.id === id ? { ...t, dependsOnEventId } : t)),
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(keys.tasks, ctx.previous);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: keys.tasks });
-    },
-  });
-
-  // P3-5 (#90) / ADR 0015: 詳細パネルからの task_category override。
-  // AddPanel には出さず、AI 初期ラベル → 人間 override のフローで暗黙的フィードバック
-  // (task_category_changed) を残す。Phase 4 のラベリング精度改善ループの入力源。
-  const updateCategoryMutation = useMutation({
-    mutationFn: ({ id, taskCategory }: { id: string; taskCategory: TaskCategory | null }) =>
-      taskGateway.update(id, { taskCategory }),
-    onMutate: async ({ id, taskCategory }) => {
-      await queryClient.cancelQueries({ queryKey: keys.tasks });
-      const previous = queryClient.getQueryData<Task[]>(keys.tasks);
-      const target = previous?.find((t) => t.id === id);
-      const from = target?.taskCategory ?? null;
-      // override 時のみ log。next === null (= 「未分類」へ戻す) は ADR 0015 の
-      // metadata.to: string と矛盾するので log を抑制する (DB は更新する)。
-      // Phase 4 のラベリング精度分析は「人間が AI ラベルを別の値で上書きした」事象を
-      // 拾えれば十分なので、null に戻す操作の追跡は今は持たない。
-      if (from !== taskCategory && taskCategory !== null) {
-        log(ACTION_TYPES.TASK_CATEGORY_CHANGED, {
-          task_id: id,
-          from,
-          to: taskCategory,
-        });
-      }
-      queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
-        (prev ?? []).map((t) => (t.id === id ? { ...t, taskCategory } : t)),
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(keys.tasks, ctx.previous);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: keys.tasks });
-    },
-  });
-
-  const reorderMutation = useMutation({
-    mutationFn: (entries: { id: string; stackOrder: number | null }[]) =>
-      taskGateway.reorder(entries),
-    // DnD は optimistic で UI 側は onMutate で即反映、サーバー同期は背面で進める。
-  });
-
-  const createTaskMutation = useMutation({
-    mutationFn: (input: CreateTaskInput) => taskGateway.create(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: keys.tasks });
-    },
-  });
-
-  const createEventMutation = useMutation({
-    mutationFn: (input: CreateEventInput) => eventGateway.create(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: keys.events });
-    },
-  });
-
-  // ADR 0010 / P2-4: google_calendar イベントは project_id だけ kozutsumi 側で
-  // 編集可。optimistic に反映し、失敗したら roll back する。
-  const updateEventProjectMutation = useMutation({
-    mutationFn: ({ id, projectId }: { id: string; projectId: string | null }) =>
-      eventGateway.update(id, { projectId }),
-    onMutate: async ({ id, projectId }) => {
-      await queryClient.cancelQueries({ queryKey: keys.events });
-      const previous = queryClient.getQueryData<Event[]>(keys.events);
-      queryClient.setQueryData<Event[]>(keys.events, (prev) =>
-        (prev ?? []).map((e) => (e.id === id ? { ...e, projectId } : e)),
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(keys.events, ctx.previous);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: keys.events });
-    },
-  });
-
-  // ADR 0010: manual イベントの全フィールド編集 (title / start_time / end_time /
-  // meet_url / project_id / description)。optimistic に反映し、失敗したら roll
-  // back する。SupabaseEventGateway.update 側で source='google_calendar' の行は
-  // Google 側属性を弾くので、UI が誤ってここに google_calendar を流しても DB
-  // 書き込みは守られる (ADR 0010 の defense in depth)。
-  const updateEventMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: UpdateEventInput }) =>
-      eventGateway.update(id, patch),
-    onMutate: async ({ id, patch }) => {
-      await queryClient.cancelQueries({ queryKey: keys.events });
-      const previous = queryClient.getQueryData<Event[]>(keys.events);
-      queryClient.setQueryData<Event[]>(keys.events, (prev) =>
-        (prev ?? []).map((e) =>
-          e.id === id
-            ? {
-                ...e,
-                ...(patch.title !== undefined ? { title: patch.title } : {}),
-                ...(patch.startTime !== undefined ? { startTime: patch.startTime } : {}),
-                ...(patch.endTime !== undefined ? { endTime: patch.endTime } : {}),
-                ...(patch.projectId !== undefined ? { projectId: patch.projectId } : {}),
-                ...(patch.meetUrl !== undefined ? { meetUrl: patch.meetUrl } : {}),
-                ...(patch.hasAttachments !== undefined
-                  ? { hasAttachments: patch.hasAttachments }
-                  : {}),
-                ...(patch.description !== undefined ? { description: patch.description } : {}),
-              }
-            : e,
-        ),
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(keys.events, ctx.previous);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: keys.events });
-    },
-  });
-
-  // ADR 0010: manual イベントだけが UI から削除可能。google_calendar は
-  // SupabaseEventGateway.delete が source を見て弾く。
-  const deleteEventMutation = useMutation({
-    mutationFn: (id: string) => eventGateway.delete(id),
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: keys.events });
-      const previous = queryClient.getQueryData<Event[]>(keys.events);
-      queryClient.setQueryData<Event[]>(keys.events, (prev) =>
-        (prev ?? []).filter((e) => e.id !== id),
-      );
-      return { previous };
-    },
-    onError: (_err, _id, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(keys.events, ctx.previous);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: keys.events });
-    },
-  });
-
-  const createProjectMutation = useMutation({
-    mutationFn: (input: CreateProjectInput) => projectGateway.create(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: keys.projects });
-    },
-  });
-
-  const updateProjectMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: UpdateProjectInput }) =>
-      projectGateway.update(id, patch),
-    onMutate: async ({ id, patch }) => {
-      await queryClient.cancelQueries({ queryKey: keys.projects });
-      const previous = queryClient.getQueryData<Project[]>(keys.projects);
-      queryClient.setQueryData<Project[]>(keys.projects, (prev) =>
-        (prev ?? []).map((p) => (p.id === id ? { ...p, ...patch } : p)),
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(keys.projects, ctx.previous);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: keys.projects });
-    },
-  });
-
-  // schema 上 `ON DELETE SET NULL` で tasks.project_id / events.project_id が
-  // null 化される。UI 側はそれを反映するため tasks / events も invalidate する。
-  const deleteProjectMutation = useMutation({
-    mutationFn: (id: string) => projectGateway.delete(id),
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: keys.projects });
-      const previous = queryClient.getQueryData<Project[]>(keys.projects);
-      queryClient.setQueryData<Project[]>(keys.projects, (prev) =>
-        (prev ?? []).filter((p) => p.id !== id),
-      );
-      return { previous };
-    },
-    onError: (_err, _id, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(keys.projects, ctx.previous);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: keys.projects });
-      queryClient.invalidateQueries({ queryKey: keys.tasks });
-      queryClient.invalidateQueries({ queryKey: keys.events });
-    },
-  });
-
-  // タスク削除は TASK_DELETED action_log も記録する (SupabaseTaskGateway.delete 内)。
-  const deleteTaskMutation = useMutation({
-    mutationFn: (id: string) => taskGateway.delete(id),
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: keys.tasks });
-      const previous = queryClient.getQueryData<Task[]>(keys.tasks);
-      queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
-        (prev ?? []).filter((t) => t.id !== id),
-      );
-      return { previous };
-    },
-    onError: (_err, _id, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(keys.tasks, ctx.previous);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: keys.tasks });
-    },
-  });
-
-  const toggleDone = useCallback(
-    (id: string) => toggleDoneMutation.mutate(id),
-    [toggleDoneMutation],
-  );
-
-  const updateBody = useCallback(
-    (id: string, body: string) => updateBodyMutation.mutate({ id, body }),
-    [updateBodyMutation],
-  );
-
-  const reorder = useCallback(
-    (fromId: string, toId: string) => {
-      if (fromId === toId) return;
-      const cached = queryClient.getQueryData<Task[]>(keys.tasks) ?? [];
-      const pending = cached.filter((t) => !isDone(t));
-      const done = cached.filter((t) => isDone(t));
-      const fromIdx = pending.findIndex((t) => t.id === fromId);
-      const toIdx = pending.findIndex((t) => t.id === toId);
-      if (fromIdx < 0 || toIdx < 0) return;
-      const reordered = reorderTasksById(pending, fromId, toId);
-      queryClient.setQueryData<Task[]>(keys.tasks, [...reordered, ...done]);
-      log(ACTION_TYPES.TASK_REORDERED, {
-        task_id: fromId,
-        from_position: fromIdx,
-        to_position: toIdx,
-      });
-      reorderMutation.mutate(
-        reordered.map((t) => ({ id: t.id, stackOrder: t.stackOrder })),
-        {
-          onError: () => {
-            // 失敗したら再取得して辻褄を合わせる (UI は一瞬戻るが DB 正とする)
-            queryClient.invalidateQueries({ queryKey: keys.tasks });
-          },
-        },
-      );
-    },
-    [queryClient, reorderMutation],
-  );
+  const {
+    toggleDone,
+    updateBody,
+    updateDependency,
+    updateCategory,
+    reorder,
+    createTaskWithAi,
+    createEvent,
+    updateEventProject,
+    updateEvent,
+    deleteEvent,
+    createProject,
+    updateProject,
+    deleteProject,
+    deleteTask,
+    triggerDecomposeWithOptimistic,
+    triggerResplitWithOptimistic,
+  } = useDashboardMutations();
 
   const resetSample = useCallback(async () => {
     try {
@@ -596,43 +273,14 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
               onClose={() => setDetailId(null)}
               onUpdate={updateBody}
               onToggleDone={toggleDone}
-              onDelete={(id) => deleteTaskMutation.mutate(id)}
-              onChangeDependency={(id, dependsOnEventId) =>
-                updateDependencyMutation.mutate({ id, dependsOnEventId })
-              }
-              onChangeCategory={(id, taskCategory) =>
-                updateCategoryMutation.mutate({ id, taskCategory })
-              }
+              onDelete={deleteTask}
+              onChangeDependency={updateDependency}
+              onChangeCategory={updateCategory}
               aiEnabled={aiEnabled}
               latestDecomposeLog={decomposeLogQuery.data ?? null}
               isDecomposeLogLoading={decomposeLogQuery.isPending}
-              onTriggerDecompose={(id) => {
-                // P3-15 / ADR 0021 §4: optimistic に decomposing pill を出しつつ fire-and-forget。
-                // server 側でも `decompose_status='decomposing'` に倒す (重複設定は無害)。
-                queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
-                  (prev ?? []).map((t) =>
-                    t.id === id ? { ...t, decomposeStatus: "decomposing" } : t,
-                  ),
-                );
-                // 既存 log は陳腐化するので invalidate (新たな試行が完了したら再 fetch される)
-                queryClient.invalidateQueries({ queryKey: keys.decomposeLog(id) });
-                triggerDecompose(id);
-              }}
-              onTriggerResplit={(id) => {
-                // Issue #121 / ADR 0027: 子の再分解。optimistic に decomposing pill を出す。
-                queryClient.setQueryData<Task[]>(keys.tasks, (prev) =>
-                  (prev ?? []).map((t) =>
-                    t.id === id ? { ...t, decomposeStatus: "decomposing" } : t,
-                  ),
-                );
-                queryClient.invalidateQueries({ queryKey: keys.decomposeLog(id) });
-                // server 側で target が delete される + 新規子が insert されるので、
-                // 完了後 (成功 / 失敗 / skipped 問わず) に tasks を invalidate して refetch する。
-                // .finally は fire-and-forget の void 返却と互換 (例外は triggerResplit 内で潰している)。
-                void triggerResplit(id).finally(() => {
-                  queryClient.invalidateQueries({ queryKey: keys.tasks });
-                });
-              }}
+              onTriggerDecompose={triggerDecomposeWithOptimistic}
+              onTriggerResplit={triggerResplitWithOptimistic}
             />
           )}
 
@@ -643,15 +291,9 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
                 <EventDetailPanel
                   event={ev}
                   onClose={() => setEventDetailId(null)}
-                  onChangeProject={(id, projectId) =>
-                    updateEventProjectMutation.mutate({ id, projectId })
-                  }
-                  onUpdate={async (id, patch) => {
-                    await updateEventMutation.mutateAsync({ id, patch });
-                  }}
-                  onDelete={async (id) => {
-                    await deleteEventMutation.mutateAsync(id);
-                  }}
+                  onChangeProject={updateEventProject}
+                  onUpdate={updateEvent}
+                  onDelete={deleteEvent}
                 />
               ) : null;
             })()}
@@ -663,39 +305,9 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
               projects={projects}
               events={events}
               onClose={() => setAddOpen(false)}
-              onCreateTask={async (input) => {
-                // stackOrder は末尾に割り当て (pending 件数)
-                const stackOrder = pendingTasks.length;
-                const created = await createTaskMutation.mutateAsync({ ...input, stackOrder });
-                // P3-6 / ADR 0017: タスク作成成功後に AI 分解を fire-and-forget で投げる。
-                // server 側でも `decompose_status='decomposing'` に倒すが、UI に分解中 pill を
-                // 即時出すため optimistic に cache を書き換える。AI_ENABLED=false / 失敗時は
-                // server が `none` に戻す (decompose-server の guard 経路)。
-                // 既に invalidateQueries で refetch 中の cache に対しては map で上書き、
-                // refetch 前で entry が無ければ末尾に append する。
-                queryClient.setQueryData<Task[]>(keys.tasks, (prev) => {
-                  const list = prev ?? [];
-                  const found = list.some((t) => t.id === created.id);
-                  const updated = { ...created, decomposeStatus: "decomposing" as const };
-                  return found
-                    ? list.map((t) =>
-                        t.id === created.id ? { ...t, decomposeStatus: "decomposing" } : t,
-                      )
-                    : [...list, updated];
-                });
-                triggerDecompose(created.id);
-                // P3-4 / ADR 0015: AI 初期ラベリングも同経路で fire-and-forget。
-                // 失敗 / AI_ENABLED=false は server が `task_category=null` のまま残す
-                // (ADR 0013 augmentation only)。client 側の optimistic 反映はしない —
-                // category は UX 上「気づいたら埋まっている」体験で良い。
-                triggerCategorize(created.id);
-              }}
-              onCreateEvent={async (input) => {
-                await createEventMutation.mutateAsync(input);
-              }}
-              onCreateProject={async (input) => {
-                await createProjectMutation.mutateAsync(input);
-              }}
+              onCreateTask={(input) => createTaskWithAi(input, pendingTasks.length)}
+              onCreateEvent={createEvent}
+              onCreateProject={createProject}
               onOpenProject={setProjectDetailId}
             />
           ) : null}
@@ -704,12 +316,8 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
             <ProjectDetailPanel
               project={projectDetail}
               onClose={() => setProjectDetailId(null)}
-              onUpdate={async (id, patch) => {
-                await updateProjectMutation.mutateAsync({ id, patch });
-              }}
-              onDelete={async (id) => {
-                await deleteProjectMutation.mutateAsync(id);
-              }}
+              onUpdate={updateProject}
+              onDelete={deleteProject}
             />
           )}
 
