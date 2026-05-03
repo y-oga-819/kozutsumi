@@ -77,6 +77,11 @@ create index user_calendar_subscriptions_user_id_idx
   on public.user_calendar_subscriptions (user_id);
 create index user_calendar_subscriptions_account_idx
   on public.user_calendar_subscriptions (user_id, external_account_id);
+-- FK (external_account_id) lookup の standalone index。
+-- 複合 (user_id, external_account_id) は leading column が user_id なので
+-- external_accounts 削除時の cascade lookup を覆わない (supabase db lint 対策)。
+create index user_calendar_subscriptions_external_account_idx
+  on public.user_calendar_subscriptions (external_account_id);
 
 comment on table public.user_calendar_subscriptions is
   'ADR 0031: calendar 単位の subscription (Layer 1) と auto-promote 設定 (Layer 2)。';
