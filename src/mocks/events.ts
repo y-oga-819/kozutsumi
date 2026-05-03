@@ -15,6 +15,8 @@ export function buildInitialEvents(): Event[] {
   const base = {
     source: "manual" as const,
     externalId: null,
+    externalCalendarId: "manual",
+    visibilityOverride: "none" as const,
     createdAt: now,
   };
 

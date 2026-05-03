@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database, Json } from "@/shared/types/database";
 
-import type { ActionMetadataMap, ActionType } from "./types";
+import type { ActionMetadataMap, ActionType, ActorType } from "./types";
 
 /**
  * Server 側 (Route Handler 内) からの action_logs 書き込み helper。
@@ -16,6 +16,8 @@ import type { ActionMetadataMap, ActionType } from "./types";
  * - INSERT 失敗は `console.error` に留め、呼び出し元のロジックは止めない (ADR 0001)
  * - `task_deleted` / `decomposition_modified` は FK 違反を避けるため column の task_id を
  *   null にする。metadata.task_id は一次の真実として残す
+ * - `actor_type` (ADR 0035) は明示渡しに変更。default 'user' は手動連打安全のため残すが、
+ *   system actor の type を発火する箇所では必ず 'system' を渡す
  */
 
 function extractTaskId(actionType: ActionType, metadata: Record<string, unknown>): string | null {
@@ -31,12 +33,14 @@ export async function logServerSide<T extends ActionType>(
   userId: string,
   actionType: T,
   metadata: ActionMetadataMap[T],
+  actorType: ActorType = "user",
 ): Promise<void> {
   const { error } = await supabase.from("action_logs").insert({
     user_id: userId,
     action_type: actionType,
     task_id: extractTaskId(actionType, metadata as unknown as Record<string, unknown>),
     metadata: metadata as unknown as Json,
+    actor_type: actorType,
   });
   if (error) {
     console.error("[action-log/server] insert failed", error);

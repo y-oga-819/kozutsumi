@@ -24,6 +24,8 @@ const baseEvent: Event = {
   description: "## アジェンダ\n\n本文",
   source: "manual",
   externalId: null,
+  externalCalendarId: "manual",
+  visibilityOverride: "none",
   createdAt: "2026-04-11T00:00:00",
 };
 
@@ -32,6 +34,7 @@ const googleEvent: Event = {
   id: "g1",
   source: "google_calendar",
   externalId: "ext-1",
+  externalCalendarId: "primary",
 };
 
 const noop = () => {};

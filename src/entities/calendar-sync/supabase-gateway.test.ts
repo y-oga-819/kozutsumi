@@ -3,9 +3,16 @@ import { describe, expect, test, vi } from "vitest";
 
 import type { Database } from "@/shared/types/database";
 
+import type { CalendarSyncStateKey } from "./gateway";
 import { SupabaseCalendarSyncStateGateway } from "./supabase-gateway";
 
 type Sb = SupabaseClient<Database>;
+
+const KEY: CalendarSyncStateKey = {
+  source: "google_calendar",
+  externalAccountId: "ext-acc-1",
+  externalCalendarId: "primary",
+};
 
 function makeSupabase(overrides: {
   getUserId?: string | null;
@@ -22,8 +29,12 @@ function makeSupabase(overrides: {
 }) {
   const userId = overrides.getUserId === undefined ? "user-1" : overrides.getUserId;
   const maybeSingle = vi.fn(async () => overrides.selectResult ?? { data: null, error: null });
-  const eqSelect = vi.fn(() => ({ maybeSingle }));
-  const select = vi.fn(() => ({ eq: eqSelect }));
+  // 4 段の eq().eq().eq().eq().maybeSingle() を chain で組み立てる
+  const eq4 = vi.fn(() => ({ maybeSingle }));
+  const eq3 = vi.fn(() => ({ eq: eq4 }));
+  const eq2 = vi.fn(() => ({ eq: eq3 }));
+  const eq1 = vi.fn(() => ({ eq: eq2 }));
+  const select = vi.fn(() => ({ eq: eq1 }));
   const upsert = vi.fn<
     (
       payload: Record<string, unknown>,
@@ -40,12 +51,12 @@ function makeSupabase(overrides: {
     },
     from,
   } as unknown as Sb;
-  return { supabase, from, select, eqSelect, maybeSingle, upsert };
+  return { supabase, from, select, eq1, eq2, eq3, eq4, maybeSingle, upsert };
 }
 
 describe("SupabaseCalendarSyncStateGateway.get", () => {
   test("行があれば CalendarSyncState を返す (sync_token も含めて)", async () => {
-    const { supabase, from, select, eqSelect } = makeSupabase({
+    const { supabase, from, select, eq1, eq2, eq3, eq4 } = makeSupabase({
       selectResult: {
         data: {
           user_id: "user-1",
@@ -58,7 +69,7 @@ describe("SupabaseCalendarSyncStateGateway.get", () => {
     });
 
     const gw = new SupabaseCalendarSyncStateGateway(supabase);
-    const state = await gw.get();
+    const state = await gw.get(KEY);
 
     expect(state).toEqual({
       lastSyncedAt: "2026-04-24T10:00:00.000Z",
@@ -66,7 +77,11 @@ describe("SupabaseCalendarSyncStateGateway.get", () => {
     });
     expect(from).toHaveBeenCalledWith("user_calendar_sync_state");
     expect(select).toHaveBeenCalledWith("user_id, last_synced_at, sync_token, updated_at");
-    expect(eqSelect).toHaveBeenCalledWith("user_id", "user-1");
+    // 複合キー (user_id, source, external_account_id, external_calendar_id) で絞る
+    expect(eq1).toHaveBeenCalledWith("user_id", "user-1");
+    expect(eq2).toHaveBeenCalledWith("source", "google_calendar");
+    expect(eq3).toHaveBeenCalledWith("external_account_id", "ext-acc-1");
+    expect(eq4).toHaveBeenCalledWith("external_calendar_id", "primary");
   });
 
   test("sync_token が null でもそのまま返す (初回 / 410 fallback 直後)", async () => {
@@ -83,7 +98,7 @@ describe("SupabaseCalendarSyncStateGateway.get", () => {
     });
 
     const gw = new SupabaseCalendarSyncStateGateway(supabase);
-    const state = await gw.get();
+    const state = await gw.get(KEY);
 
     expect(state).toEqual({
       lastSyncedAt: "2026-04-24T10:00:00.000Z",
@@ -97,7 +112,7 @@ describe("SupabaseCalendarSyncStateGateway.get", () => {
     });
 
     const gw = new SupabaseCalendarSyncStateGateway(supabase);
-    const state = await gw.get();
+    const state = await gw.get(KEY);
 
     expect(state).toBeNull();
   });
@@ -106,7 +121,7 @@ describe("SupabaseCalendarSyncStateGateway.get", () => {
     const { supabase, from } = makeSupabase({ getUserId: null });
     const gw = new SupabaseCalendarSyncStateGateway(supabase);
 
-    const state = await gw.get();
+    const state = await gw.get(KEY);
 
     expect(state).toBeNull();
     expect(from).not.toHaveBeenCalled();
@@ -121,16 +136,16 @@ describe("SupabaseCalendarSyncStateGateway.get", () => {
     });
     const gw = new SupabaseCalendarSyncStateGateway(supabase);
 
-    await expect(gw.get()).rejects.toMatchObject({ message: "db down" });
+    await expect(gw.get(KEY)).rejects.toMatchObject({ message: "db down" });
   });
 });
 
 describe("SupabaseCalendarSyncStateGateway.saveSyncState", () => {
-  test("user_id + last_synced_at + sync_token を on conflict user_id で upsert する", async () => {
+  test("複合キー + last_synced_at + sync_token を on conflict 4 列キーで upsert する", async () => {
     const { supabase, from, upsert } = makeSupabase({});
     const gw = new SupabaseCalendarSyncStateGateway(supabase);
 
-    await gw.saveSyncState({
+    await gw.saveSyncState(KEY, {
       lastSyncedAt: "2026-04-24T10:00:00.000Z",
       syncToken: "tok-xyz",
     });
@@ -140,17 +155,22 @@ describe("SupabaseCalendarSyncStateGateway.saveSyncState", () => {
     const [payload, options] = upsert.mock.calls[0]!;
     expect(payload).toEqual({
       user_id: "user-1",
+      source: "google_calendar",
+      external_account_id: "ext-acc-1",
+      external_calendar_id: "primary",
       last_synced_at: "2026-04-24T10:00:00.000Z",
       sync_token: "tok-xyz",
     });
-    expect(options).toEqual({ onConflict: "user_id" });
+    expect(options).toEqual({
+      onConflict: "user_id,source,external_account_id,external_calendar_id",
+    });
   });
 
   test("syncToken: null を渡すと sync_token も null で上書きされる (410 fallback で nextSyncToken が無いケース)", async () => {
     const { supabase, upsert } = makeSupabase({});
     const gw = new SupabaseCalendarSyncStateGateway(supabase);
 
-    await gw.saveSyncState({
+    await gw.saveSyncState(KEY, {
       lastSyncedAt: "2026-04-24T10:00:00.000Z",
       syncToken: null,
     });
@@ -158,6 +178,9 @@ describe("SupabaseCalendarSyncStateGateway.saveSyncState", () => {
     const [payload] = upsert.mock.calls[0]!;
     expect(payload).toEqual({
       user_id: "user-1",
+      source: "google_calendar",
+      external_account_id: "ext-acc-1",
+      external_calendar_id: "primary",
       last_synced_at: "2026-04-24T10:00:00.000Z",
       sync_token: null,
     });
@@ -168,7 +191,7 @@ describe("SupabaseCalendarSyncStateGateway.saveSyncState", () => {
     const gw = new SupabaseCalendarSyncStateGateway(supabase);
 
     await expect(
-      gw.saveSyncState({
+      gw.saveSyncState(KEY, {
         lastSyncedAt: "2026-04-24T10:00:00.000Z",
         syncToken: null,
       }),
@@ -182,7 +205,7 @@ describe("SupabaseCalendarSyncStateGateway.saveSyncState", () => {
     const gw = new SupabaseCalendarSyncStateGateway(supabase);
 
     await expect(
-      gw.saveSyncState({
+      gw.saveSyncState(KEY, {
         lastSyncedAt: "2026-04-24T10:00:00.000Z",
         syncToken: "t",
       }),

@@ -42,6 +42,7 @@ test.describe("google_calendar イベントの編集制約 (ADR 0010)", () => {
       description,
       source: "google_calendar",
       external_id: "gcal-readonly-e2e",
+      external_calendar_id: "primary",
     });
     if (insertErr) throw new Error(`[e2e] insert gcal event failed: ${insertErr.message}`);
 
@@ -124,6 +125,7 @@ test.describe("google_calendar イベントの編集制約 (ADR 0010)", () => {
       description: "",
       source: "google_calendar",
       external_id: "gcal-project-edit-e2e",
+      external_calendar_id: "primary",
     });
     if (insertErr) throw new Error(`[e2e] insert gcal event failed: ${insertErr.message}`);
 

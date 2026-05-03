@@ -12,6 +12,9 @@ import { EVENT_SOURCE, type Event } from "./types";
 
 type Sb = SupabaseClient<Database>;
 
+/** manual event の external_calendar_id 固定値 (ADR 0033 backfill 規約と一致)。 */
+const MANUAL_EXTERNAL_CALENDAR_ID = "manual";
+
 function fromRow(row: Tables<"events">): Event {
   return {
     id: row.id,
@@ -24,6 +27,8 @@ function fromRow(row: Tables<"events">): Event {
     description: row.description,
     source: row.source,
     externalId: row.external_id,
+    externalCalendarId: row.external_calendar_id,
+    visibilityOverride: row.visibility_override,
     createdAt: row.created_at,
   };
 }
@@ -50,6 +55,7 @@ export class SupabaseEventGateway implements EventGateway {
 
   async create(input: CreateEventInput): Promise<Event> {
     const user_id = await getUserId(this.supabase);
+    // ADR 0033: source-agnostic な triple uniqueness。manual event は固定値で埋める。
     const payload: TablesInsert<"events"> = {
       user_id,
       title: input.title,
@@ -61,6 +67,7 @@ export class SupabaseEventGateway implements EventGateway {
       description: input.description ?? "",
       source: input.source ?? EVENT_SOURCE.MANUAL,
       external_id: input.externalId ?? null,
+      external_calendar_id: MANUAL_EXTERNAL_CALENDAR_ID,
     };
     const { data, error } = await this.supabase.from("events").insert(payload).select("*").single();
     if (error) throw error;
@@ -136,8 +143,8 @@ export class SupabaseEventGateway implements EventGateway {
   async upsertFromGoogleCalendar(inputs: UpsertGoogleCalendarEventInput[]): Promise<number> {
     if (inputs.length === 0) return 0;
     const user_id = await getUserId(this.supabase);
-    // project_id を payload に含めないことで、ON CONFLICT DO UPDATE SET ... から除外され、
-    // 既存行の project_id は保持される (kozutsumi 側の拡張、ADR 0010)
+    // project_id / visibility_override を payload に含めないことで、ON CONFLICT DO UPDATE SET ... から
+    // 除外され、既存行の値が保持される (kozutsumi 側の拡張、ADR 0010 / ADR 0034 L4)
     const payloads: TablesInsert<"events">[] = inputs.map((input) => ({
       user_id,
       title: input.title,
@@ -148,16 +155,21 @@ export class SupabaseEventGateway implements EventGateway {
       description: input.description,
       source: EVENT_SOURCE.GOOGLE_CALENDAR,
       external_id: input.externalId,
+      external_calendar_id: input.externalCalendarId,
     }));
+    // ADR 0033: triple uniqueness `(source, external_calendar_id, external_id)`
     const { error } = await this.supabase
       .from("events")
-      .upsert(payloads, { onConflict: "source,external_id" });
+      .upsert(payloads, { onConflict: "source,external_calendar_id,external_id" });
     if (error) throw error;
     // upsert は全 input に対して insert または update を実行するため、affected = inputs.length
     return inputs.length;
   }
 
-  async deleteByGoogleExternalIds(externalIds: string[]): Promise<number> {
+  async deleteByGoogleExternalIds(
+    externalCalendarId: string,
+    externalIds: string[],
+  ): Promise<number> {
     if (externalIds.length === 0) return 0;
     const uid = await getUserId(this.supabase);
     // count のみ欲しいので head: true で row を返させない
@@ -166,6 +178,7 @@ export class SupabaseEventGateway implements EventGateway {
       .delete({ count: "exact" })
       .eq("user_id", uid)
       .eq("source", EVENT_SOURCE.GOOGLE_CALENDAR)
+      .eq("external_calendar_id", externalCalendarId)
       .in("external_id", externalIds);
     if (error) throw error;
     return count ?? 0;
