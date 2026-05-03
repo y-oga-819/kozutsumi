@@ -145,18 +145,34 @@ export function useTaskTimer(task: Task | null): TaskTimerApi {
     await invalidate();
   }, [task, openEntry, taskGateway, taskTimeEntryGateway, invalidate]);
 
-  return {
-    isActive,
-    isPaused,
-    isRunning,
-    elapsedSeconds,
-    pauseReason,
-    entries,
-    start,
-    pause,
-    resume,
-    complete,
-  };
+  // 戻り値の参照を安定化させ、呼び出し側で [timer] を依存にした useMemo / useCallback が
+  // 機能するようにする。これがないと毎レンダーで新オブジェクトになり memo が効かない。
+  return useMemo(
+    () => ({
+      isActive,
+      isPaused,
+      isRunning,
+      elapsedSeconds,
+      pauseReason,
+      entries,
+      start,
+      pause,
+      resume,
+      complete,
+    }),
+    [
+      isActive,
+      isPaused,
+      isRunning,
+      elapsedSeconds,
+      pauseReason,
+      entries,
+      start,
+      pause,
+      resume,
+      complete,
+    ],
+  );
 }
 
 /** "HH:MM:SS" または "MM:SS" に整形する。 */
