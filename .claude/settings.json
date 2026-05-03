@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git push*)",
+            "command": "./node_modules/.bin/prettier --check . >/dev/null 2>&1 || { ./node_modules/.bin/prettier --write . >/dev/null 2>&1 || true; echo 'prettier がフォーマットドリフトを auto-fix しました。git diff を確認して commit してから push し直してください。' >&2; exit 2; }",
+            "timeout": 60,
+            "statusMessage": "Pre-push prettier check..."
+          }
+        ]
+      }
+    ]
+  }
+}
