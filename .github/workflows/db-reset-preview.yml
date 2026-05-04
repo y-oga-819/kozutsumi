@@ -1,0 +1,105 @@
+name: DB reset (preview)
+
+# preview Supabase project を main 状態に戻す。
+# 設計判断は ADR-0043 を参照。
+#
+# やること:
+# - public schema を drop → 作り直し
+# - supabase_migrations.schema_migrations を truncate
+# - main の migration を全部再適用
+#
+# auth / storage 等の Supabase 管理スキーマは触らない (テスト user / OAuth 設定は維持)。
+# kozutsumi の migration はすべて public schema 配下なので、これで main 状態に揃う。
+#
+# Trigger:
+# - pull_request (closed) で supabase/migrations/** を含む PR が閉じたとき (merge / discard 問わず)
+# - schedule で週次 (毎週日曜 00:00 UTC = 09:00 JST)
+# - workflow_dispatch (手動)
+#
+# secret は SUPABASE_PREVIEW_DB_URL のみ。本番 SUPABASE_DB_URL は本 workflow から参照しない。
+
+on:
+  pull_request:
+    types: [closed]
+    paths:
+      - "supabase/migrations/**"
+  schedule:
+    # 毎週日曜 00:00 UTC = 09:00 JST
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # migrate-preview と同じ group で serialize する (ADR-0043)。
+  group: preview-db
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    name: Reset preview DB to main state
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # PR close trigger でも main の migration files を使うので、明示的に main を checkout する。
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Install PostgreSQL 17 client tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          test -x /usr/lib/postgresql/17/bin/pg_dump
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Drop public schema and clear migration history
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_PREVIEW_DB_URL }}
+        run: |
+          # 注意: auth / storage / supabase_migrations 等の管理スキーマは drop しない。
+          # public 以外で migration が作る objects があれば本 reset では取り切れない。
+          # 現 kozutsumi の migration はすべて public schema 配下なので問題なし。
+          psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=on <<'SQL'
+          DROP SCHEMA IF EXISTS public CASCADE;
+          CREATE SCHEMA public;
+          GRANT ALL ON SCHEMA public TO postgres;
+          GRANT ALL ON SCHEMA public TO public;
+          TRUNCATE TABLE supabase_migrations.schema_migrations;
+          SQL
+
+      - name: Re-apply main migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_PREVIEW_DB_URL }}
+        run: |
+          supabase db push --db-url "$SUPABASE_DB_URL"
+
+      - name: Verify post-reset state
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_PREVIEW_DB_URL }}
+        run: |
+          echo "::group::Applied migrations after reset"
+          psql "$SUPABASE_DB_URL" -c \
+            "SELECT version FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 30;"
+          echo "::endgroup::"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### DB reset (preview)"
+            echo ""
+            echo "- Trigger: \`${{ github.event_name }}\`"
+            echo "- ADR: [0042](../blob/main/docs/adr/0042-preview-env-uses-separate-supabase-project.md) / [0043](../blob/main/docs/adr/0043-preview-db-migration-auto-apply-on-pr-push.md)"
+          } >> "$GITHUB_STEP_SUMMARY"
