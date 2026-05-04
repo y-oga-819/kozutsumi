@@ -156,11 +156,23 @@ jobs:
             -x studio,inbucket,storage-api,imgproxy,edge-runtime,logflare,vector,pgsodium,realtime
       - name: Lint SQL
         run: supabase db lint
-      - name: Reset DB (re-apply all migrations from scratch)
+      - name: Reset DB sanity check (re-apply all migrations from scratch)
+        # PR では下の本番 deploy 経路再生フローで base 適用 → migration up → snapshot を行うため、
+        # ここでの fresh re-apply は冗長。main への push でのみ走らせる sanity check として残す。
+        if: github.event_name != 'pull_request'
         run: supabase db reset --no-seed
 
       # ===== ADR 0023: PR migration diff comment =====
-      # 以下のステップは pull_request イベントのみで動かす (main への push では diff 元がない)。
+      # PR の場合は本番 `supabase db push` と同じ deploy 経路を再生する:
+      #   1. base migrations のみで `db reset` → production の現在状態を再現
+      #   2. snapshot (base) を取得
+      #   3. HEAD migrations を復元
+      #   4. `supabase migration up` で PR 新規分のみを追加適用
+      #      → ここで PK 衝突 (同 timestamp prefix) や out-of-order があれば
+      #        CLI が production と同じ error で fail し、CI も fail する
+      #   5. snapshot (PR) を取得 → diff / 規約検査 / コメント投稿
+      # `supabase start` 直後は HEAD migrations 適用済み状態だが、下の base 復元 + db reset で
+      # 上書きするので start 直後の状態には依存しない。
 
       # Supabase local stack は PG 17 を使うので、pg_dump も 17 を入れる。
       # Ubuntu runner default の 16 だと server version mismatch で aborting。
@@ -184,20 +196,12 @@ jobs:
           db_url=$(grep '^DB_URL=' /tmp/sb.env | cut -d= -f2- | tr -d '"')
           echo "DATABASE_URL=$db_url" >> "$GITHUB_ENV"
 
-      - name: Snapshot PR-state (HEAD migrations applied)
-        if: github.event_name == 'pull_request'
-        run: |
-          mkdir -p /tmp/migration-diff
-          bash scripts/db-migration-diff/snapshot.sh \
-            "$DATABASE_URL" /tmp/migration-diff/pr.json
-          pg_dump --schema-only --schema=public --no-owner --no-privileges \
-            --dbname="$DATABASE_URL" > /tmp/migration-diff/pr.sql
-
       - name: List new / missing migration files vs base
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          mkdir -p /tmp/migration-diff
           # 3-dot 構文 = fork point (merge base) からの差分。「PR ブランチで追加された」分。
           git diff --name-only --diff-filter=A "$BASE_SHA"...HEAD -- supabase/migrations/ \
             > /tmp/migration-diff/new_migrations.txt || true
@@ -211,7 +215,7 @@ jobs:
           echo "missing (need rebase) migrations:"
           cat /tmp/migration-diff/missing_migrations.txt || true
 
-      - name: Restore base migrations and reset DB
+      - name: Restore base migrations and reset DB to base state
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -235,6 +239,22 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           git checkout HEAD -- supabase/migrations/
+
+      - name: Apply PR migrations on top of base (production deploy path)
+        # 本番 `supabase db push` と同じ経路: base 適用済みの schema_migrations に対して、
+        # PR で追加された migration のみを `supabase migration up` で追加適用する。
+        # PK 衝突 (同 timestamp prefix) や out-of-order を CLI が拒否すれば、ここで CI が
+        # production と同じ error で fail する。失敗時は exit code がそのまま伝播し job が落ちる。
+        if: github.event_name == 'pull_request'
+        run: supabase migration up
+
+      - name: Snapshot PR-state (HEAD migrations applied)
+        if: github.event_name == 'pull_request'
+        run: |
+          bash scripts/db-migration-diff/snapshot.sh \
+            "$DATABASE_URL" /tmp/migration-diff/pr.json
+          pg_dump --schema-only --schema=public --no-owner --no-privileges \
+            --dbname="$DATABASE_URL" > /tmp/migration-diff/pr.sql
 
       - name: Compute schema diff
         if: github.event_name == 'pull_request'
