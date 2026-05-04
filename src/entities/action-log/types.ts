@@ -87,10 +87,17 @@ export type ActionMetadataMap = {
     estimated_minutes?: number;
     actual_minutes?: number;
   };
+  // ADR-0041: グループ並べ替え (親バッジ起点で同じ parent_task_id を持つ全行を
+  // まとめて移動) のとき、各要素の log に `group_parent_id` を含める。
+  // 個別 row の移動 (Grip 起点) では undefined。
+  // ADR-0001 の「個別 type の payload 揺らぎは JSONB で吸収」原則に収まる範囲。
+  // Phase 4 では同一 `created_at` 近辺の同 `group_parent_id` ログ群を 1 グループ
+  // 移動として再構成する。
   task_reordered: {
     task_id: string;
     from_position: number;
     to_position: number;
+    group_parent_id?: string;
   };
   // ADR 0035 §5: 削除系は元 entity が物理削除されるため snapshot を必須化する。
   // 過去ログ (snapshot 列が無かった頃) は backfill しない (ADR 0035 §6)。
