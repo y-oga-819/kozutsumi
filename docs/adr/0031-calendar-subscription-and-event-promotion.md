@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-05-03
-- **Related**: Supersedes [ADR 0008](./0008-google-calendar-sync-target-primary-only.md) / [ADR 0005](./0005-google-calendar-sync-via-route-handler.md) / [ADR 0006](./0006-google-calendar-sync-full-then-synctoken.md) / [ADR 0010](./0010-google-calendar-events-read-only.md) / `docs/design/vision.md` / Issue #144 / Issue #145 / Issue #146
+- **Related**: Supersedes [ADR 0008](./0008-google-calendar-sync-target-primary-only.md) / [ADR 0005](./0005-google-calendar-sync-via-route-handler.md) / [ADR 0006](./0006-google-calendar-sync-mode-staged-adoption.md) / [ADR 0010](./0010-google-calendar-event-edit-scope.md) / `docs/design/vision.md` / Issue #144 / Issue #145 / Issue #146
 
 ## Context
 
