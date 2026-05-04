@@ -19,7 +19,7 @@ type Plan = {
   insertActionLogs: { error: { message: string } | null };
   rpcThrow?: unknown; // rpc が throw する想定 (last-resort safety net テスト用)
   /**
-   * ADR 0042 / Issue #157: tryClaimDecomposing で「既に decomposing / decomposed / skipped に
+   * ADR 0044 / Issue #157: tryClaimDecomposing で「既に decomposing / decomposed / skipped に
    * 確定済」を疑似する。true のとき claim 経路の maybeSingle が { data: null } を返し、
    * orchestrator は skipped/already_resolved に倒す (race window が閉じていることのテスト)。
    */
@@ -67,7 +67,7 @@ function makeSupabase(plan: Plan): {
       })),
       // 2 系統の chain を同じ shape で返す (resplit-server.test.ts と同形):
       //   (a) `.update().eq()` を await: setDecomposeStatus (failed / skipped) 用、{ error } を解決
-      //   (b) `.update().eq().in().select().maybeSingle()`: tryClaimDecomposing (ADR 0042) 用、
+      //   (b) `.update().eq().in().select().maybeSingle()`: tryClaimDecomposing (ADR 0044) 用、
       //       claim 成功で { data: { id }, error: null }、race 敗北で plan.claimReturnsExisting = true
       //       のとき { data: null }
       update: (patch: { decompose_status?: unknown }) => ({
@@ -285,11 +285,11 @@ describe("decomposeTask", () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
-  // ADR 0042 / Issue #157: fetchParent → setDecomposeStatus(decomposing) の旧 2 step に
+  // ADR 0044 / Issue #157: fetchParent → setDecomposeStatus(decomposing) の旧 2 step に
   // あった TOCTOU race window を、tryClaimDecomposing の条件付き UPDATE で閉じた。
   // 並行 click や fire-and-forget の重複起動でも、後勝ちの 1 本だけが進み、もう 1 本は
   // skipped/already_resolved で潰れることをテストする。
-  test("並行起動: claim が race で負けたら skipped/already_resolved (ADR 0042)", async () => {
+  test("並行起動: claim が race で負けたら skipped/already_resolved (ADR 0044)", async () => {
     const plan = defaultPlan(makeParentRow());
     plan.claimReturnsExisting = true;
     const { client, calls } = makeSupabase(plan);

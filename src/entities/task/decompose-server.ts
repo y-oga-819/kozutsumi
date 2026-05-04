@@ -10,13 +10,13 @@ import {
 import type { Database, Json, Tables } from "@/shared/types/database";
 
 /**
- * AI タスク分解 (P3-6 / ADR 0017 / 0018 / 0016 / 0021 / 0042) の server 側 orchestrator。
+ * AI タスク分解 (P3-6 / ADR 0017 / 0018 / 0016 / 0021 / 0044) の server 側 orchestrator。
  *
  * 流れ:
  * 1. 親タスクを userId スコープで取得 (RLS 前提だが defense in depth)。見つからなければ no-op
  * 2. read 時 fast-exit: 親が active/paused/done か、既に decomposed/skipped なら no-op
  *    (ADR 0017 Notes: 親 active 化済みは分解対象から外す。冪等性のため重複時もスキップ)
- * 3. ADR 0042 の race guard: `tryClaimDecomposing` の条件付き UPDATE で `decompose_status`
+ * 3. ADR 0044 の race guard: `tryClaimDecomposing` の条件付き UPDATE で `decompose_status`
  *    を `none|failed → decomposing` に atomic 遷移。0 行更新なら他 fire に負けた / 直前に
  *    decomposed/skipped に確定したケースなので `already_resolved` で skipped に倒す。
  * 4. ここから先は ADR 0021 の不変条件: 「`decomposing` で固まらない」。
@@ -70,7 +70,7 @@ export async function decomposeTask(deps: DecomposeTaskDeps): Promise<DecomposeT
     return { kind: "skipped", reason: "already_resolved" };
   }
 
-  // ADR 0042: 条件付き UPDATE で `decomposing` を atomic に claim する。fetchParent との間に
+  // ADR 0044: 条件付き UPDATE で `decomposing` を atomic に claim する。fetchParent との間に
   // concurrent fire が `decomposing` に倒したり decomposed/skipped で確定した場合、claim は
   // 0 行更新で失敗 → skipped/already_resolved に倒し、AI 呼び出しを起こさない。これにより
   // ADR 0021 §1 の不変条件 (decomposing で固まらない) を DB レベルで保証する。
@@ -248,7 +248,7 @@ async function fetchParent(
 }
 
 /**
- * ADR 0042: `decompose_status` を `none|failed → decomposing` に atomic 遷移させる。
+ * ADR 0044: `decompose_status` を `none|failed → decomposing` に atomic 遷移させる。
  *
  * `.in("decompose_status", CLAIMABLE_PRE_STATES)` で pre-state を allowlist 制約することで:
  * - 並行 fire との TOCTOU race window を閉じる (後勝ち 1 本だけが claim 成功)
@@ -260,7 +260,7 @@ async function fetchParent(
  * resplit-server.ts の `tryClaimDecomposing` (ADR 0027) と同じ pattern を共有するが、
  * 当該 server は `.neq("decomposing")` で「進行中以外なら claim」を許す (resplit はユーザー
  * 明示クリック起動なので decomposed/skipped/failed → 再分解を許容)。decompose は auto 起動
- * のため `none|failed` だけに絞る点が異なる (ADR 0042: guard 述語は機能ごとに別)。
+ * のため `none|failed` だけに絞る点が異なる (ADR 0044: guard 述語は機能ごとに別)。
  */
 async function tryClaimDecomposing(
   supabase: SupabaseClient<Database>,
