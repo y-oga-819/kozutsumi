@@ -54,7 +54,9 @@ export class SupabaseTaskGateway implements TaskGateway {
     const user_id = await getUserId(this.supabase);
     const payload: TablesInsert<"tasks"> = {
       user_id,
-      project_id: input.projectId,
+      // #170 / ADR 0039: project は任意化された。null / 空文字 / undefined は
+      // 「未指定 (Inbox 的)」として project_id=NULL で insert する。
+      project_id: input.projectId ? input.projectId : null,
       title: input.title,
       body: input.body ?? "",
       estimated_minutes: input.estimatedMinutes ?? null,

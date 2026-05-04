@@ -43,7 +43,9 @@ test.describe("依存イベント設定 (TaskDetailPanel → DB → バッジ)",
     const addTask = page.getByRole("dialog", { name: "追加メニュー" });
     await addTask.getByRole("tab", { name: "タスク" }).click();
     await addTask.getByLabel("タイトル").fill(taskTitle);
-    await addTask.getByLabel("プロジェクト").selectOption({ label: projectName });
+    // #170 / ADR 0038: task_size は登録時必須。テスト範囲外なので任意の値 (30分) を選ぶ。
+    await addTask.getByRole("radio", { name: "30分" }).click();
+    await addTask.getByLabel("プロジェクト (任意)").selectOption({ label: projectName });
     await addTask.getByRole("button", { name: "追加" }).click();
     await expect(addTask).toHaveCount(0);
 
@@ -149,7 +151,9 @@ test.describe("依存イベント設定 (TaskDetailPanel → DB → バッジ)",
       const addTask = page.getByRole("dialog", { name: "追加メニュー" });
       await addTask.getByRole("tab", { name: "タスク" }).click();
       await addTask.getByLabel("タイトル").fill(title);
-      await addTask.getByLabel("プロジェクト").selectOption({ label: projectName });
+      // #170 / ADR 0038: task_size は登録時必須。テスト範囲外なので任意の値 (30分) を選ぶ。
+      await addTask.getByRole("radio", { name: "30分" }).click();
+      await addTask.getByLabel("プロジェクト (任意)").selectOption({ label: projectName });
       await addTask.getByRole("button", { name: "追加" }).click();
       await expect(addTask).toHaveCount(0);
     }

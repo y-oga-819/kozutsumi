@@ -324,7 +324,9 @@ test.describe("プロジェクト削除 (cascade SET NULL)", () => {
     let addDialog = page.getByRole("dialog", { name: "追加メニュー" });
     await addDialog.getByRole("tab", { name: "タスク" }).click();
     await addDialog.getByLabel("タイトル").fill(taskTitle);
-    await addDialog.getByLabel("プロジェクト").selectOption({ label: projectName });
+    // #170 / ADR 0038: task_size は登録時必須。
+    await addDialog.getByRole("radio", { name: "30分" }).click();
+    await addDialog.getByLabel("プロジェクト (任意)").selectOption({ label: projectName });
     await addDialog.getByRole("button", { name: "追加" }).click();
     await expect(addDialog).toHaveCount(0);
 

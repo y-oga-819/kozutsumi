@@ -22,3 +22,20 @@ export const TASK_SIZE_TO_MINUTES: Record<TaskSizeValue, number | null> = {
   "1d": 480,
   large: null,
 };
+
+/**
+ * task_size の UI 表示ラベル (#170, ADR 0038)。
+ *
+ * TaskForm の 7 段階ボタン / TaskDetailPanel の編集 select / 一覧表示で使う。
+ * `large` は「1 日では括れない大物」を表すため、他の段階と並んだときに「半日超」
+ * と分かる文言にする (ADR 0038 Notes 「`large` の表示文言は実装で詰める」)。
+ */
+export const TASK_SIZE_LABELS: Record<TaskSizeValue, string> = {
+  "15m": "15分",
+  "30m": "30分",
+  "1h": "1時間",
+  "2h": "2時間",
+  "4h": "半日",
+  "1d": "1日",
+  large: "1日超",
+};

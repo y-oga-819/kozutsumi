@@ -95,7 +95,7 @@ test("Phase 1 golden path", async ({ signedInPage: page }) => {
 
 /**
  * AddPanel 経由でタスクを作るヘルパー。
- * プロジェクト名で select し、見積もりは空のまま追加する。
+ * #170 / ADR 0038: task_size 必須。テスト範囲外なので 30分 を選ぶ。
  */
 async function createTask(
   page: import("@playwright/test").Page,
@@ -106,7 +106,8 @@ async function createTask(
   const addDialog = page.getByRole("dialog", { name: "追加メニュー" });
   await addDialog.getByRole("tab", { name: "タスク" }).click();
   await addDialog.getByLabel("タイトル").fill(title);
-  await addDialog.getByLabel("プロジェクト").selectOption({ label: projectName });
+  await addDialog.getByRole("radio", { name: "30分" }).click();
+  await addDialog.getByLabel("プロジェクト (任意)").selectOption({ label: projectName });
   await addDialog.getByRole("button", { name: "追加" }).click();
   await expect(addDialog).toHaveCount(0);
 }

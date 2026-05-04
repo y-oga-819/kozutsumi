@@ -411,6 +411,96 @@ describe("TaskDetailPanel - task_category override (P3-5)", () => {
   });
 });
 
+// #170 / ADR 0038: 主観サイズ (task_size) の override UI。AI が初期値を入れた / 入れなかった
+// に関わらず、ユーザーが詳細パネルから上書きできる。logging は呼び出し側 (AppShell + mutation) の
+// 責務なので、ここでは callback 引数だけを担保する。category と同じ button → select パターン。
+describe("TaskDetailPanel - task_size override (#170 / ADR 0038)", () => {
+  test("onChangeSize 未指定なら size 編集 UI を出さない (旧呼び出し互換)", () => {
+    const { queryByText } = renderPanel();
+    expect(queryByText("サイズ")).toBeNull();
+    expect(queryByText(/未設定\s+を変更/)).toBeNull();
+  });
+
+  test("onChangeSize 指定時、デフォルトは「未設定 を変更」ボタン (taskSize=null)", () => {
+    const { getByText, queryByRole } = renderPanel({ onChangeSize: vi.fn() });
+    expect(getByText(/未設定\s+を変更/)).toBeTruthy();
+    expect(queryByRole("combobox")).toBeNull();
+  });
+
+  test("taskSize がある場合はボタン文言にその表示ラベルが入る", () => {
+    const { getByText } = renderPanel({
+      task: { ...baseTask, taskSize: "1h" },
+      onChangeSize: vi.fn(),
+    });
+    expect(getByText(/1時間\s+を変更/)).toBeTruthy();
+  });
+
+  test("ボタン押下で <select> に切り替わり、現在値が反映されている", () => {
+    const { getByText, getByRole } = renderPanel({
+      task: { ...baseTask, taskSize: "1h" },
+      onChangeSize: vi.fn(),
+    });
+    fireEvent.click(getByText(/1時間\s+を変更/));
+    const select = getByRole("combobox") as HTMLSelectElement;
+    expect(select.value).toBe("1h");
+  });
+
+  test("値変更で onChangeSize(taskId, value) を呼び、編集モードを抜ける", () => {
+    const onChangeSize = vi.fn();
+    const { getByText, getByRole, queryByRole } = renderPanel({
+      task: { ...baseTask, taskSize: "1h" },
+      onChangeSize,
+    });
+    fireEvent.click(getByText(/1時間\s+を変更/));
+    fireEvent.change(getByRole("combobox"), { target: { value: "2h" } });
+    expect(onChangeSize).toHaveBeenCalledWith("t1", "2h");
+    expect(queryByRole("combobox")).toBeNull();
+  });
+
+  test("「未設定」(空文字) を選ぶと onChangeSize(taskId, null) を呼ぶ", () => {
+    const onChangeSize = vi.fn();
+    const { getByText, getByRole } = renderPanel({
+      task: { ...baseTask, taskSize: "1h" },
+      onChangeSize,
+    });
+    fireEvent.click(getByText(/1時間\s+を変更/));
+    fireEvent.change(getByRole("combobox"), { target: { value: "" } });
+    expect(onChangeSize).toHaveBeenCalledWith("t1", null);
+  });
+
+  test("同じ値が選ばれた場合は onChangeSize を呼ばないが編集モードは抜ける", () => {
+    const onChangeSize = vi.fn();
+    const { getByText, getByRole, queryByRole } = renderPanel({
+      task: { ...baseTask, taskSize: "1h" },
+      onChangeSize,
+    });
+    fireEvent.click(getByText(/1時間\s+を変更/));
+    fireEvent.change(getByRole("combobox"), { target: { value: "1h" } });
+    expect(onChangeSize).not.toHaveBeenCalled();
+    expect(queryByRole("combobox")).toBeNull();
+  });
+
+  test("blur で編集モードを抜ける", () => {
+    const onChangeSize = vi.fn();
+    const { getByText, getByRole, queryByRole } = renderPanel({
+      task: { ...baseTask, taskSize: "1h" },
+      onChangeSize,
+    });
+    fireEvent.click(getByText(/1時間\s+を変更/));
+    fireEvent.blur(getByRole("combobox"));
+    expect(onChangeSize).not.toHaveBeenCalled();
+    expect(queryByRole("combobox")).toBeNull();
+  });
+
+  test("値域が UI に揃っている (15m / 30m / 1h / 2h / 4h / 1d / large + 未設定)", () => {
+    const { getByText, getByRole } = renderPanel({ onChangeSize: vi.fn() });
+    fireEvent.click(getByText(/未設定\s+を変更/));
+    const select = getByRole("combobox") as HTMLSelectElement;
+    const values = Array.from(select.options).map((o) => o.value);
+    expect(values).toEqual(["", "15m", "30m", "1h", "2h", "4h", "1d", "large"]);
+  });
+});
+
 // AI 分解情報エリア (P3-15 / ADR 0021 §3)。
 // 親が `latestDecomposeLog` か `onTriggerDecompose` を渡したときだけセクションが描画される。
 describe("TaskDetailPanel - AI 分解情報エリア (P3-15)", () => {
