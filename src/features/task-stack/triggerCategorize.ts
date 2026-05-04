@@ -4,18 +4,23 @@
  * AppShell の onCreateTask 成功後にこれを呼ぶ。await しない:
  * - latency をタスク追加 UX に乗せない (ADR 0013 augmentation only)
  * - AI 失敗 / `AI_ENABLED=false` で 200 skipped が返っても呼び出し元は知らない
- * - `task_category` は server 側で fire-and-forget に書かれる。UI には数秒後の
- *   refetch (action_log invalidate / TanStack Query refetchOnFocus 等) で反映される
+ * - `task_category` は server 側で fire-and-forget に書かれる
  *
- * 戻り値は無し。例外も握り潰す (fire-and-forget の契約)。
+ * 戻り値が `Promise<void>` なのは、呼び出し元が `.finally(...)` で
+ * tasks query invalidate (= AI ラベルの refetch トリガ) を起こすため (issue #167)。
+ * await しないのは契約通り (latency を UI に乗せない)。例外も握り潰す。
  */
-export function triggerCategorize(taskId: string): void {
-  void fetch("/api/ai/categorize", {
+export function triggerCategorize(taskId: string): Promise<void> {
+  return fetch("/api/ai/categorize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ task_id: taskId }),
-  }).catch((err) => {
-    // 失敗しても core は止まらない。dev では console に出して気付けるようにする
-    console.error("[ai/categorize] fire-and-forget failed", err);
-  });
+  })
+    .then(() => {
+      // outcome は使わない。完了タイミングだけが意味を持つ (ADR 0013)。
+    })
+    .catch((err) => {
+      // 失敗しても core は止まらない。dev では console に出して気付けるようにする
+      console.error("[ai/categorize] fire-and-forget failed", err);
+    });
 }
