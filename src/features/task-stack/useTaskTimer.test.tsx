@@ -233,6 +233,42 @@ describe("useTaskTimer", () => {
     });
   });
 
+  test("visibilitychange (visible) で active タスクの elapsedSeconds が即時更新される", async () => {
+    const startedAtMs = new Date("2026-04-19T10:00:00.000Z").getTime();
+    // setInterval が tick を踏んでいない (= background で throttle 中) 状況を
+    // 再現するため、Date.now() のみを stub して時刻を進める。
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(startedAtMs);
+    m.list.mockResolvedValue([
+      {
+        id: "te-open",
+        taskId: "t1",
+        startedAt: new Date(startedAtMs).toISOString(),
+        pausedAt: null,
+        pauseReason: null,
+        durationSeconds: null,
+      },
+    ]);
+    const activeTask: Task = { ...baseTask, status: "active" };
+    const { Wrapper } = wrapTimer(m);
+    const { result } = renderHook(() => useTaskTimer(activeTask), {
+      wrapper: Wrapper,
+    });
+    await waitFor(() => {
+      expect(result.current.isRunning).toBe(true);
+    });
+
+    nowSpy.mockReturnValue(startedAtMs + 60_000);
+    // visibilitychange (visible) → 即時 tick → elapsedSeconds が追従する。
+    await act(async () => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "visible",
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(result.current.elapsedSeconds).toBe(60);
+  });
+
   test("リロード復元: paused タスクの最終 pause_reason を pauseReason で返す", async () => {
     m.list.mockResolvedValue([
       {
