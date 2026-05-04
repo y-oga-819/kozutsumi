@@ -87,16 +87,14 @@ export function AddPanel({
 
         <div className="flex-1 overflow-auto px-5 pb-6 pt-4">
           {tab === "task" ? (
-            projects.length === 0 ? (
-              <EmptyProjectsNotice onSwitch={() => setTab("project")} />
-            ) : (
-              <TaskForm
-                projects={projects}
-                events={events}
-                onSubmit={onCreateTask}
-                onClose={onClose}
-              />
-            )
+            // #170 / ADR 0039: project は任意化された。projects.length === 0 でも
+            // タスクは未指定 (Inbox 的) で登録できる。
+            <TaskForm
+              projects={projects}
+              events={events}
+              onSubmit={onCreateTask}
+              onClose={onClose}
+            />
           ) : null}
           {tab === "event" ? (
             <EventForm projects={projects} onSubmit={onCreateEvent} onClose={onClose} />
@@ -151,21 +149,6 @@ function ProjectList({
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-function EmptyProjectsNotice({ onSwitch }: { onSwitch: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-3 py-6 text-center">
-      <p className="font-jp text-[12px] text-fg-muted">タスクにはプロジェクトが必要です。</p>
-      <button
-        type="button"
-        onClick={onSwitch}
-        className="rounded bg-accent-blue px-4 py-1.5 font-jp text-[11px] font-semibold text-fg-invert"
-      >
-        プロジェクトを先に作る
-      </button>
     </div>
   );
 }

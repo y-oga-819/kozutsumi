@@ -44,7 +44,9 @@ test.describe("行動データ整合 (action_logs / task_time_entries / tasks.st
     const addDialog2 = page.getByRole("dialog", { name: "追加メニュー" });
     await addDialog2.getByRole("tab", { name: "タスク" }).click();
     await addDialog2.getByLabel("タイトル").fill(taskTitle);
-    await addDialog2.getByLabel("プロジェクト").selectOption({ label: projectName });
+    // #170 / ADR 0038: task_size は登録時必須。テスト範囲外なので任意の値 (30分) を選ぶ。
+    await addDialog2.getByRole("radio", { name: "30分" }).click();
+    await addDialog2.getByLabel("プロジェクト (任意)").selectOption({ label: projectName });
     await addDialog2.getByRole("button", { name: "追加" }).click();
     await expect(addDialog2).toHaveCount(0);
 

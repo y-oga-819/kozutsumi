@@ -6,11 +6,12 @@ import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
 import { useCorrectionFactors } from "../../entities/task/CorrectionFactorsContext";
 import { correctEstimate } from "../../entities/task/correction";
-import type { Task, TaskCategory } from "../../entities/task/types";
+import { TASK_SIZE_LABELS } from "../../entities/task/task-size";
+import type { Task, TaskCategory, TaskSize } from "../../entities/task/types";
 import { renderMarkdown } from "../../shared/lib/markdown";
 import { isDone } from "../../shared/lib/task";
 import { fmtDuration, formatRelativeTime } from "../../shared/lib/time";
-import { TASK_CATEGORY_VALUES } from "../../shared/types/database";
+import { TASK_CATEGORY_VALUES, TASK_SIZE_VALUES } from "../../shared/types/database";
 
 export type TaskDetailPanelProps = {
   task: Task;
@@ -33,6 +34,13 @@ export type TaskDetailPanelProps = {
    * 未指定なら category 編集 UI を出さない (旧呼び出し / テスト互換)。
    */
   onChangeCategory?: (id: string, category: TaskCategory | null) => void;
+  /**
+   * 主観サイズ (`tasks.task_size`) の編集 (#170 / ADR 0038)。
+   * AI 推定の estimated_minutes とは独立した軸で、ユーザーが「これくらい」と感じた
+   * 粗いサイズ感を上書きできる。null は未設定。
+   * 未指定なら size 編集 UI を出さない (旧呼び出し / テスト互換)。
+   */
+  onChangeSize?: (id: string, size: TaskSize | null) => void;
   /**
    * AI 分解の最新試行ログ (`task_decomposed` / `task_decompose_failed` /
    * `task_decompose_skipped` の最新 1 件)。なければ null。
@@ -66,6 +74,7 @@ export function TaskDetailPanel({
   onDelete,
   onChangeDependency,
   onChangeCategory,
+  onChangeSize,
   latestDecomposeLog,
   isDecomposeLogLoading,
   aiEnabled = true,
@@ -77,6 +86,7 @@ export function TaskDetailPanel({
   const [draft, setDraft] = useState(task.body || "");
   const [editingDep, setEditingDep] = useState(false);
   const [editingCategory, setEditingCategory] = useState(false);
+  const [editingSize, setEditingSize] = useState(false);
   // パネル open 時刻を「今」として固定する。パネル中に分跨ぎしても候補や相対時刻が
   // ばたつかないようにするのが目的 (相対時刻はあくまで判断補助)。
   const [openedAt] = useState<number>(() => now ?? Date.now());
@@ -209,6 +219,45 @@ export function TaskDetailPanel({
                 >
                   {dep ? `${formatRelativeTime(dep.startTime, nowDate)} ${dep.title}` : "なし"}{" "}
                   を変更
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {onChangeSize && (
+          <div className="px-5 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="font-jp text-[10px] text-fg-weak">サイズ</span>
+              {editingSize ? (
+                <select
+                  autoFocus
+                  value={task.taskSize ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const next = raw === "" ? null : (raw as TaskSize);
+                    if (next !== (task.taskSize ?? null)) {
+                      onChangeSize(task.id, next);
+                    }
+                    setEditingSize(false);
+                  }}
+                  onBlur={() => setEditingSize(false)}
+                  className="flex-1 rounded border border-bg-divider bg-bg-elevated px-2 py-1 text-[11px] text-fg-default outline-none focus:border-accent-blue"
+                >
+                  <option value="">未設定</option>
+                  {TASK_SIZE_VALUES.map((value) => (
+                    <option key={value} value={value}>
+                      {TASK_SIZE_LABELS[value]}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingSize(true)}
+                  className="cursor-pointer rounded-[4px] border border-bg-divider bg-transparent px-2 py-[3px] font-jp text-[10px] text-fg-subtle"
+                >
+                  {task.taskSize ? TASK_SIZE_LABELS[task.taskSize] : "未設定"} を変更
                 </button>
               )}
             </div>

@@ -3,9 +3,11 @@
 import { useMemo, useState } from "react";
 
 import type { CreateTaskInput } from "@/entities/task/gateway";
+import { TASK_SIZE_LABELS } from "@/entities/task/task-size";
 import type { Event } from "@/entities/event/types";
 import type { Project } from "@/entities/project/types";
 import { formatRelativeTime } from "@/shared/lib/time";
+import { TASK_SIZE_VALUES, type TaskSizeValue } from "@/shared/types/database";
 
 type TaskFormProps = {
   projects: readonly Project[];
@@ -15,13 +17,19 @@ type TaskFormProps = {
 };
 
 /**
- * Phase 1 仕様 Step 3「タスク追加フォーム（タイトル、プロジェクト選択、見積もり時間）」。
- * 依存イベントも任意で選べるようにしてある (feature-spec.md: event-gated タスク)。
+ * #170 / ADR 0036 / 0037 / 0038 / 0039: シンプル世界観の単一登録経路。
+ *
+ * - title 必須
+ * - body は任意 (ADR 0037 の AI 分解 prompt 入力 / 「秘書から相談」モードの起点)
+ * - task_size 必須 7 段階 (ADR 0038 の主観サイズ。AI 推定 estimated_minutes とは別軸)
+ * - project は任意 (ADR 0039 で後付け / 伝播 RPC 経由で修正可能になる前提)
+ * - estimated_minutes は登録時に取らない。AI 分解 / 補正の責務に倒す
  */
 export function TaskForm({ projects, events, onSubmit, onClose }: TaskFormProps) {
   const [title, setTitle] = useState("");
-  const [projectId, setProjectId] = useState<string>(projects[0]?.id ?? "");
-  const [minutes, setMinutes] = useState<string>("");
+  const [body, setBody] = useState("");
+  const [projectId, setProjectId] = useState<string>("");
+  const [taskSize, setTaskSize] = useState<TaskSizeValue | null>(null);
   const [dependsOnEventId, setDependsOnEventId] = useState<string>("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,23 +53,18 @@ export function TaskForm({ projects, events, onSubmit, onClose }: TaskFormProps)
       setError("タイトルは必須です");
       return;
     }
-    if (!projectId) {
-      setError("プロジェクトを選んでください");
+    if (taskSize === null) {
+      setError("サイズを選んでください");
       return;
     }
     setPending(true);
     setError(null);
     try {
-      const estimated = minutes.trim() === "" ? null : Number(minutes);
-      if (estimated !== null && (!Number.isFinite(estimated) || estimated <= 0)) {
-        setError("見積もり分数は正の整数で指定してください");
-        setPending(false);
-        return;
-      }
       await onSubmit({
-        projectId,
+        projectId: projectId || null,
         title: title.trim(),
-        estimatedMinutes: estimated,
+        body: body.trim() || undefined,
+        taskSize,
         dependsOnEventId: dependsOnEventId || null,
       });
       onClose();
@@ -86,31 +89,55 @@ export function TaskForm({ projects, events, onSubmit, onClose }: TaskFormProps)
       </label>
 
       <label className="flex flex-col gap-1">
-        <span className="font-jp text-[10px] text-fg-weak">プロジェクト</span>
+        <span className="font-jp text-[10px] text-fg-weak">詳細 (任意)</span>
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={3}
+          className="resize-y rounded border border-bg-divider bg-bg-elevated px-3 py-2 font-mono text-[12px] leading-[1.5] text-fg-default outline-none focus:border-accent-blue"
+          placeholder="背景 / 進め方 / 完了条件など。AI 分解の文脈になります"
+        />
+      </label>
+
+      <fieldset className="flex flex-col gap-1">
+        <legend className="font-jp text-[10px] text-fg-weak">サイズ</legend>
+        <div role="radiogroup" aria-label="サイズ" className="flex flex-wrap gap-1.5">
+          {TASK_SIZE_VALUES.map((value) => {
+            const selected = taskSize === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => setTaskSize(value)}
+                className={`rounded border px-2.5 py-1 font-jp text-[11px] ${
+                  selected
+                    ? "border-accent-blue bg-accent-blue/15 text-accent-blue"
+                    : "border-bg-divider bg-bg-elevated text-fg-subtle hover:border-fg-faint"
+                }`}
+              >
+                {TASK_SIZE_LABELS[value]}
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      <label className="flex flex-col gap-1">
+        <span className="font-jp text-[10px] text-fg-weak">プロジェクト (任意)</span>
         <select
           value={projectId}
           onChange={(e) => setProjectId(e.target.value)}
           className="rounded border border-bg-divider bg-bg-elevated px-3 py-2 text-[13px] text-fg-default outline-none focus:border-accent-blue"
         >
-          {projects.length === 0 ? <option value="">プロジェクトがありません</option> : null}
+          <option value="">未指定 (後で決める)</option>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>
           ))}
         </select>
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="font-jp text-[10px] text-fg-weak">見積もり (分)</span>
-        <input
-          type="number"
-          min="1"
-          value={minutes}
-          onChange={(e) => setMinutes(e.target.value)}
-          className="rounded border border-bg-divider bg-bg-elevated px-3 py-2 text-[13px] text-fg-default outline-none focus:border-accent-blue"
-          placeholder="45"
-        />
       </label>
 
       <label className="flex flex-col gap-1">
@@ -130,7 +157,10 @@ export function TaskForm({ projects, events, onSubmit, onClose }: TaskFormProps)
       </label>
 
       {error ? (
-        <div className="rounded bg-[#ef444420] px-2 py-1.5 text-[11px] text-accent-red">
+        <div
+          role="alert"
+          className="rounded bg-[#ef444420] px-2 py-1.5 text-[11px] text-accent-red"
+        >
           {error}
         </div>
       ) : null}

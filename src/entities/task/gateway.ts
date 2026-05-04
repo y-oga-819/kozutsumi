@@ -2,7 +2,11 @@ import type { CorrectionFactor } from "./correction";
 import type { DecomposeStatus, Task, TaskCategory, TaskSize } from "./types";
 
 export type CreateTaskInput = {
-  projectId: string;
+  /**
+   * 所属プロジェクト (#170, ADR 0039)。null は「未指定 (Inbox 的)」。
+   * DB 上 `tasks.project_id` は NULLABLE で、TaskForm の project 入力を任意化する方針に対応する。
+   */
+  projectId: string | null;
   title: string;
   body?: string;
   estimatedMinutes?: number | null;
@@ -16,7 +20,10 @@ export type CreateTaskInput = {
 };
 
 export type UpdateTaskInput = {
-  projectId?: string;
+  /**
+   * project の付け替え / 未設定化 (#170, ADR 0039)。null で「未指定」に戻せる。
+   */
+  projectId?: string | null;
   title?: string;
   body?: string;
   estimatedMinutes?: number | null;

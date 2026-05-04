@@ -117,6 +117,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
     updateBody,
     updateDependency,
     updateCategory,
+    updateSize,
     reorder,
     createTaskWithAi,
     createEvent,
@@ -254,6 +255,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
               onDelete={deleteTask}
               onChangeDependency={updateDependency}
               onChangeCategory={updateCategory}
+              onChangeSize={updateSize}
               aiEnabled={aiEnabled}
               latestDecomposeLog={decomposeLogQuery.data ?? null}
               isDecomposeLogLoading={decomposeLogQuery.isPending}

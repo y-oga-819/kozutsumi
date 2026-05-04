@@ -145,6 +145,7 @@ export type TaskRow = {
   stack_order: number | null;
   depends_on_event_id: string | null;
   task_category: "coding" | "doc" | "research" | "admin" | "other" | null;
+  task_size: "15m" | "30m" | "1h" | "2h" | "4h" | "1d" | "large" | null;
   parent_task_id: string | null;
   decompose_status: DecomposeStatus;
   completed_at: string | null;

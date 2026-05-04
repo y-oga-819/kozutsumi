@@ -10,7 +10,7 @@ import type { Event } from "@/entities/event/types";
 import type { CreateProjectInput, UpdateProjectInput } from "@/entities/project/gateway";
 import type { Project } from "@/entities/project/types";
 import type { CreateTaskInput } from "@/entities/task/gateway";
-import type { Task, TaskCategory } from "@/entities/task/types";
+import type { Task, TaskCategory, TaskSize } from "@/entities/task/types";
 import { reorderTasksById } from "@/features/task-stack/reorderTasks";
 import { triggerCategorize } from "@/features/task-stack/triggerCategorize";
 import { triggerDecompose } from "@/features/task-stack/triggerDecompose";
@@ -31,6 +31,12 @@ export type DashboardMutations = {
   updateDependency: (id: string, dependsOnEventId: string | null) => void;
   /** P3-5 (#90) / ADR 0015: 詳細パネルからの task_category override。action_log: TASK_CATEGORY_CHANGED。 */
   updateCategory: (id: string, taskCategory: TaskCategory | null) => void;
+  /**
+   * #170 / ADR 0038: 詳細パネルからの task_size 編集。AI 推定の estimated_minutes
+   * とは独立した主観サイズ軸を上書きする。logging は今は持たない (action_log の
+   * payload schema を別 issue で確定する必要があるため)。
+   */
+  updateSize: (id: string, taskSize: TaskSize | null) => void;
   /** DnD でのタスク並び替え。action_log: TASK_REORDERED。 */
   reorder: (fromId: string, toId: string) => void;
   /**
@@ -191,6 +197,28 @@ export function useDashboardMutations(): DashboardMutations {
       }
       queryClient.setQueryData<Task[]>(dashboardKeys.tasks, (prev) =>
         (prev ?? []).map((t) => (t.id === id ? { ...t, taskCategory } : t)),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(dashboardKeys.tasks, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.tasks });
+    },
+  });
+
+  // #170 / ADR 0038: 主観サイズ (task_size) の上書き。AI が初期値を入れるルートと、
+  // ユーザーが詳細パネルで上書きするルートが両方あり、どちらも `tasks.task_size` 同列に
+  // 落ちる。category と異なり action_log は今は持たない (Phase 4 で必要になったら追加)。
+  const updateSizeMutation = useMutation({
+    mutationFn: ({ id, taskSize }: { id: string; taskSize: TaskSize | null }) =>
+      taskGateway.update(id, { taskSize }),
+    onMutate: async ({ id, taskSize }) => {
+      await queryClient.cancelQueries({ queryKey: dashboardKeys.tasks });
+      const previous = queryClient.getQueryData<Task[]>(dashboardKeys.tasks);
+      queryClient.setQueryData<Task[]>(dashboardKeys.tasks, (prev) =>
+        (prev ?? []).map((t) => (t.id === id ? { ...t, taskSize } : t)),
       );
       return { previous };
     },
@@ -482,6 +510,7 @@ export function useDashboardMutations(): DashboardMutations {
     updateDependency: (id, dependsOnEventId) =>
       updateDependencyMutation.mutate({ id, dependsOnEventId }),
     updateCategory: (id, taskCategory) => updateCategoryMutation.mutate({ id, taskCategory }),
+    updateSize: (id, taskSize) => updateSizeMutation.mutate({ id, taskSize }),
     reorder,
     createTaskWithAi,
     createEvent: (input) => createEventMutation.mutateAsync(input).then(() => undefined),
