@@ -1,0 +1,92 @@
+name: DB migrate (preview)
+
+# preview Supabase project に migration を適用する。
+# 設計判断は ADR-0042 / ADR-0043 を参照。
+#
+# Trigger:
+# - pull_request (opened/synchronize/reopened) で supabase/migrations/** が変わったとき
+# - workflow_dispatch (手動 / debug)
+#
+# secret は SUPABASE_PREVIEW_DB_URL のみ。step env で渡す
+# (job env / workflow env には置かない: ADR-0020 の hardening 方針を踏襲)。
+# 本番 SUPABASE_DB_URL は本 workflow から参照しない。
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "supabase/migrations/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # preview DB は 1 個共有 (ADR-0043 の後勝ち戦略)。
+  # migrate / reset は同じ group でシリアライズし、本番への副作用を物理的に排除する。
+  group: preview-db
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply migrations to preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # 本番 workflow と同じ理由で psql 17 を入れる (本番 / preview は同じ major version 前提)。
+      - name: Install PostgreSQL 17 client tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          test -x /usr/lib/postgresql/17/bin/pg_dump
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Show migration state (local files vs applied)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_PREVIEW_DB_URL }}
+        run: |
+          echo "::group::Local migration files (supabase/migrations/)"
+          ls -1 supabase/migrations/ || true
+          echo "::endgroup::"
+          echo "::group::Applied migrations on preview (supabase_migrations.schema_migrations)"
+          psql "$SUPABASE_DB_URL" -c \
+            "SELECT version FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 30;" \
+            || echo "Could not read schema_migrations (table might not exist on first run)"
+          echo "::endgroup::"
+
+      - name: Apply migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_PREVIEW_DB_URL }}
+        run: |
+          supabase db push --db-url "$SUPABASE_DB_URL"
+
+      - name: Verify post-migrate state
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_PREVIEW_DB_URL }}
+        run: |
+          echo "::group::Applied migrations after push"
+          psql "$SUPABASE_DB_URL" -c \
+            "SELECT version FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 10;"
+          echo "::endgroup::"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### DB migrate (preview)"
+            echo ""
+            echo "- Trigger: \`${{ github.event_name }}\`"
+            echo "- ADR: [0042](../blob/main/docs/adr/0042-preview-env-uses-separate-supabase-project.md) / [0043](../blob/main/docs/adr/0043-preview-db-migration-auto-apply-on-pr-push.md)"
+          } >> "$GITHUB_STEP_SUMMARY"
