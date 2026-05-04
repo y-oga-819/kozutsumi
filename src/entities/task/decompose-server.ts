@@ -10,13 +10,15 @@ import {
 import type { Database, Json, Tables } from "@/shared/types/database";
 
 /**
- * AI タスク分解 (P3-6 / ADR 0017 / 0018 / 0016 / 0021) の server 側 orchestrator。
+ * AI タスク分解 (P3-6 / ADR 0017 / 0018 / 0016 / 0021 / 0042) の server 側 orchestrator。
  *
  * 流れ:
  * 1. 親タスクを userId スコープで取得 (RLS 前提だが defense in depth)。見つからなければ no-op
- * 2. race condition guard: 親が active/paused/done か、既に decomposed/skipped/failed なら no-op
+ * 2. read 時 fast-exit: 親が active/paused/done か、既に decomposed/skipped なら no-op
  *    (ADR 0017 Notes: 親 active 化済みは分解対象から外す。冪等性のため重複時もスキップ)
- * 3. 親の decompose_status を `decomposing` に倒す
+ * 3. ADR 0042 の race guard: `tryClaimDecomposing` の条件付き UPDATE で `decompose_status`
+ *    を `none|failed → decomposing` に atomic 遷移。0 行更新なら他 fire に負けた / 直前に
+ *    decomposed/skipped に確定したケースなので `already_resolved` で skipped に倒す。
  * 4. ここから先は ADR 0021 の不変条件: 「`decomposing` で固まらない」。
  *    すべての失敗経路で parent を必ず終端 status (`failed` / `skipped` / `decomposed`) に倒し、
  *    試行結果を `action_logs` に記録する。
@@ -49,6 +51,9 @@ const SKIP_STATUSES = new Set(["active", "paused", "done"]);
 // 終端のうち「再分解しない」ものだけ。`failed` は ADR 0021 §1 で `failed → decomposing` を
 // 明示的に許容しているので含めない（詳細パネルの「再実行」ボタンが直接ここを通る）。
 const ALREADY_RESOLVED = new Set(["decomposed", "skipped"]);
+// claim の allowlist: ここに含まれる pre-state からのみ `decomposing` への遷移を許容する。
+// `decomposed` / `skipped` は冪等のため再分解しない。`decomposing` は他 fire の進行中。
+const CLAIMABLE_PRE_STATES = ["none", "failed"] as const;
 
 export async function decomposeTask(deps: DecomposeTaskDeps): Promise<DecomposeTaskOutcome> {
   const { supabase, userId, taskId, generate } = deps;
@@ -65,8 +70,14 @@ export async function decomposeTask(deps: DecomposeTaskDeps): Promise<DecomposeT
     return { kind: "skipped", reason: "already_resolved" };
   }
 
-  // 重複 fire-and-forget や client 側 optimistic ズレに耐えるよう、ここで decomposing に確定させる。
-  await setDecomposeStatus(supabase, parent.id, "decomposing");
+  // ADR 0042: 条件付き UPDATE で `decomposing` を atomic に claim する。fetchParent との間に
+  // concurrent fire が `decomposing` に倒したり decomposed/skipped で確定した場合、claim は
+  // 0 行更新で失敗 → skipped/already_resolved に倒し、AI 呼び出しを起こさない。これにより
+  // ADR 0021 §1 の不変条件 (decomposing で固まらない) を DB レベルで保証する。
+  const claimed = await tryClaimDecomposing(supabase, parent.id);
+  if (!claimed) {
+    return { kind: "skipped", reason: "already_resolved" };
+  }
 
   try {
     return await runDecompose(supabase, userId, parent, generate);
@@ -234,6 +245,39 @@ async function fetchParent(
     return null;
   }
   return (data as ParentRow | null) ?? null;
+}
+
+/**
+ * ADR 0042: `decompose_status` を `none|failed → decomposing` に atomic 遷移させる。
+ *
+ * `.in("decompose_status", CLAIMABLE_PRE_STATES)` で pre-state を allowlist 制約することで:
+ * - 並行 fire との TOCTOU race window を閉じる (後勝ち 1 本だけが claim 成功)
+ * - fetchParent 後に decomposed/skipped に確定したケースも 0 行更新で吸収
+ *
+ * 0 行更新 (data === null) → claim 失敗 → orchestrator は skipped/already_resolved に倒す。
+ * supabase error は safe-side に倒して `false` を返す (ADR 0013 augmentation only)。
+ *
+ * resplit-server.ts の `tryClaimDecomposing` (ADR 0027) と同じ pattern を共有するが、
+ * 当該 server は `.neq("decomposing")` で「進行中以外なら claim」を許す (resplit はユーザー
+ * 明示クリック起動なので decomposed/skipped/failed → 再分解を許容)。decompose は auto 起動
+ * のため `none|failed` だけに絞る点が異なる (ADR 0042: guard 述語は機能ごとに別)。
+ */
+async function tryClaimDecomposing(
+  supabase: SupabaseClient<Database>,
+  taskId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("tasks")
+    .update({ decompose_status: "decomposing" })
+    .eq("id", taskId)
+    .in("decompose_status", [...CLAIMABLE_PRE_STATES])
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    console.error("[ai/decompose] claim decomposing failed", error);
+    return false;
+  }
+  return data !== null;
 }
 
 /**

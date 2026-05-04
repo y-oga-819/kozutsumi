@@ -18,6 +18,12 @@ type Plan = {
   rpc: { data: string[] | null; error: { message: string } | null };
   insertActionLogs: { error: { message: string } | null };
   rpcThrow?: unknown; // rpc が throw する想定 (last-resort safety net テスト用)
+  /**
+   * ADR 0042 / Issue #157: tryClaimDecomposing で「既に decomposing / decomposed / skipped に
+   * 確定済」を疑似する。true のとき claim 経路の maybeSingle が { data: null } を返し、
+   * orchestrator は skipped/already_resolved に倒す (race window が閉じていることのテスト)。
+   */
+  claimReturnsExisting?: boolean;
 };
 
 function makeSupabase(plan: Plan): {
@@ -59,11 +65,31 @@ function makeSupabase(plan: Plan): {
           })),
         })),
       })),
-      // setDecomposeStatus: update({...}).eq("id", taskId) — eq is awaited (PostgrestFilterBuilder is thenable)
+      // 2 系統の chain を同じ shape で返す (resplit-server.test.ts と同形):
+      //   (a) `.update().eq()` を await: setDecomposeStatus (failed / skipped) 用、{ error } を解決
+      //   (b) `.update().eq().in().select().maybeSingle()`: tryClaimDecomposing (ADR 0042) 用、
+      //       claim 成功で { data: { id }, error: null }、race 敗北で plan.claimReturnsExisting = true
+      //       のとき { data: null }
       update: (patch: { decompose_status?: unknown }) => ({
         eq: (_col: string, val: unknown) => {
           calls.statusUpdates.push({ id: val, decompose_status: patch.decompose_status });
-          return Promise.resolve({ error: plan.update.error });
+          const promise = Promise.resolve({ error: plan.update.error });
+          return Object.assign(promise, {
+            in: () => ({
+              select: () => ({
+                maybeSingle: () =>
+                  Promise.resolve({
+                    data:
+                      plan.claimReturnsExisting === true
+                        ? null
+                        : plan.update.error
+                          ? null
+                          : { id: val },
+                    error: plan.update.error,
+                  }),
+              }),
+            }),
+          });
         },
       }),
     };
@@ -257,6 +283,26 @@ describe("decomposeTask", () => {
 
     expect(result).toEqual({ kind: "skipped", reason: "already_resolved" });
     expect(generate).not.toHaveBeenCalled();
+  });
+
+  // ADR 0042 / Issue #157: fetchParent → setDecomposeStatus(decomposing) の旧 2 step に
+  // あった TOCTOU race window を、tryClaimDecomposing の条件付き UPDATE で閉じた。
+  // 並行 click や fire-and-forget の重複起動でも、後勝ちの 1 本だけが進み、もう 1 本は
+  // skipped/already_resolved で潰れることをテストする。
+  test("並行起動: claim が race で負けたら skipped/already_resolved (ADR 0042)", async () => {
+    const plan = defaultPlan(makeParentRow());
+    plan.claimReturnsExisting = true;
+    const { client, calls } = makeSupabase(plan);
+    const generate = vi.fn();
+
+    const result = await decomposeTask(makeDeps({ client, generate }));
+
+    expect(result).toEqual({ kind: "skipped", reason: "already_resolved" });
+    expect(generate).not.toHaveBeenCalled();
+    expect(calls.rpcCalls).toHaveLength(0);
+    expect(calls.actionLogs).toHaveLength(0);
+    // claim attempt 自体は statusUpdates に記録されるが (mock 構造上)、それ以降の追加 update は無い
+    expect(calls.statusUpdates).toEqual([{ id: "parent-1", decompose_status: "decomposing" }]);
   });
 
   test("既に failed → 詳細パネル「再実行」で再分解できる (ADR 0021 §1: failed → decomposing を許容)", async () => {
