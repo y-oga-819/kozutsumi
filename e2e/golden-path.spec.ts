@@ -53,9 +53,11 @@ test("Phase 1 golden path", async ({ signedInPage: page }) => {
 
   const startX = gripBBox.x + gripBBox.width / 2;
   const startY = gripBBox.y + gripBBox.height / 2;
-  // rowA の上端より上にドロップ → findDropTarget が i=0 を返し B が top に挿入される。
+  // rowA の upper-quarter にドロップ → findDropTarget が i=0 を返し B が top に挿入される。
+  // 上端固定 offset (+4 等) は row 高さの微変動で upper half を踏み外す flake の元
+  // (#191 を参照)。height に比例した余裕を取る。
   const endX = startX;
-  const endY = rowABox.y + 4;
+  const endY = rowABox.y + Math.floor(rowABox.height / 4);
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();

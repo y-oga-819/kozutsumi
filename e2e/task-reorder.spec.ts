@@ -42,7 +42,7 @@ test.describe("DnD 並び替え (task_reordered + tasks.stack_order)", () => {
 
     // task_reordered ログが、つかんだ task の id + 該当 from/to で 1 件以上残る。
     // findDropTarget は「半分より上」で from を返す挙動なので to_position=0。
-    // (task A の box top + 4 を狙うので、midpoint より上 → 0 が選ばれる)
+    // (dragRowAboveRow は upper-quarter を狙うので、midpoint より上 → 0 が選ばれる)
     const movedC = await getTaskByTitle(admin, userId, titles[2]);
     const reorderLog = await waitForActionLog(
       admin,
@@ -139,6 +139,13 @@ async function getProjectId(
  * `sourceTitle` の grip を掴んで `targetTitle` の上端より少し下にドロップする。
  * useStackDnD は HTML5 DnD ではなく custom pointer events なので mouse API で
  * pointermove を複数回 emit する必要がある (5px 以上動かさないと drag 判定が立たない)。
+ *
+ * drop 座標は target row の upper-quarter (top + height/4) を狙う:
+ *   - findDropTarget は `clientY < rect.top + rect.height/2` で idx を返す
+ *   - 上端固定 + 数 px の oFFset (ex. +4) は、TopTaskCard の async load (projects /
+ *     correction factors / now 経過時間 badge) や DropIndicator (h-0.5) 挿入で
+ *     row 高さが微変動した際に upper half を踏み外して隣 idx に落ちる flake を生む
+ *   - height/4 なら row 高さが伸縮しても midpoint の半分の余裕で upper half に残る
  */
 async function dragRowAboveRow(
   page: Page,
@@ -158,7 +165,7 @@ async function dragRowAboveRow(
   const startY = gripBox.y + gripBox.height / 2;
   // target の midline より上に落とす → findDropTarget が target idx を返す。
   const endX = startX;
-  const endY = targetBox.y + 4;
+  const endY = targetBox.y + Math.floor(targetBox.height / 4);
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
