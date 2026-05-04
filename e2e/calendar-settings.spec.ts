@@ -72,17 +72,12 @@ test.describe("設定パネル (calendar subscriptions)", () => {
     const patches: Array<{ url: string; status: number }> = [];
     page.on("response", async (res) => {
       const url = res.url();
-      if (
-        res.request().method() === "PATCH" &&
-        url.includes("/api/calendar/subscriptions/")
-      ) {
+      if (res.request().method() === "PATCH" && url.includes("/api/calendar/subscriptions/")) {
         patches.push({ url, status: res.status() });
       }
     });
 
-    const toggle = dialog
-      .getByLabel(/(primary) を自動で予定化/)
-      .first();
+    const toggle = dialog.getByLabel(/(primary) を自動で予定化/).first();
     await expect(toggle).toBeChecked();
     await toggle.click();
 
