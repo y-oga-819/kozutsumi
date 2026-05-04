@@ -135,6 +135,9 @@ async function runDecompose(
     body: child.body,
     estimated_minutes: child.estimatedMinutes,
     task_category: child.taskCategory,
+    // ADR 0038 / Issue #169: AI が推定した主観サイズ。fn_decompose_parent_task が
+    // tasks.task_size 列に保存する (値域外 / null は parser 側で null に倒している)。
+    task_size: child.taskSize,
   }));
 
   // ADR 0021 / Issue #150: 子 insert + 親 decompose_status 更新を 1 トランザクションで行う。
@@ -206,6 +209,7 @@ type ParentRow = Pick<
   | "title"
   | "body"
   | "estimated_minutes"
+  | "task_size"
   | "project_id"
   | "depends_on_event_id"
   | "stack_order"
@@ -219,7 +223,7 @@ async function fetchParent(
   const { data, error } = await supabase
     .from("tasks")
     .select(
-      "id, status, decompose_status, title, body, estimated_minutes, project_id, depends_on_event_id, stack_order",
+      "id, status, decompose_status, title, body, estimated_minutes, task_size, project_id, depends_on_event_id, stack_order",
     )
     .eq("id", taskId)
     .eq("user_id", userId)
@@ -259,5 +263,6 @@ function toPromptInput(row: ParentRow): DecomposeInput {
     title: row.title,
     body: row.body,
     estimatedMinutes: row.estimated_minutes,
+    taskSize: row.task_size,
   };
 }

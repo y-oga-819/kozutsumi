@@ -22,6 +22,20 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export const TASK_CATEGORY_VALUES = ["coding", "doc", "research", "admin", "other"] as const;
 export type TaskCategoryValue = (typeof TASK_CATEGORY_VALUES)[number];
 
+/**
+ * tasks.task_size の値域 (#169, ADR 0036 / 0038)。
+ * DB 側は text + CHECK 制約 (supabase/migrations/20260504000000_task_size.sql)。
+ *
+ * ユーザーが感じた主観サイズ。AI 推定の estimated_minutes とは別軸で蓄積する
+ * (ADR 0038 §Decision)。Phase 4 行動分析で「主観 vs 実所要中央値」を
+ * 独立シグナルとして見るための土台。
+ *
+ * 値の追加・名称変更は ADR の supersede ではなく migration + ここの更新で行う
+ * (TASK_CATEGORY_VALUES と同じ運用)。
+ */
+export const TASK_SIZE_VALUES = ["15m", "30m", "1h", "2h", "4h", "1d", "large"] as const;
+export type TaskSizeValue = (typeof TASK_SIZE_VALUES)[number];
+
 export type Database = {
   public: {
     Tables: {
@@ -67,6 +81,7 @@ export type Database = {
           parent_task_id: string | null;
           decompose_status: Database["public"]["Enums"]["decompose_status"];
           task_category: TaskCategoryValue | null;
+          task_size: TaskSizeValue | null;
           created_at: string;
           completed_at: string | null;
         };
@@ -84,6 +99,7 @@ export type Database = {
           parent_task_id?: string | null;
           decompose_status?: Database["public"]["Enums"]["decompose_status"];
           task_category?: TaskCategoryValue | null;
+          task_size?: TaskSizeValue | null;
           created_at?: string;
           completed_at?: string | null;
         };
@@ -101,6 +117,7 @@ export type Database = {
           parent_task_id?: string | null;
           decompose_status?: Database["public"]["Enums"]["decompose_status"];
           task_category?: TaskCategoryValue | null;
+          task_size?: TaskSizeValue | null;
           created_at?: string;
           completed_at?: string | null;
         };

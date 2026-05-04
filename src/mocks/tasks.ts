@@ -13,6 +13,7 @@ export function buildInitialTasks(): Task[] {
     parentTaskId: null,
     decomposeStatus: "none" as const,
     taskCategory: null,
+    taskSize: null,
     createdAt: now,
     completedAt: null,
   };
