@@ -93,6 +93,7 @@ function makeParentRow(overrides: Partial<Tables<"tasks">> = {}): Partial<Tables
     title: "親タスク",
     body: "本文",
     estimated_minutes: 60,
+    task_size: null,
     project_id: "proj-1",
     depends_on_event_id: "evt-1",
     stack_order: 5,
@@ -137,8 +138,15 @@ describe("decomposeTask", () => {
         body: "- 手順を書く\n- 注意点を確認",
         estimated_minutes: 30,
         task_category: "research",
+        task_size: "30m",
       },
-      { title: "子B", body: "", estimated_minutes: 15, task_category: "doc" },
+      {
+        title: "子B",
+        body: "",
+        estimated_minutes: 15,
+        task_category: "doc",
+        task_size: "15m",
+      },
     ]);
     const generate = vi.fn(async () => rawResponse);
 
@@ -160,12 +168,14 @@ describe("decomposeTask", () => {
       body: "- 手順を書く\n- 注意点を確認", // #120: AI 生成 body を子 insert に渡す
       estimated_minutes: 30,
       task_category: "research", // ADR 0022: decompose プロンプトが同時推論
+      task_size: "30m", // ADR 0038 / #169: 同 prompt が task_size も推論
     });
     expect(newChildren[1]).toMatchObject({
       title: "子B",
       body: "", // body が無い子は空文字で insert される
       estimated_minutes: 15,
       task_category: "doc",
+      task_size: "15m",
     });
 
     // 状態遷移: decomposing に倒すのみ (success path では rpc が親 status='decomposed' まで実行する)
@@ -516,6 +526,54 @@ describe("decomposeTask", () => {
     expect(newChildren[0]).toMatchObject({ title: "a", task_category: "coding" });
     expect(newChildren[1]).toMatchObject({ title: "b", task_category: null });
     expect(newChildren[2]).toMatchObject({ title: "c", task_category: null });
+  });
+
+  test("task_size: 値域内は rpc params に含まれる / 欠損・値域外は null になる (ADR 0038 / #169)", async () => {
+    const { client, calls } = makeSupabase(defaultPlan(makeParentRow()));
+    const generate = vi.fn(async () =>
+      JSON.stringify([
+        { title: "a", estimated_minutes: 30, task_category: "coding", task_size: "30m" },
+        { title: "b", estimated_minutes: 60, task_category: "coding", task_size: "huge" }, // 値域外
+        { title: "c", estimated_minutes: 15, task_category: "coding" }, // 欠損
+      ]),
+    );
+
+    const result = await decomposeTask(makeDeps({ client, generate }));
+
+    expect(result.kind).toBe("decomposed");
+    const newChildren = calls.rpcCalls[0].params.p_new_children as Array<Record<string, unknown>>;
+    expect(newChildren).toHaveLength(3);
+    expect(newChildren[0]).toMatchObject({ title: "a", task_size: "30m" });
+    expect(newChildren[1]).toMatchObject({ title: "b", task_size: null });
+    expect(newChildren[2]).toMatchObject({ title: "c", task_size: null });
+  });
+
+  test("親 task_size が prompt に渡る (#169)", async () => {
+    const { client } = makeSupabase(defaultPlan(makeParentRow({ task_size: "1d" })));
+    const generate = vi.fn(async () =>
+      JSON.stringify([
+        { title: "a", estimated_minutes: 60, task_category: "coding", task_size: "1h" },
+        { title: "b", estimated_minutes: 60, task_category: "coding", task_size: "1h" },
+      ]),
+    );
+
+    await decomposeTask(makeDeps({ client, generate }));
+
+    expect(generate).toHaveBeenCalledWith(expect.stringContaining("task_size: 1d"));
+  });
+
+  test("親 task_size が null なら prompt は「未設定」と出す (後方互換)", async () => {
+    const { client } = makeSupabase(defaultPlan(makeParentRow({ task_size: null })));
+    const generate = vi.fn(async () =>
+      JSON.stringify([
+        { title: "a", estimated_minutes: 15, task_category: "coding", task_size: "15m" },
+        { title: "b", estimated_minutes: 15, task_category: "coding", task_size: "15m" },
+      ]),
+    );
+
+    await decomposeTask(makeDeps({ client, generate }));
+
+    expect(generate).toHaveBeenCalledWith(expect.stringContaining("task_size: 未設定"));
   });
 });
 

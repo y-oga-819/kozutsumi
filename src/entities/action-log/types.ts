@@ -177,6 +177,9 @@ export type ActionMetadataMap = {
       body: string;
       estimated_minutes: number | null;
       task_category: string | null;
+      // ADR 0038 / Issue #169: 主観サイズも snapshot に含めて再分解前後の比較を可能にする。
+      // 既存タスク・未設定では null。
+      task_size: string | null;
       created_at: string;
     };
     new_child_ids: string[];

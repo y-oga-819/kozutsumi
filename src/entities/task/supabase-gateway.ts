@@ -23,6 +23,7 @@ function fromRow(row: Tables<"tasks">): Task {
     parentTaskId: row.parent_task_id,
     decomposeStatus: row.decompose_status,
     taskCategory: row.task_category,
+    taskSize: row.task_size,
     createdAt: row.created_at,
     completedAt: row.completed_at,
   };
@@ -62,6 +63,7 @@ export class SupabaseTaskGateway implements TaskGateway {
       is_interruption: input.isInterruption ?? false,
       parent_task_id: input.parentTaskId ?? null,
       task_category: input.taskCategory ?? null,
+      task_size: input.taskSize ?? null,
       ...(input.decomposeStatus !== undefined ? { decompose_status: input.decomposeStatus } : {}),
     };
     const { data, error } = await this.supabase.from("tasks").insert(payload).select("*").single();
@@ -81,6 +83,7 @@ export class SupabaseTaskGateway implements TaskGateway {
     if (patch.isInterruption !== undefined) update.is_interruption = patch.isInterruption;
     if (patch.decomposeStatus !== undefined) update.decompose_status = patch.decomposeStatus;
     if (patch.taskCategory !== undefined) update.task_category = patch.taskCategory;
+    if (patch.taskSize !== undefined) update.task_size = patch.taskSize;
     if (patch.completedAt !== undefined) update.completed_at = patch.completedAt;
     const { data, error } = await this.supabase
       .from("tasks")

@@ -115,6 +115,7 @@ type TargetRow = Pick<
   | "body"
   | "estimated_minutes"
   | "task_category"
+  | "task_size"
   | "parent_task_id"
   | "stack_order"
   | "created_at"
@@ -174,6 +175,8 @@ async function runResplit(
     body: c.body,
     estimated_minutes: c.estimatedMinutes,
     task_category: c.taskCategory,
+    // ADR 0038 / Issue #169: 子の主観サイズも保存する。
+    task_size: c.taskSize,
   }));
 
   // ADR 0028 / 0030: rpc で delete + insert + reorder を atomic 実行する。
@@ -211,6 +214,8 @@ async function runResplit(
       body: target.body,
       estimated_minutes: target.estimated_minutes,
       task_category: target.task_category,
+      // ADR 0038 / Issue #169: 主観サイズも snapshot に含めて再分解前後の比較を可能に。
+      task_size: target.task_size,
       created_at: target.created_at,
     },
     new_child_ids: newChildIds,
@@ -257,7 +262,7 @@ async function fetchTarget(
   const { data, error } = await supabase
     .from("tasks")
     .select(
-      "id, status, decompose_status, title, body, estimated_minutes, task_category, parent_task_id, stack_order, created_at",
+      "id, status, decompose_status, title, body, estimated_minutes, task_category, task_size, parent_task_id, stack_order, created_at",
     )
     .eq("id", taskId)
     .eq("user_id", userId)
@@ -300,6 +305,7 @@ function toPromptInput(target: TargetRow, siblings: string[]): DecomposeInput {
     title: target.title,
     body: target.body,
     estimatedMinutes: target.estimated_minutes,
+    taskSize: target.task_size,
     siblings: siblings.length > 0 ? siblings : undefined,
   };
 }

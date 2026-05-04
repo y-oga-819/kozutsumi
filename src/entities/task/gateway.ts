@@ -1,5 +1,5 @@
 import type { CorrectionFactor } from "./correction";
-import type { DecomposeStatus, Task, TaskCategory } from "./types";
+import type { DecomposeStatus, Task, TaskCategory, TaskSize } from "./types";
 
 export type CreateTaskInput = {
   projectId: string;
@@ -12,6 +12,7 @@ export type CreateTaskInput = {
   parentTaskId?: string | null;
   decomposeStatus?: DecomposeStatus;
   taskCategory?: TaskCategory | null;
+  taskSize?: TaskSize | null;
 };
 
 export type UpdateTaskInput = {
@@ -25,6 +26,7 @@ export type UpdateTaskInput = {
   isInterruption?: boolean;
   decomposeStatus?: DecomposeStatus;
   taskCategory?: TaskCategory | null;
+  taskSize?: TaskSize | null;
   completedAt?: string | null;
 };
 

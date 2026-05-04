@@ -15,12 +15,23 @@
  *   子の生成自体は止めない (title / estimated_minutes が取れていれば子を作る)。
  */
 
-import { TASK_CATEGORY_VALUES, type TaskCategoryValue } from "@/shared/types/database";
+import {
+  TASK_CATEGORY_VALUES,
+  TASK_SIZE_VALUES,
+  type TaskCategoryValue,
+  type TaskSizeValue,
+} from "@/shared/types/database";
 
 export type DecomposeInput = {
   title: string;
   body: string;
   estimatedMinutes: number | null;
+  /**
+   * ADR 0038 / Issue #169: 親タスクの主観サイズ (ユーザーが感じた粗い粒度感)。
+   * AI 分解時に「親はこのサイズだから子は更に細かく」と推論させる文脈情報。
+   * 親が未設定 (既存タスク・後方互換経路) なら null / undefined。
+   */
+  taskSize?: TaskSizeValue | null;
   /**
    * ADR 0029 / Issue #121: 子の再分解時のみ、再分解対象の子の兄弟 title を渡す。
    * AI に「同じ粒度感で分解する」よう誘導するための文脈情報。
@@ -35,6 +46,12 @@ export type DecomposedChild = {
   body: string;
   estimatedMinutes: number | null;
   taskCategory: TaskCategoryValue | null;
+  /**
+   * ADR 0038 / Issue #169: 子の主観サイズ。AI が推定し、ユーザーの主観入力と
+   * 同じ列 (tasks.task_size) に保存する。値域外・欠損は null に倒す
+   * (フェイルソフト: task_size の parse 失敗で子の生成自体は止めない)。
+   */
+  taskSize: TaskSizeValue | null;
 };
 
 const MIN_CHILDREN = 2;
@@ -58,6 +75,9 @@ const ALLOWED_ESTIMATE_BUCKETS = [5, 10, 15, 20, 30, 45, 60, 90, 120] as const;
 export function buildDecomposePrompt(parent: DecomposeInput): string {
   const bodyText = parent.body.trim().length > 0 ? parent.body.trim() : "(本文なし)";
   const estimateText = parent.estimatedMinutes !== null ? `${parent.estimatedMinutes}分` : "未設定";
+  // ADR 0038 / Issue #169: 親 task_size を prompt に渡し「親はこの粒度だから子はもっと細かく」を誘導する。
+  // 既存タスク・新規分解で親が未設定なら "未設定" として従来 prompt と同等の挙動に倒す。
+  const taskSizeText = parent.taskSize ?? "未設定";
 
   // ADR 0029: siblings が渡されたら「兄弟タスクと同じ粒度感」で分解する誘導文を挿入する。
   // undefined / 空配列なら従来 prompt と同一になる (新規分解への影響をゼロに保つ)。
@@ -93,16 +113,28 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
     "- other    : 上記いずれにも当てはまらない作業",
     "判断に確信が持てない場合は other を返す。",
     "",
+    "# task_size の値域 (各子タスクの粗いサイズ感)",
+    "- 15m   : 15 分以内で終わる短作業",
+    "- 30m   : 30 分前後の小作業",
+    "- 1h    : 1 時間程度のまとまった作業",
+    "- 2h    : 2 時間程度の集中作業",
+    "- 4h    : 半日 (4 時間) 規模の作業",
+    "- 1d    : 1 日 (8 時間) 規模の作業",
+    "- large : 1 日では収まらない / さらに分解したほうがよい大物",
+    "親の task_size より大きい値を子に付けない。判断に確信が持てない場合は null を返す。",
+    "estimated_minutes と独立した軸であり、両方を埋めること。",
+    "",
     "# 親タスク",
     `title: ${parent.title}`,
     `body: ${bodyText}`,
     `estimated_minutes: ${estimateText}`,
+    `task_size: ${taskSizeText}`,
     ...siblingsSection,
     "",
     "# 出力形式",
     "JSON 配列のみを返す。前後に説明文や markdown fence を付けない。",
-    "各要素は title / body / estimated_minutes / task_category の 4 フィールドを持つ。",
-    '例: [{"title":"...","body":"- 手順1\\n- 手順2","estimated_minutes":30,"task_category":"coding"},{"title":"...","body":"","estimated_minutes":null,"task_category":"research"}]',
+    "各要素は title / body / estimated_minutes / task_category / task_size の 5 フィールドを持つ。",
+    '例: [{"title":"...","body":"- 手順1\\n- 手順2","estimated_minutes":30,"task_category":"coding","task_size":"30m"},{"title":"...","body":"","estimated_minutes":null,"task_category":"research","task_size":null}]',
   ].join("\n");
 }
 
@@ -167,10 +199,12 @@ function normalizeChild(raw: unknown): DecomposedChild | null {
   // task_category だけの parse 失敗 (値域外 / 型違い / 欠損) では子の生成自体を止めない。
   // null で埋めて子は作る (ADR 0022 §否定的影響: フェイルソフト)。
   const taskCategory = normalizeCategory(obj.task_category);
+  // task_size も同じくフェイルソフト (ADR 0038 §否定的影響)。値域外・欠損は null。
+  const taskSize = normalizeSize(obj.task_size);
   // body は欠損 / 型違い → 空文字。長すぎ → 末尾 truncate。空文字を許容する
   // (title だけで十分な子の場合に AI が "" を返す)。
   const body = normalizeBody(obj.body);
-  return { title, body, estimatedMinutes: estimate, taskCategory };
+  return { title, body, estimatedMinutes: estimate, taskCategory, taskSize };
 }
 
 function normalizeBody(raw: unknown): string {
@@ -200,5 +234,21 @@ function normalizeCategory(raw: unknown): TaskCategoryValue | null {
   if (typeof raw !== "string") return null;
   const cleaned = raw.trim().toLowerCase();
   const found = TASK_CATEGORY_VALUES.find((v) => v === cleaned);
+  return found ?? null;
+}
+
+/**
+ * task_size の値域ガード (ADR 0038 / Issue #169)。
+ *
+ * - 値域内 (`15m` / `30m` / `1h` / `2h` / `4h` / `1d` / `large`) → そのまま採用
+ * - 値域外 / 型違い / 欠損 → null (`other` 相当の握り潰しはしない: ユーザーの主観
+ *   シグナルなので「AI が判定不能」と「AI が large と判定」は区別する)
+ *
+ * 大文字小文字 / 前後空白は許容する (taskCategory と同じ運用)。
+ */
+function normalizeSize(raw: unknown): TaskSizeValue | null {
+  if (typeof raw !== "string") return null;
+  const cleaned = raw.trim().toLowerCase();
+  const found = TASK_SIZE_VALUES.find((v) => v === cleaned);
   return found ?? null;
 }

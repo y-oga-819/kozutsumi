@@ -162,6 +162,7 @@ function makeTargetRow(overrides: Partial<Tables<"tasks">> = {}): Partial<Tables
     body: "ドキュメント本文を執筆",
     estimated_minutes: 30,
     task_category: "doc",
+    task_size: "30m",
     parent_task_id: "parent-1",
     stack_order: 1,
     created_at: "2026-04-30T09:00:00.000Z",
@@ -197,9 +198,27 @@ function makeDeps(opts: {
 }
 
 const VALID_RAW = JSON.stringify([
-  { title: "導入部の構成を決める", body: "", estimated_minutes: 10, task_category: "doc" },
-  { title: "本文を書く", body: "", estimated_minutes: 15, task_category: "doc" },
-  { title: "最終確認", body: "", estimated_minutes: 5, task_category: "doc" },
+  {
+    title: "導入部の構成を決める",
+    body: "",
+    estimated_minutes: 10,
+    task_category: "doc",
+    task_size: "15m",
+  },
+  {
+    title: "本文を書く",
+    body: "",
+    estimated_minutes: 15,
+    task_category: "doc",
+    task_size: "15m",
+  },
+  {
+    title: "最終確認",
+    body: "",
+    estimated_minutes: 5,
+    task_category: "doc",
+    task_size: "15m",
+  },
 ]);
 
 describe("resplitChildTask", () => {
@@ -225,10 +244,16 @@ describe("resplitChildTask", () => {
       p_base_stack_order: 1, // = target.stack_order
       p_shift_amount: 2, // = parsed.length(3) - 1
     });
-    // p_new_children は parsed の写像
+    // p_new_children は parsed の写像 (task_size も含む、ADR 0038 / #169)
     const newChildren = calls.rpcCalls[0].params.p_new_children as Array<Record<string, unknown>>;
     expect(newChildren).toHaveLength(3);
-    expect(newChildren[0]).toMatchObject({ title: "導入部の構成を決める", task_category: "doc" });
+    expect(newChildren[0]).toMatchObject({
+      title: "導入部の構成を決める",
+      task_category: "doc",
+      task_size: "15m",
+    });
+    expect(newChildren[1]).toMatchObject({ title: "本文を書く", task_size: "15m" });
+    expect(newChildren[2]).toMatchObject({ title: "最終確認", task_size: "15m" });
 
     // status: decomposing に倒すのみ (success path では rpc が target を delete するので追加 update は無い)
     expect(calls.statusUpdates).toEqual([{ id: "child-B", decompose_status: "decomposing" }]);
@@ -250,10 +275,20 @@ describe("resplitChildTask", () => {
           body: "ドキュメント本文を執筆",
           estimated_minutes: 30,
           task_category: "doc",
+          task_size: "30m", // ADR 0038 / #169: 主観サイズも snapshot に含める
           created_at: "2026-04-30T09:00:00.000Z",
         },
       },
     });
+  });
+
+  test("target.task_size が prompt に渡る (ADR 0038 / #169)", async () => {
+    const { client } = makeSupabase(defaultPlan(makeTargetRow({ task_size: "2h" })));
+    const generate = vi.fn(async () => VALID_RAW);
+
+    await resplitChildTask(makeDeps({ client, generate }));
+
+    expect(generate).toHaveBeenCalledWith(expect.stringContaining("task_size: 2h"));
   });
 
   test("siblings を prompt に渡す (ADR 0029)", async () => {

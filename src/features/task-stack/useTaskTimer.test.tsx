@@ -47,6 +47,7 @@ const baseTask: Task = {
   parentTaskId: null,
   decomposeStatus: "none",
   taskCategory: null,
+  taskSize: null,
   createdAt: "2026-04-19T09:00:00.000Z",
   completedAt: null,
 };

@@ -32,6 +32,7 @@ function makeRow(overrides: Partial<Tables<"tasks">> = {}): Tables<"tasks"> {
     parent_task_id: null,
     decompose_status: "none",
     task_category: null,
+    task_size: null,
     created_at: "2026-04-27T00:00:00.000Z",
     completed_at: null,
     ...overrides,
@@ -150,6 +151,84 @@ describe("SupabaseTaskGateway: task_category mapping", () => {
 
     expect(tasks).toHaveLength(1);
     expect(tasks[0]!.taskCategory).toBe("admin");
+  });
+});
+
+/**
+ * task_size mapping (#169 / ADR 0036 / 0038)。
+ * task_category と同じ薄ラッパー責務。CHECK 制約の検証は migration 側。
+ */
+describe("SupabaseTaskGateway: task_size mapping (#169)", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  test("create: taskSize 指定値が payload.task_size に乗る", async () => {
+    const { client, chain } = makeSupabase(makeRow({ task_size: "1h" }));
+    const gateway = new SupabaseTaskGateway(client);
+
+    const task = await gateway.create({ projectId: "p1", title: "x", taskSize: "1h" });
+
+    expect(chain.insert).toHaveBeenCalledWith(expect.objectContaining({ task_size: "1h" }));
+    expect(task.taskSize).toBe("1h");
+  });
+
+  test("create: taskSize 未指定なら null で insert される (後方互換: 未設定 = NULL)", async () => {
+    const { client, chain } = makeSupabase(makeRow({ task_size: null }));
+    const gateway = new SupabaseTaskGateway(client);
+
+    const task = await gateway.create({ projectId: "p1", title: "x" });
+
+    expect(chain.insert).toHaveBeenCalledWith(expect.objectContaining({ task_size: null }));
+    expect(task.taskSize).toBeNull();
+  });
+
+  test("update: taskSize 明示なら update.task_size に乗る (override)", async () => {
+    const { client, chain } = makeSupabase(makeRow({ task_size: "2h" }));
+    const gateway = new SupabaseTaskGateway(client);
+
+    const task = await gateway.update("t1", { taskSize: "2h" });
+
+    expect(chain.update).toHaveBeenCalledWith(expect.objectContaining({ task_size: "2h" }));
+    expect(task.taskSize).toBe("2h");
+  });
+
+  test("update: taskSize=null も明示的に書ける (override で外す)", async () => {
+    const { client, chain } = makeSupabase(makeRow({ task_size: null }));
+    const gateway = new SupabaseTaskGateway(client);
+
+    await gateway.update("t1", { taskSize: null });
+
+    expect(chain.update).toHaveBeenCalledWith(expect.objectContaining({ task_size: null }));
+  });
+
+  test("update: taskSize を patch に含めなければ update に乗らない (後方互換)", async () => {
+    const { client, chain } = makeSupabase(makeRow({ task_size: "30m" }));
+    const gateway = new SupabaseTaskGateway(client);
+
+    await gateway.update("t1", { title: "y" });
+
+    const call = chain.update.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(call).not.toHaveProperty("task_size");
+    expect(call).toHaveProperty("title", "y");
+  });
+
+  test("list: row.task_size が Task.taskSize に写る", async () => {
+    const { client } = makeSupabase(makeRow({ task_size: "1d" }));
+    const orderInner = vi.fn(async () => ({
+      data: [makeRow({ task_size: "1d" })],
+      error: null,
+    }));
+    const orderOuter = vi.fn(() => ({ order: orderInner }));
+    const select = vi.fn(() => ({ order: orderOuter }));
+    (client.from as ReturnType<typeof vi.fn>).mockReturnValueOnce({ select });
+
+    const gateway = new SupabaseTaskGateway(client);
+    const tasks = await gateway.list();
+
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]!.taskSize).toBe("1d");
   });
 });
 

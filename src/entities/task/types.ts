@@ -1,4 +1,4 @@
-import type { TaskCategoryValue } from "@/shared/types/database";
+import type { TaskCategoryValue, TaskSizeValue } from "@/shared/types/database";
 
 export type TaskStatus = "idle" | "active" | "paused" | "done";
 
@@ -22,6 +22,15 @@ export type DecomposeStatus = "none" | "decomposing" | "decomposed" | "skipped" 
 export type TaskCategory = TaskCategoryValue;
 
 /**
+ * 主観タスクサイズ (ADR 0036 / 0038, #169)。
+ * ユーザーが登録時に「これくらい」と感じた粗いサイズ感。AI 推定の estimatedMinutes
+ * とは別軸で蓄積する (Phase 4 行動分析の独立シグナル)。
+ * 値域: '15m' / '30m' / '1h' / '2h' / '4h' / '1d' / 'large'。
+ * 既存タスク・未設定は null (後方互換: estimated_minutes ベースに倒れる)。
+ */
+export type TaskSize = TaskSizeValue;
+
+/**
  * DB スキーマ (supabase/migrations/..._initial_schema.sql の tasks) と 1:1 対応。
  * projectId は projects.id を参照する UUID (初回 seed では slug 由来の UUID)。
  * DB 上は project_id が nullable だが、UI では常に割り当てさせる運用なので string を前提とする。
@@ -39,6 +48,7 @@ export type Task = {
   parentTaskId: string | null;
   decomposeStatus: DecomposeStatus;
   taskCategory: TaskCategory | null;
+  taskSize: TaskSize | null;
   createdAt: string;
   completedAt: string | null;
 };
