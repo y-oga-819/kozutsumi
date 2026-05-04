@@ -58,11 +58,21 @@ export function useTaskTimer(task: Task | null): TaskTimerApi {
   const isRunning = isActive && openEntry !== null;
 
   // アクティブな間は 1 秒間隔で再描画する。停止中は interval を張らない。
+  // タブが background で setInterval が throttle された場合、foreground 復帰時に
+  // visibilitychange で即時 tick して表示を最新に追従させる (#153)。
   const [tickMs, setTickMs] = useState<number>(() => Date.now());
   useEffect(() => {
     if (!isRunning) return;
-    const id = window.setInterval(() => setTickMs(Date.now()), 1000);
-    return () => window.clearInterval(id);
+    const tick = () => setTickMs(Date.now());
+    const id = window.setInterval(tick, 1000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [isRunning]);
 
   const elapsedSeconds = useMemo(() => sumDurationSeconds(entries, tickMs), [entries, tickMs]);
