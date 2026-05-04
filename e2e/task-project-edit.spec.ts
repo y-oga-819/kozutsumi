@@ -122,7 +122,11 @@ test.describe("project 編集 + 親-子-兄弟への伝播 (Issue #171 / ADR-003
     await page.reload();
 
     const stack = page.getByRole("list", { name: "タスクスタック" });
-    const parentRow = stack.getByRole("listitem").filter({ hasText: "親 cascade テスト" });
+    // 親行は子の親バッジ (`⤷ 親 cascade テスト`) と本文がマッチして strict mode 違反するので、
+    // 子バッジ持ちを `hasNotText: "⤷"` で除外して親自身の listitem だけに絞る。
+    const parentRow = stack
+      .getByRole("listitem")
+      .filter({ hasText: "親 cascade テスト", hasNotText: "⤷" });
     await expect(parentRow).toBeVisible();
     await parentRow.getByText("親 cascade テスト").first().click();
 
@@ -283,7 +287,10 @@ test.describe("project 編集 + 親-子-兄弟への伝播 (Issue #171 / ADR-003
     await page.reload();
 
     const stack = page.getByRole("list", { name: "タスクスタック" });
-    const parentRow = stack.getByRole("listitem").filter({ hasText: "親 (cancel)" });
+    // 親行は子の親バッジと衝突するので `hasNotText: "⤷"` で子バッジ持ちを除外する。
+    const parentRow = stack
+      .getByRole("listitem")
+      .filter({ hasText: "親 (cancel)", hasNotText: "⤷" });
     await parentRow.getByText("親 (cancel)").first().click();
 
     await page.getByRole("button", { name: new RegExp(`${projectName}\\s+を変更`) }).click();
