@@ -13,7 +13,9 @@
 --     "indexes":     [{ schema, table, name, definition }],
 --     "policies":    [{ schema, table, name, permissive, roles, command, using, with_check }],
 --     "enums":       [{ schema, name, values }],
---     "views":       [{ schema, name, kind, definition, security_invoker, security_barrier }]
+--     "views":       [{ schema, name, kind, definition, security_invoker, security_barrier }],
+--     "functions":   [{ schema, name, args, return_type, body, security_definer, volatility, comment }],
+--     "triggers":    [{ schema, table, name, function_name, timing, event, level, comment }]
 --   }
 --
 -- `tables` は relkind in ('r','v','m') を含むので「table / view / matview を一律
@@ -200,6 +202,69 @@ with
       where n.nspname = 'public'
       group by n.nspname, t.typname
     ) sub
+  ),
+  functions as (
+    -- 関数 / トリガー関数の定義 + 主要属性。security_definer は postgres の SECURITY DEFINER
+    -- フラグで、true だと所有者権限で実行され RLS を迂回する。kozutsumi では原則
+    -- SECURITY INVOKER (= prosecdef = false) を要求する。
+    -- 同名異シグネチャを別関数として扱うため key には pg_get_function_arguments を含める。
+    select coalesce(json_agg(f order by f->>'schema', f->>'name', f->>'args'), '[]'::json) as data
+    from (
+      select json_build_object(
+        'schema', n.nspname,
+        'name', p.proname,
+        'args', pg_get_function_arguments(p.oid),
+        'return_type', pg_get_function_result(p.oid),
+        'body', p.prosrc,
+        'security_definer', p.prosecdef,
+        'volatility', case p.provolatile
+          when 'i' then 'immutable'
+          when 's' then 'stable'
+          when 'v' then 'volatile'
+        end,
+        'comment', obj_description(p.oid, 'pg_proc')
+      ) as f
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public'
+    ) sub
+  ),
+  triggers as (
+    -- ユーザー定義 trigger のみ (tgisinternal = false で内部 FK trigger 等を除外)。
+    -- tgtype は bitmask: 1=ROW, 2=BEFORE, 4=INSERT, 8=DELETE, 16=UPDATE, 32=TRUNCATE, 64=INSTEAD OF
+    -- (BEFORE / INSTEAD OF どちらでもなければ AFTER)。event は複数同時指定可能なので配列で出す。
+    select coalesce(json_agg(t order by t->>'schema', t->>'table', t->>'name'), '[]'::json) as data
+    from (
+      select json_build_object(
+        'schema', n.nspname,
+        'table', cl.relname,
+        'name', tg.tgname,
+        'function_name', pn.nspname || '.' || pp.proname,
+        'timing', case
+          when (tg.tgtype & 64) <> 0 then 'INSTEAD OF'
+          when (tg.tgtype & 2) <> 0 then 'BEFORE'
+          else 'AFTER'
+        end,
+        'event', (
+          select coalesce(json_agg(ev order by ev), '[]'::json)
+          from (values
+            (case when (tg.tgtype & 4) <> 0 then 'INSERT' end),
+            (case when (tg.tgtype & 8) <> 0 then 'DELETE' end),
+            (case when (tg.tgtype & 16) <> 0 then 'UPDATE' end),
+            (case when (tg.tgtype & 32) <> 0 then 'TRUNCATE' end)
+          ) as v(ev)
+          where ev is not null
+        ),
+        'level', case when (tg.tgtype & 1) <> 0 then 'ROW' else 'STATEMENT' end,
+        'comment', obj_description(tg.oid, 'pg_trigger')
+      ) as t
+      from pg_trigger tg
+      join pg_class cl on cl.oid = tg.tgrelid
+      join pg_namespace n on n.oid = cl.relnamespace
+      join pg_proc pp on pp.oid = tg.tgfoid
+      join pg_namespace pn on pn.oid = pp.pronamespace
+      where n.nspname = 'public' and tg.tgisinternal = false
+    ) sub
   )
 select json_build_object(
   'tables', (select data from tables),
@@ -209,5 +274,7 @@ select json_build_object(
   'indexes', (select data from indexes),
   'policies', (select data from policies),
   'enums', (select data from enums),
-  'views', (select data from views)
+  'views', (select data from views),
+  'functions', (select data from functions),
+  'triggers', (select data from triggers)
 );

@@ -95,6 +95,18 @@ function buildReport(before, after) {
     enums: diffEnums(before.enums, after.enums),
     // views は view / matview 専用 (definition / security_invoker / security_barrier を含む)
     views: diffByKey(before.views ?? [], after.views ?? [], (v) => `${v.schema}.${v.name}`),
+    // functions: 同名異シグネチャを別物として扱うため key に args を含める
+    functions: diffByKey(
+      before.functions ?? [],
+      after.functions ?? [],
+      (f) => `${f.schema}.${f.name}(${f.args ?? ""})`,
+    ),
+    // triggers: 同一テーブル内で trigger 名はユニーク
+    triggers: diffByKey(
+      before.triggers ?? [],
+      after.triggers ?? [],
+      (t) => `${t.schema}.${t.table}.${t.name}`,
+    ),
   };
 }
 
@@ -261,6 +273,35 @@ function runAssertions(report, prSnapshot, missingMigrations = []) {
     }
   }
 
+  // ❌ 新規 function に SECURITY DEFINER がついている
+  // SECURITY DEFINER だと所有者 (= postgres) 権限で実行され、呼び出し元の RLS をバイパスする。
+  // kozutsumi の関数は SECURITY INVOKER (postgres default) が原則。
+  for (const f of report.functions.added) {
+    if (f.schema !== "public") continue;
+    if (f.security_definer) {
+      errors.push({
+        kind: "function-security-definer",
+        message: `\`${f.schema}.${f.name}(${f.args ?? ""})\` が \`SECURITY DEFINER\` で定義されています`,
+        fix: "`CREATE FUNCTION ... SECURITY INVOKER AS $$ ... $$;` で定義（または SECURITY 句を省略）。RLS を迂回する必要がある場合は ADR で根拠を残す",
+      });
+    } else {
+      oks.push(
+        `\`${f.schema}.${f.name}(${f.args ?? ""})\` は \`SECURITY INVOKER\` で定義されている`,
+      );
+    }
+  }
+
+  // ⚠️ 既存 function の security_definer が false → true に変更された (RLS 迂回経路ができる)
+  for (const m of report.functions.modified) {
+    if (!m.before.security_definer && m.after.security_definer) {
+      warnings.push({
+        kind: "function-security-definer-added",
+        message: `\`${m.after.schema}.${m.after.name}(${m.after.args ?? ""})\` で \`SECURITY DEFINER\` が付与されました (false → true)`,
+        fix: "RLS 迂回経路ができるため原則 INVOKER を維持する。意図的に付ける場合は ADR で根拠を残す",
+      });
+    }
+  }
+
   // ⚠️ 新規 public テーブルに owner-only ポリシー 4 種が揃っていない (table のみ対象)
   const policiesByTable = new Map();
   for (const p of prSnapshot.policies ?? []) {
@@ -358,6 +399,8 @@ function renderMarkdown({ report, assertions, schemaDiff, newMigrations, missing
   lines.push(`| インデックス | ${summarizeSimple(report.indexes)} |`);
   lines.push(`| RLS / ポリシー | ${summarizePolicies(tablesOnly, report.policies)} |`);
   lines.push(`| 制約 | ${summarizeConstraints(report.constraints, report.foreignKeys)} |`);
+  lines.push(`| 関数 | ${summarizeFunctions(report.functions)} |`);
+  lines.push(`| トリガー | ${summarizeTriggers(report.triggers)} |`);
   lines.push("");
 
   // ---- 新規テーブル詳細 (view は除外) ----
@@ -413,6 +456,31 @@ function renderMarkdown({ report, assertions, schemaDiff, newMigrations, missing
         lines.push("");
       }
     }
+  }
+
+  // ---- 新規 function 詳細 ----
+  if (report.functions.added.length > 0) {
+    lines.push("### 新規関数の詳細");
+    lines.push("");
+    for (const f of report.functions.added) {
+      lines.push(...renderNewFunctionSection(f));
+      lines.push("");
+    }
+  }
+
+  // ---- 新規 trigger 詳細 ----
+  if (report.triggers.added.length > 0) {
+    lines.push("### 新規トリガーの詳細");
+    lines.push("");
+    lines.push("| テーブル | トリガー名 | timing | event | level | 関数 |");
+    lines.push("|---|---|---|---|---|---|");
+    for (const t of report.triggers.added) {
+      const events = (t.event ?? []).join(" / ");
+      lines.push(
+        `| \`${t.schema}.${t.table}\` | \`${t.name}\` | ${t.timing} | ${events} | ${t.level} | \`${t.function_name}\` |`,
+      );
+    }
+    lines.push("");
   }
 
   // ---- 既存テーブルへのカラム追加詳細 (view 由来は除外) ----
@@ -570,6 +638,36 @@ function summarizePolicies(tablesOnly, policies) {
   return parts.length ? parts.join(" / ") : "変更なし";
 }
 
+function summarizeFunctions({ added, removed, modified }) {
+  const parts = [];
+  if (added.length)
+    parts.push(`${added.length} 件追加 (${added.map((f) => `\`${f.name}\``).join(", ")})`);
+  if (removed.length)
+    parts.push(`⚠️ ${removed.length} 件削除 (${removed.map((f) => `\`${f.name}\``).join(", ")})`);
+  if (modified.length)
+    parts.push(
+      `${modified.length} 件変更 (${modified.map((m) => `\`${m.after.name}\``).join(", ")})`,
+    );
+  return parts.length ? parts.join(" / ") : "変更なし";
+}
+
+function summarizeTriggers({ added, removed, modified }) {
+  const parts = [];
+  if (added.length)
+    parts.push(
+      `${added.length} 件追加 (${added.map((t) => `\`${t.table}.${t.name}\``).join(", ")})`,
+    );
+  if (removed.length)
+    parts.push(
+      `⚠️ ${removed.length} 件削除 (${removed.map((t) => `\`${t.table}.${t.name}\``).join(", ")})`,
+    );
+  if (modified.length)
+    parts.push(
+      `${modified.length} 件変更 (${modified.map((m) => `\`${m.after.table}.${m.after.name}\``).join(", ")})`,
+    );
+  return parts.length ? parts.join(" / ") : "変更なし";
+}
+
 function summarizeConstraints(constraints, foreignKeys) {
   const parts = [];
   const fkAdded = foreignKeys.added.length;
@@ -688,6 +786,28 @@ function renderNewViewSection(v, report) {
     lines.push("");
   }
 
+  return lines;
+}
+
+// ---- New function detail ----
+
+function renderNewFunctionSection(f) {
+  const lines = [];
+  lines.push(`#### \`${f.schema}.${f.name}(${f.args ?? ""})\` → \`${f.return_type ?? ""}\``);
+  lines.push("");
+  lines.push("**属性**:");
+  lines.push(`- \`security\`: ${f.security_definer ? "❌ DEFINER (RLS 迂回)" : "✅ INVOKER"}`);
+  lines.push(`- \`volatility\`: \`${f.volatility ?? "(unknown)"}\``);
+  if (f.comment) lines.push(`- \`comment\`: ${f.comment}`);
+  lines.push("");
+  if (f.body) {
+    lines.push("**本体**:");
+    lines.push("");
+    lines.push("```sql");
+    lines.push(truncateForComment(f.body, 4000));
+    lines.push("```");
+    lines.push("");
+  }
   return lines;
 }
 

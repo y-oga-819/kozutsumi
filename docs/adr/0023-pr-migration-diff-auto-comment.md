@@ -37,7 +37,12 @@ sticky コメントとして PR に投稿する。
   取った構造化スナップショットの diff の両方を出す
 - 構造化スナップショットの対象: tables (relkind in `r`/`v`/`m` を `kind` で識別) /
   columns / constraints / foreign_keys / indexes / policies / enums / views
-  (definition + `security_invoker` / `security_barrier` reloptions)
+  (definition + `security_invoker` / `security_barrier` reloptions) /
+  functions (`pg_proc` から `args` / `return_type` / `body` / `security_definer` /
+  `volatility` / `comment`、`pronamespace = public` のみ。同名異シグネチャは key に
+  `args` を含めて別物として扱う) /
+  triggers (`pg_trigger` から `tgisinternal = false` でユーザー定義のみ。
+  `timing` / `event` / `level` / `function_name` を `tgtype` bitmask から分解)
 - 規約チェック (`❌` / `⚠️` / `✅`):
   - `❌` `public` の新テーブルに RLS が有効化されていない
   - `❌` カラム追加で NOT NULL かつ default なし（既存行で fail）
@@ -45,6 +50,10 @@ sticky コメントとして PR に投稿する。
   - `❌` 新規 view / matview に `security_invoker = true` が指定されていない（postgres の view は
     未指定だと **definer 権限で評価され RLS をバイパス**するため、kozutsumi では原則必須）
   - `❌` 既存 view の `security_invoker` が `true → false` に変更された（RLS 迂回経路ができる）
+  - `❌` 新規 function に `SECURITY DEFINER` がついている（`prosecdef = true`）。
+    所有者権限で実行され RLS をバイパスするため、kozutsumi の関数は `SECURITY INVOKER`
+    （または SECURITY 句省略 = postgres default INVOKER）が原則
+  - `⚠️` 既存 function の `prosecdef` が `false → true` に変更された（RLS 迂回経路ができる）
   - `❌` main にあって HEAD に無い migration がある（rebase 不在 / PR ブランチが古い）
   - `⚠️` `public` の新テーブルで owner-only ポリシー 4 種（select / insert / update / delete）が揃っていない
   - `⚠️` 外部キーの ON DELETE policy が未指定（`NO ACTION` のまま）
@@ -84,8 +93,8 @@ sticky コメントとして PR に投稿する。
 - **CI 時間が +2〜3 分**。`supabase start` が支配的（2 分強）。`supabase/migrations/**` を
   変更する PR でしか走らないので、頻度は低い
 - **構造化スナップショットのカバレッジは限定的**。本 ADR では columns / tables / constraints /
-  foreign_keys / indexes / policies / enums / views(definition + reloptions) のみ対象。
-  functions / triggers / sequences は生 diff のみ（必要になったら別 ADR で拡張）
+  foreign_keys / indexes / policies / enums / views(definition + reloptions) /
+  functions / triggers のみ対象。sequences は生 diff のみ（必要になったら別 ADR で拡張）
 - **規約チェックは false positive を起こしうる**。例外的に RLS を意図的に外したい場合の
   override 機構は持たない（必要になったら別 ADR で扱う）
 - **fork PR からの実行**は制限される。`pull_request` トリガーで `pull-requests: write` 権限を
@@ -136,7 +145,9 @@ rebase 不在 (missing migrations) を `❌` 扱いにする根拠: CI フロー
 - 本 ADR は **migration の可視化と自動レビュー** が目的。本番への適用フローは ADR-0019 の
   手動 workflow に従う（自動適用に寄せる ADR ではない）
 - 将来見直す条件:
-  - 構造化スナップショットの対象を functions / triggers に広げたくなった
+  - 構造化スナップショットの対象を sequences に広げたくなった
+  - triggers の規約チェック（命名 / SECURITY DEFINER 含む trigger 関数の検出強化等）を
+    入れたくなった（kozutsumi 規約として固まってから）
   - `⚠️` レベルの違反も fail にしたくなった（例: RLS policy 不足を厳格化）
   - Supabase CLI の `db diff` が pg_dump diff を超える品質になった
 - 改訂履歴:
@@ -157,6 +168,15 @@ rebase 不在 (missing migrations) を `❌` 扱いにする根拠: CI フロー
       （main にあって HEAD に無い migration を検出してリスト表示）
     - 生 diff 比較前に pg_dump 17 の `\restrict` / `\unrestrict` ランダムトークンを除去
       （差分ゼロでも 2 行ノイズが出る問題の解消）
+  - **2026-05-04 改訂** (Closes #177):
+    - **構造化スナップショットに functions / triggers を追加**。PR #176 の function-only
+      migration (`fn_set_subscription_auto_promote` 追加) で構造化サマリが「全カテゴリ変更なし」
+      になった問題への対応。`pg_proc` から `args` / `return_type` / `body` /
+      `security_definer` / `volatility` / `comment`、`pg_trigger` から `timing` / `event` /
+      `level` / `function_name` を取得し、サマリ表に「関数」「トリガー」行と新規詳細セクションを追加
+    - **`SECURITY DEFINER` 検査を追加**。新規 function に `prosecdef = true` がついていれば
+      `❌` で fail（views の `security_invoker` と同じく RLS 迂回経路を塞ぐ規約）。既存
+      function の `false → true` は `⚠️` warning（merge 即破壊ではないが ADR 根拠を要求する）
   - **2026-05-04 改訂** (Closes #178):
     - **本番 deploy 経路の再生に変更**: 旧実装は PR / base 両方とも `supabase db reset --no-seed`
       で fresh 適用してから snapshot を取っていた。これは diff 比較目的としては正しいが、
