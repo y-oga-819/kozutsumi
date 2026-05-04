@@ -8,8 +8,10 @@ import type { Event } from "@/entities/event/types";
  *   - visibility_override='shown'  → 強制表示
  *   - visibility_override='hidden' → 強制非表示
  *   - visibility_override='none'   → subscription.auto_promote_to_timeline に従う
- *     subscription が見つからない場合は安全側 (hidden) に倒す。unsubscribe 直後の
- *     一瞬の race / orphan event を timeline に乗せないため。
+ *     subscription が見つからない場合は表示する。理由: ADR 0034 の unsubscribe フローは
+ *     「events 物理削除 → subscription 削除」の順なので、events 行が残っていて subscription が
+ *     無い状態は通常起こらない。発生する経路は test fixture / migration 等の外側からの
+ *     直接挿入で、その場合は events 行が DB に存在する事実を尊重して表示する方が予測しやすい。
  */
 export type SubscriptionVisibility = {
   source: string;
@@ -29,7 +31,8 @@ export function isEventVisibleInTimeline(
   const sub = subscriptions.find(
     (s) => s.source === event.source && s.externalCalendarId === event.externalCalendarId,
   );
-  if (!sub) return false;
+  // subscription 不在は normal flow では起こらないため、events 行が DB にある事実を尊重して表示する。
+  if (!sub) return true;
   return sub.autoPromoteToTimeline;
 }
 

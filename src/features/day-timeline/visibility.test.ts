@@ -76,12 +76,21 @@ describe("isEventVisibleInTimeline (Issue #144 / ADR 0031 Layer 2 + Layer 3)", (
     expect(isEventVisibleInTimeline(baseGoogle, subs)).toBe(false);
   });
 
-  test("google event で subscription が見つからないときは安全側 (非表示)", () => {
-    expect(isEventVisibleInTimeline(baseGoogle, [])).toBe(false);
+  test("google event で subscription が見つからないときは表示する (orphan event は normal flow では発生しないので events 行を尊重)", () => {
+    expect(isEventVisibleInTimeline(baseGoogle, [])).toBe(true);
   });
 
   test("subscription マッチは (source, external_calendar_id) の両方で行う", () => {
+    // 別 calendar の subscription があるが当該 event の calendar には無い → orphan 扱い → 表示
     const subs: SubscriptionVisibility[] = [
+      { source: "google_calendar", externalCalendarId: "other", autoPromoteToTimeline: true },
+    ];
+    expect(isEventVisibleInTimeline(baseGoogle, subs)).toBe(true);
+  });
+
+  test("マッチする subscription があり auto_promote=false なら非表示 (orphan ではないので filter 効く)", () => {
+    const subs: SubscriptionVisibility[] = [
+      { source: "google_calendar", externalCalendarId: "primary", autoPromoteToTimeline: false },
       { source: "google_calendar", externalCalendarId: "other", autoPromoteToTimeline: true },
     ];
     expect(isEventVisibleInTimeline(baseGoogle, subs)).toBe(false);
