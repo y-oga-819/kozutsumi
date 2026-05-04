@@ -9,7 +9,7 @@ import type { CreateEventInput, UpdateEventInput } from "@/entities/event/gatewa
 import type { Event, EventVisibilityOverride } from "@/entities/event/types";
 import type { CreateProjectInput, UpdateProjectInput } from "@/entities/project/gateway";
 import type { Project } from "@/entities/project/types";
-import type { CreateTaskInput } from "@/entities/task/gateway";
+import type { CreateTaskInput, ProjectCascadeMode } from "@/entities/task/gateway";
 import type { Task, TaskCategory, TaskSize } from "@/entities/task/types";
 import {
   insertAtTopPlusOne,
@@ -41,6 +41,13 @@ export type DashboardMutations = {
    * payload schema を別 issue で確定する必要があるため)。
    */
   updateSize: (id: string, taskSize: TaskSize | null) => void;
+  /**
+   * Issue #171 / ADR 0039: タスクの project_id 編集と親→子 / 子→兄弟+親 への伝播。
+   * cache から target の親子関係を判定して mode を決め、対応する RPC (atomic) または
+   * 単独 update を呼ぶ。1 操作 = 1 ログ (`task_project_changed`) + payload に伝播範囲。
+   * - 同値選択は no-op (mutation 自体を呼ばない)。
+   */
+  updateTaskProject: (id: string, projectId: string | null) => void;
   /** DnD でのタスク並び替え。action_log: TASK_REORDERED。 */
   reorder: (fromId: string, toId: string) => void;
   /**
@@ -254,6 +261,96 @@ export function useDashboardMutations(): DashboardMutations {
       taskGateway.reorder(entries),
     // DnD は optimistic で UI 側は onMutate で即反映、サーバー同期は背面で進める。
   });
+
+  // Issue #171 / ADR 0039: 詳細パネルからの project 編集 + 親→子 / 子→兄弟+親 伝播。
+  // mutation 引数:
+  //   id            : ユーザーが直接編集した task id (action_logs.task_id 列に入る)
+  //   projectId     : 新しい project_id (null で「未指定」)
+  //   mode          : "single" | "with_children" | "with_siblings_and_parent"
+  //   affectedIds   : 影響を受ける全 task id (target を含む) — onMutate / log で使う
+  //   from          : 旧 project_id (action_log の payload `from` 用)
+  //
+  // mode 判定と affected_ids の算出は wrapper (updateTaskProject) 側で cache を読んで行う。
+  // ここでは「先に確定した範囲を atomic に変える」ことだけに集中する。
+  const updateTaskProjectMutation = useMutation({
+    mutationFn: ({
+      id,
+      projectId,
+      mode,
+    }: {
+      id: string;
+      projectId: string | null;
+      mode: ProjectCascadeMode;
+      affectedIds: string[];
+      from: string | null;
+    }) => taskGateway.updateTaskProjectCascade(id, projectId, mode),
+    onMutate: async ({ id, projectId, mode, affectedIds, from }) => {
+      await queryClient.cancelQueries({ queryKey: dashboardKeys.tasks });
+      const previous = queryClient.getQueryData<Task[]>(dashboardKeys.tasks);
+      // 楽観: 影響範囲全 task の projectId を一括書き換え。Task.projectId は
+      // 空文字を「未指定」として保持する慣習 (fromRow で `row.project_id ?? ""`) なので、
+      // null は "" に揃える。
+      const next = projectId ?? "";
+      const affectedSet = new Set(affectedIds);
+      queryClient.setQueryData<Task[]>(dashboardKeys.tasks, (prev) =>
+        (prev ?? []).map((t) => (affectedSet.has(t.id) ? { ...t, projectId: next } : t)),
+      );
+      // 1 操作 = 1 ログ。propagation と affected_task_ids で N 行更新を再構成可能にする (ADR 0039)。
+      log(ACTION_TYPES.TASK_PROJECT_CHANGED, {
+        task_id: id,
+        from,
+        to: projectId,
+        propagation: mode,
+        affected_task_ids: affectedIds,
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(dashboardKeys.tasks, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.tasks });
+    },
+  });
+
+  const updateTaskProject = useCallback(
+    (id: string, projectId: string | null) => {
+      const cached = queryClient.getQueryData<Task[]>(dashboardKeys.tasks) ?? [];
+      const target = cached.find((t) => t.id === id);
+      if (!target) return;
+      // Task.projectId は "" を「未指定」として保持しているので、null と "" を同一視する。
+      const from = target.projectId === "" ? null : target.projectId;
+      const to = projectId === "" ? null : projectId;
+      if (from === to) return; // 同値選択は no-op
+
+      // mode 判定:
+      //   - target が子 (parentTaskId not null) → 親 + 全兄弟に伝播
+      //   - target が親 (parentTaskId is null) かつ子が居る → 全子に伝播
+      //   - それ以外 (単独タスク) → 当該行のみ
+      let mode: ProjectCascadeMode;
+      let affectedIds: string[];
+      if (target.parentTaskId !== null) {
+        mode = "with_siblings_and_parent";
+        const parentId = target.parentTaskId;
+        affectedIds = [
+          parentId,
+          ...cached.filter((t) => t.parentTaskId === parentId).map((t) => t.id),
+        ];
+      } else {
+        const childIds = cached.filter((t) => t.parentTaskId === id).map((t) => t.id);
+        if (childIds.length > 0) {
+          mode = "with_children";
+          affectedIds = [id, ...childIds];
+        } else {
+          mode = "single";
+          affectedIds = [id];
+        }
+      }
+
+      updateTaskProjectMutation.mutate({ id, projectId: to, mode, affectedIds, from });
+    },
+    [queryClient, updateTaskProjectMutation],
+  );
 
   // createTaskWithAi が cache を append + AI trigger 完了後に .finally invalidate
   // するので、ここでは onSuccess invalidate を持たない (issue #167)。旧実装では
@@ -640,6 +737,7 @@ export function useDashboardMutations(): DashboardMutations {
       updateDependencyMutation.mutate({ id, dependsOnEventId }),
     updateCategory: (id, taskCategory) => updateCategoryMutation.mutate({ id, taskCategory }),
     updateSize: (id, taskSize) => updateSizeMutation.mutate({ id, taskSize }),
+    updateTaskProject,
     reorder,
     reorderGroup,
     createTaskWithAi,

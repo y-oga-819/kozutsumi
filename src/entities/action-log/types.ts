@@ -7,6 +7,7 @@ export type ActionType =
   | "task_deleted"
   | "task_title_changed"
   | "task_category_changed"
+  | "task_project_changed"
   | "task_dependency_set"
   | "task_dependency_cleared"
   | "interruption_pushed"
@@ -124,6 +125,19 @@ export type ActionMetadataMap = {
     task_id: string;
     from: string | null;
     to: string;
+  };
+  // Issue #171 / ADR 0039: タスクの project_id 変更 (親→子 / 子→兄弟+親 への伝播も含む)。
+  // 1 操作 = 1 ログ + payload に伝播範囲を持たせる方針。
+  // - task_id は user が直接編集した行 (action_logs.task_id 列にもこの値が入る)
+  // - propagation: "single" は単独行のみ更新 / "with_children" は親+全子 / "with_siblings_and_parent" は子+親+全兄弟
+  // - affected_task_ids は target を含む全 update 対象 id (Phase 4 で 1 操作 → N 行更新を再構成可能にする)
+  // from/to は project_id の文字列 (uuid) または null (= 未指定)。
+  task_project_changed: {
+    task_id: string;
+    from: string | null;
+    to: string | null;
+    propagation: "single" | "with_children" | "with_siblings_and_parent";
+    affected_task_ids: string[];
   };
   // Phase 2 #53: 依存イベントの設定 / 解除。Phase 4 で「依存設定が着手順に効いたか」の分析データに使う。
   task_dependency_set: {

@@ -38,6 +38,14 @@ export type UpdateTaskInput = {
 };
 
 /**
+ * Issue #171 / ADR 0039: project 編集の伝播モード。
+ * - single                       : 単独タスク (親も子もない) で当該行のみ変更
+ * - with_children                : 親タスクを変更し、同じ parent_task_id を持つ全子に伝播
+ * - with_siblings_and_parent     : 子タスクを変更し、親と全兄弟に伝播
+ */
+export type ProjectCascadeMode = "single" | "with_children" | "with_siblings_and_parent";
+
+/**
  * 判断 5 (auth 隠蔽): `user_id` は interface に現れず、具象実装内で
  * `auth.getUser()` 相当を解決する。
  */
@@ -45,6 +53,17 @@ export interface TaskGateway {
   list(): Promise<Task[]>;
   create(input: CreateTaskInput): Promise<Task>;
   update(id: string, patch: UpdateTaskInput): Promise<Task>;
+  /**
+   * Issue #171 / ADR 0039: project_id を atomic に変更する。
+   * mode で伝播範囲を切り替える (with_children / with_siblings_and_parent は RPC 経由で 1 トランザクション)。
+   * 戻り値の affectedTaskIds は変更が走った全 task id (target を含む) で、Phase 4 の
+   * action_log payload に詰めて 1 操作 → N 行更新を再構成可能にする。
+   */
+  updateTaskProjectCascade(
+    taskId: string,
+    newProjectId: string | null,
+    mode: ProjectCascadeMode,
+  ): Promise<{ affectedTaskIds: string[] }>;
   reorder(entries: readonly { id: string; stackOrder: number | null }[]): Promise<void>;
   delete(id: string): Promise<void>;
   deleteAllForCurrentUser(): Promise<void>;

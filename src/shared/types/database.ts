@@ -383,6 +383,24 @@ export type Database = {
         };
         Returns: Json;
       };
+      // ADR 0039 / Issue #171: 親 task の project_id 変更を全子に atomic 伝播する。
+      // 戻り値は影響を受けた task id 配列 (親自身 + 全子)。
+      fn_update_task_project_with_children: {
+        Args: {
+          p_task_id: string;
+          p_new_project_id: string | null;
+        };
+        Returns: string[];
+      };
+      // ADR 0039 / Issue #171: 子 task の project_id 変更を親と全兄弟に atomic 伝播する。
+      // 戻り値は影響を受けた task id 配列 (target 子 + 親 + 全兄弟)。
+      fn_update_task_project_with_siblings_and_parent: {
+        Args: {
+          p_task_id: string;
+          p_new_project_id: string | null;
+        };
+        Returns: string[];
+      };
     };
     Enums: {
       task_status: "idle" | "active" | "paused" | "done";
