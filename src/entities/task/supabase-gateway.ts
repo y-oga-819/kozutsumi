@@ -129,16 +129,11 @@ export class SupabaseTaskGateway implements TaskGateway {
 
   async reorder(entries: readonly { id: string; stackOrder: number | null }[]): Promise<void> {
     if (entries.length === 0) return;
-    // 並列 update: 個別 patch を Promise.all で流す。件数は高々 20〜30 件想定。
-    // 1 call で済ませるには upsert + on_conflict だが、全カラムを送る必要が出るので採用しない。
-    await Promise.all(
-      entries.map(({ id, stackOrder }) =>
-        this.supabase
-          .from("tasks")
-          .update({ stack_order: stackOrder } satisfies TablesUpdate<"tasks">)
-          .eq("id", id),
-      ),
-    );
+    // issue #184 / #185: 1 transaction で一括 update する RPC 経由に揃える。
+    // 個別 reorder / グループ reorder (ADR-0041) どちらも同じ入口。
+    const payload = entries.map((e) => ({ id: e.id, stack_order: e.stackOrder }));
+    const { error } = await this.supabase.rpc("reorder_tasks_atomic", { entries: payload });
+    if (error) throw error;
   }
 
   async delete(id: string): Promise<void> {

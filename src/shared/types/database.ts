@@ -401,6 +401,14 @@ export type Database = {
         };
         Returns: string[];
       };
+      // Issue #184 / #185: tasks.stack_order を 1 transaction で一括更新する RPC。
+      // entries は [{id: uuid, stack_order: int|null}, ...] の jsonb 配列。
+      reorder_tasks_atomic: {
+        Args: {
+          entries: Json;
+        };
+        Returns: void;
+      };
     };
     Enums: {
       task_status: "idle" | "active" | "paused" | "done";
