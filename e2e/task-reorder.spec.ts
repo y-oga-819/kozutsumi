@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { createAdminClient, getTaskByTitle, waitForActionLog } from "./db";
+import { createAdminClient, getTaskByTitle, seedTask, waitForActionLog } from "./db";
 import { expect, test } from "./fixtures";
 
 /**
@@ -10,6 +10,11 @@ import { expect, test } from "./fixtures";
  * Phase 4 でユーザーがどのタスクを上に持ち上げて着手したか を学ぶには、
  * 並び替えの from/to_position と stack_order の両方が必要。UI 操作
  * (custom pointer events) と DB の最終状態を 1 セットで踏む。
+ *
+ * 起点データは `seedTask` で線形 (stack_order=0,1,2) に置く。UI 経由の
+ * createTaskWithAi は ADR-0040 で「Top 直下挿入」に変わっており、連続
+ * 登録すると visible 順がアルファベット順にならないため、並び替え検証と
+ * 切り離す目的で seed 経路を選ぶ。
  */
 test.describe("DnD 並び替え (task_reordered + tasks.stack_order)", () => {
   test("末尾を先頭に持ち上げると stack_order が 0,1,2 で再採番され、from/to ログが残る", async ({
@@ -19,10 +24,12 @@ test.describe("DnD 並び替え (task_reordered + tasks.stack_order)", () => {
   }) => {
     const titles = ["並べ替え A", "並べ替え B", "並べ替え C"] as const;
     const admin = createAdminClient();
+    const projectId = await getProjectId(admin, userId, projectName);
 
-    for (const t of titles) {
-      await createTask(page, t, projectName);
+    for (let i = 0; i < titles.length; i++) {
+      await seedTask(admin, { userId, projectId, title: titles[i], stackOrder: i });
     }
+    await page.reload();
 
     const stack = page.getByRole("list", { name: "タスクスタック" });
     for (const t of titles) {
@@ -71,10 +78,12 @@ test.describe("DnD 並び替え (task_reordered + tasks.stack_order)", () => {
   }) => {
     const titles = ["逆方向 X", "逆方向 Y", "逆方向 Z"] as const;
     const admin = createAdminClient();
+    const projectId = await getProjectId(admin, userId, projectName);
 
-    for (const t of titles) {
-      await createTask(page, t, projectName);
+    for (let i = 0; i < titles.length; i++) {
+      await seedTask(admin, { userId, projectId, title: titles[i], stackOrder: i });
     }
+    await page.reload();
 
     const stack = page.getByRole("list", { name: "タスクスタック" });
     for (const t of titles) {
@@ -111,16 +120,19 @@ test.describe("DnD 並び替え (task_reordered + tasks.stack_order)", () => {
   });
 });
 
-async function createTask(page: Page, title: string, projectName: string): Promise<void> {
-  await page.getByRole("button", { name: "新規追加" }).click();
-  const addDialog = page.getByRole("dialog", { name: "追加メニュー" });
-  await addDialog.getByRole("tab", { name: "タスク" }).click();
-  await addDialog.getByLabel("タイトル").fill(title);
-  // #170 / ADR 0038: task_size は登録時必須。
-  await addDialog.getByRole("radio", { name: "30分" }).click();
-  await addDialog.getByLabel("プロジェクト (任意)").selectOption({ label: projectName });
-  await addDialog.getByRole("button", { name: "追加" }).click();
-  await expect(addDialog).toHaveCount(0);
+async function getProjectId(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  projectName: string,
+): Promise<string> {
+  const { data, error } = await admin
+    .from("projects")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("name", projectName)
+    .single();
+  if (error || !data) throw new Error(`[e2e] project not found: ${projectName}`);
+  return (data as { id: string }).id;
 }
 
 /**

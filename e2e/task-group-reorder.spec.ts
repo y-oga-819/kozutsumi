@@ -100,12 +100,7 @@ test.describe("ADR-0041: 親バッジ起点のグループ並べ替え", () => {
     // 期待: グループ {c1, c2} が s の手前にまとめて移動 → visible = [新N, 子c1, 子c2, 兄弟s]。
     await dragGroupAboveRow(page, "子c2", "親P", "兄弟s");
 
-    await expect
-      .poll(async () => visibleTitles(stack), {
-        message: "グループ移動後の visible 順",
-        timeout: 5_000,
-      })
-      .toEqual(["新N", "子c1", "子c2", "兄弟s"]);
+    await pollVisibleOrder(stack, ["新N", "子c1", "子c2", "兄弟s"], "グループ移動後の visible 順");
 
     // action_log に group_parent_id 付きの task_reordered が、グループ要素 2 件分残る。
     const c1Row = await getTaskByTitle(admin, userId, "子c1");
@@ -179,12 +174,11 @@ test.describe("ADR-0041: 親バッジ起点のグループ並べ替え", () => {
     // c2 の Grip を掴んで s の上へ単独ドラッグ → 期待: c1, s, c2 (グループ分断)
     await dragRowAboveRowByGrip(page, "子c2", "兄弟s");
 
-    await expect
-      .poll(async () => visibleTitles(stack), {
-        message: "個別行 (Grip) ドラッグは 1 行だけ動く",
-        timeout: 5_000,
-      })
-      .toEqual(["子c1", "兄弟s", "子c2"]);
+    await pollVisibleOrder(
+      stack,
+      ["子c1", "兄弟s", "子c2"],
+      "個別行 (Grip) ドラッグは 1 行だけ動く",
+    );
 
     // action_log: 単独ドラッグなので group_parent_id は付かない。
     const c2Row = await getTaskByTitle(admin, userId, "子c2");
@@ -211,32 +205,53 @@ async function createTaskViaUI(page: Page, title: string, projectName: string): 
   await expect(addDialog).toHaveCount(0);
 }
 
-async function visibleTitles(stack: ReturnType<Page["getByRole"]>): Promise<string[]> {
-  // listitem 内の最初のタイトル文字列を上から順に拾う。Top カードと行カードで
-  // タイトルの位置が違うので、aria-label="並び替えハンドル" 兄弟の text を取る。
-  const items = await stack.getByRole("listitem").all();
-  const titles: string[] = [];
-  for (const item of items) {
-    const txt = (await item.textContent()) ?? "";
-    titles.push(txt);
-  }
-  return titles;
-}
-
 async function expectVisibleOrder(
   stack: ReturnType<Page["getByRole"]>,
   expected: string[],
 ): Promise<void> {
   // 各 expected タイトルが listitem の中で対応する index 位置に現れるかを踏む。
+  // listitem の textContent は Top カードで「project header / 開始 ボタン /
+  // 未分解 pill」等を含むため完全一致ではなく toContainText で部分一致を取る。
   for (let i = 0; i < expected.length; i++) {
     await expect(stack.getByRole("listitem").nth(i)).toContainText(expected[i]);
   }
 }
 
 /**
+ * 並び替え操作後の visible 順を poll で待つ。`expectVisibleOrder` と同じ
+ * セマンティクスだが、Playwright の組み込み auto-wait を超えて長めの timeout
+ * を取りたいケース (DnD → optimistic update → server reorder の経路) で使う。
+ */
+async function pollVisibleOrder(
+  stack: ReturnType<Page["getByRole"]>,
+  expected: string[],
+  message: string,
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const items = await stack.getByRole("listitem").all();
+        if (items.length !== expected.length) return null;
+        const matched: string[] = [];
+        for (let i = 0; i < expected.length; i++) {
+          const txt = (await items[i].textContent()) ?? "";
+          if (!txt.includes(expected[i])) return null;
+          matched.push(expected[i]);
+        }
+        return matched;
+      },
+      { message, timeout: 8_000 },
+    )
+    .toEqual(expected);
+}
+
+/**
  * 親バッジ (`role=button`, `aria-label="親グループ並び替え: <親名>"`) を起点にした
  * グループドラッグ。`sourceTitle` の行に乗っている親バッジを掴んで、
  * `targetTitle` の上端より少し下に落とす (= target の midline より上)。
+ *
+ * バッジは text-[9px] の小さな要素のため、boundingBox 取得前に visible / scroll
+ * を明示的に待つ (CI 環境でレイアウト確定前に measure すると drag 不発になる)。
  */
 async function dragGroupAboveRow(
   page: Page,
@@ -249,6 +264,8 @@ async function dragGroupAboveRow(
   const targetRow = stack.getByRole("listitem").filter({ hasText: targetTitle });
 
   const badge = sourceRow.getByRole("button", { name: `親グループ並び替え: ${parentTitle}` });
+  await badge.waitFor({ state: "visible" });
+  await badge.scrollIntoViewIfNeeded();
   const badgeBox = await badge.boundingBox();
   const targetBox = await targetRow.boundingBox();
   if (!badgeBox || !targetBox) throw new Error("badge/row not measurable");
@@ -274,7 +291,12 @@ async function dragRowAboveRowByGrip(
   const sourceRow = stack.getByRole("listitem").filter({ hasText: sourceTitle });
   const targetRow = stack.getByRole("listitem").filter({ hasText: targetTitle });
 
-  const grip = sourceRow.locator(".cursor-grab").first();
+  // Row 1 の Grip (`aria-label="並び替えハンドル"`) を狙う。Row 3 の親バッジも
+  // `.cursor-grab` を持つので `locator(".cursor-grab")` だと曖昧になるため
+  // aria-label で明示的に指す。
+  const grip = sourceRow.getByLabel("並び替えハンドル");
+  await grip.waitFor({ state: "visible" });
+  await grip.scrollIntoViewIfNeeded();
   const gripBox = await grip.boundingBox();
   const targetBox = await targetRow.boundingBox();
   if (!gripBox || !targetBox) throw new Error("row/grip not measurable");
