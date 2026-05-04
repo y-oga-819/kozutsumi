@@ -248,10 +248,14 @@ async function pollVisibleOrder(
 /**
  * 親バッジ (`role=button`, `aria-label="親グループ並び替え: <親名>"`) を起点にした
  * グループドラッグ。`sourceTitle` の行に乗っている親バッジを掴んで、
- * `targetTitle` の上端より少し下に落とす (= target の midline より上)。
+ * `targetTitle` の upper-quarter に落とす (= target の midline より上)。
  *
  * バッジは text-[9px] の小さな要素のため、boundingBox 取得前に visible / scroll
  * を明示的に待つ (CI 環境でレイアウト確定前に measure すると drag 不発になる)。
+ *
+ * drop 座標は target row の upper-quarter (top + height/4)。+4 等の上端固定 offset は
+ * row 高さの微変動 (TopTaskCard の async load / DropIndicator 挿入等) で upper half を
+ * 踏み外す flake の元になるため、height に比例した余裕を取る。
  */
 async function dragGroupAboveRow(
   page: Page,
@@ -273,7 +277,7 @@ async function dragGroupAboveRow(
   const startX = badgeBox.x + badgeBox.width / 2;
   const startY = badgeBox.y + badgeBox.height / 2;
   const endX = startX;
-  const endY = targetBox.y + 4;
+  const endY = targetBox.y + Math.floor(targetBox.height / 4);
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
@@ -304,7 +308,8 @@ async function dragRowAboveRowByGrip(
   const startX = gripBox.x + gripBox.width / 2;
   const startY = gripBox.y + gripBox.height / 2;
   const endX = startX;
-  const endY = targetBox.y + 4;
+  // target の upper-quarter を狙う (上端固定 offset は row 高さの微変動で flake るため)。
+  const endY = targetBox.y + Math.floor(targetBox.height / 4);
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
