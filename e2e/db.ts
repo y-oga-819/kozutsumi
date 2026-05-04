@@ -76,8 +76,13 @@ export async function ensureTestUser(
 
 /**
  * RLS を service_role でバイパスし、対象 user_id の関連データを全削除する。
- * tasks / events / projects / action_logs を順に消す。
+ * tasks / events / projects / action_logs を順に消し、最後に external_accounts を消す
+ * (cascade で user_calendar_subscriptions / user_calendar_sync_state も連動して消える)。
  * task_time_entries は tasks の CASCADE / SET NULL で連動して消える。
+ *
+ * Issue #144: calendar subscription / external_account を test 間で持ち越さないようにする。
+ * 持ち越すと calendar-settings spec が `auto_promote=false` で残した subscription を
+ * 後続 spec (gcal-event-readonly 等) が拾って DayTimeline 表示判定が変わる。
  */
 export async function purgeUserData(admin: SupabaseClient, userId: string): Promise<void> {
   for (const table of ["tasks", "events", "projects", "action_logs"] as const) {
@@ -85,6 +90,10 @@ export async function purgeUserData(admin: SupabaseClient, userId: string): Prom
     if (error) {
       throw new Error(`[e2e] purge ${table} failed: ${error.message}`);
     }
+  }
+  const { error: extErr } = await admin.from("external_accounts").delete().eq("user_id", userId);
+  if (extErr) {
+    throw new Error(`[e2e] purge external_accounts failed: ${extErr.message}`);
   }
 }
 
