@@ -3,6 +3,8 @@
 import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
+import type { CalendarSubscription } from "@/entities/calendar-subscription/types";
+import { SupabaseCalendarSubscriptionGateway } from "@/entities/calendar-subscription/supabase-gateway";
 import type { Event } from "@/entities/event/types";
 import type { Project } from "@/entities/project/types";
 import type { CorrectionFactor } from "@/entities/task/correction";
@@ -13,6 +15,7 @@ import {
   useTaskGateway,
 } from "@/shared/gateway/GatewayContext";
 import { isDone } from "@/shared/lib/task";
+import { createClient } from "@/shared/supabase/client";
 
 /**
  * Query key と「どの queryClient から書き換えるか」をここに集約する。
@@ -26,6 +29,8 @@ export const dashboardKeys = {
   decomposeLog: (taskId: string) => ["actionLog", "decompose", taskId] as const,
   /** 見積もり補正倍率 (P3-9 / #93、ADR 0025): user-scoped、view 経由で取る。 */
   correctionFactors: ["correctionFactors"] as const,
+  /** Calendar subscription (Issue #144、ADR 0031 Layer 1/2): timeline 表示判定で使う。 */
+  calendarSubscriptions: ["calendar", "subscriptions"] as const,
 };
 
 export type DashboardQueries = {
@@ -33,6 +38,7 @@ export type DashboardQueries = {
   tasksQuery: ReturnType<typeof useQuery<Task[]>>;
   eventsQuery: ReturnType<typeof useQuery<Event[]>>;
   correctionFactorsQuery: ReturnType<typeof useQuery<readonly CorrectionFactor[]>>;
+  calendarSubscriptionsQuery: ReturnType<typeof useQuery<CalendarSubscription[]>>;
   /** projectsQuery.data ?? [] (参照安定) */
   projects: Project[];
   /** tasksQuery.data ?? [] (参照安定) */
@@ -41,6 +47,8 @@ export type DashboardQueries = {
   events: Event[];
   /** correctionFactorsQuery.data ?? [] (参照安定、未取得・失敗時は空配列 = 全タスク補正なし) */
   correctionFactors: readonly CorrectionFactor[];
+  /** calendarSubscriptionsQuery.data ?? [] (参照安定、未取得・失敗時は空配列 = 表示は安全側) */
+  calendarSubscriptions: readonly CalendarSubscription[];
   pendingTasks: Task[];
   doneTasks: Task[];
 };
@@ -82,12 +90,26 @@ export function useDashboardQueries(): DashboardQueries {
     staleTime: 5 * 60_000,
   });
 
+  // Issue #144: subscription (Layer 1/2)。DayTimeline / TimelineBar の表示判定に必要。
+  // 失敗時は空配列扱い → google_calendar 由来 event は visibility_override='none' で安全側 (hidden)。
+  const calendarSubscriptionsQuery = useQuery<CalendarSubscription[]>({
+    queryKey: dashboardKeys.calendarSubscriptions,
+    queryFn: () => {
+      const supabase = createClient();
+      return new SupabaseCalendarSubscriptionGateway(supabase).list();
+    },
+  });
+
   const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
   const events = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data]);
   const correctionFactors = useMemo<readonly CorrectionFactor[]>(
     () => correctionFactorsQuery.data ?? [],
     [correctionFactorsQuery.data],
+  );
+  const calendarSubscriptions = useMemo<readonly CalendarSubscription[]>(
+    () => calendarSubscriptionsQuery.data ?? [],
+    [calendarSubscriptionsQuery.data],
   );
 
   const pendingTasks = useMemo(() => tasks.filter((t) => !isDone(t)), [tasks]);
@@ -98,10 +120,12 @@ export function useDashboardQueries(): DashboardQueries {
     tasksQuery,
     eventsQuery,
     correctionFactorsQuery,
+    calendarSubscriptionsQuery,
     projects,
     tasks,
     events,
     correctionFactors,
+    calendarSubscriptions,
     pendingTasks,
     doneTasks,
   };

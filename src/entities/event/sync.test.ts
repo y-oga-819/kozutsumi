@@ -12,7 +12,7 @@ import {
 import { RefreshTokenExpiredError } from "@/shared/google/token";
 import type { Database } from "@/shared/types/database";
 
-import type { EventGateway, UpsertGoogleCalendarEventInput } from "./gateway";
+import type { DeletedEventSnapshot, EventGateway, UpsertGoogleCalendarEventInput } from "./gateway";
 import {
   extractMeetUrl,
   mapGoogleEventToUpsertInput,
@@ -178,7 +178,7 @@ describe("partitionEvents", () => {
 
 type ListEventsFn = (params: ListEventsParams) => Promise<GoogleCalendarEventsListResponse>;
 
-function makeFakeGateway() {
+function makeFakeGateway(opts: { snapshots?: DeletedEventSnapshot[] } = {}) {
   const upsertCalls: UpsertGoogleCalendarEventInput[][] = [];
   const deleteCalls: { externalCalendarId: string; ids: string[] }[] = [];
   const gateway: EventGateway = {
@@ -195,6 +195,17 @@ function makeFakeGateway() {
       deleteCalls.push({ externalCalendarId, ids });
       return ids.length;
     }),
+    findGoogleEventSnapshots: vi.fn(
+      async (externalCalendarId, externalIds): Promise<DeletedEventSnapshot[]> => {
+        const provided = opts.snapshots ?? [];
+        // 引数 calendarId / externalIds に一致するものだけ返す (テストの意図とずれを早期に弾く)
+        return provided.filter(
+          (s) => externalIds.includes(s.externalId) && externalCalendarId.length > 0,
+        );
+      },
+    ),
+    findAllGoogleEventsByCalendar: vi.fn(async () => opts.snapshots ?? []),
+    deleteAllGoogleEventsByCalendar: vi.fn(async () => (opts.snapshots ?? []).length),
   };
   return { gateway, upsertCalls, deleteCalls };
 }
@@ -237,6 +248,19 @@ function makeDeps(overrides: {
   }>;
   now?: () => Date;
   accessToken?: string;
+  /** sync 対象 calendar list (default: primary 1 件)。複数 calendar テスト用に上書き可 */
+  targets?: Array<{
+    externalAccountUuid: string;
+    externalAccountIdentifier: string;
+    externalCalendarId: string;
+  }>;
+  /** events.id 配列 → tasks の依存解析。default は空 */
+  findTasksDependingOnEvents?: (eventIds: string[]) => Promise<
+    Array<{
+      taskId: string;
+      eventId: string;
+    }>
+  >;
 }) {
   return {
     gateway: overrides.gateway,
@@ -249,7 +273,24 @@ function makeDeps(overrides: {
     refreshAccessToken: overrides.refreshAccessToken
       ? vi.fn(overrides.refreshAccessToken)
       : vi.fn(),
-    resolvePrimaryExternalAccountId: vi.fn(async () => "ext-acc-id"),
+    resolveSubscriptionTargets: vi.fn(
+      async () =>
+        overrides.targets ?? [
+          {
+            externalAccountUuid: "ext-acc-id",
+            externalAccountIdentifier: "user@example.com",
+            externalCalendarId: "primary",
+          },
+        ],
+    ),
+    findTasksDependingOnEvents: vi.fn(
+      async (_supabase: SupabaseClient<Database>, eventIds: string[]) => {
+        if (overrides.findTasksDependingOnEvents) {
+          return overrides.findTasksDependingOnEvents(eventIds);
+        }
+        return [];
+      },
+    ),
     now: overrides.now ?? DEFAULT_NOW,
   };
 }
@@ -272,10 +313,18 @@ describe("syncGoogleCalendar (full sync)", () => {
       }),
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       synced: 2,
       deleted: 0,
       lastSyncedAt: "2026-04-23T12:00:00.000Z",
+    });
+    expect(result.outcomes).toHaveLength(1);
+    expect(result.outcomes[0]).toMatchObject({
+      source: "google_calendar",
+      externalCalendarId: "primary",
+      synced: 2,
+      deleted: 0,
+      deletions: [],
     });
     expect(listEvents).toHaveBeenCalledTimes(1);
     const call = listEvents.mock.calls[0]![0];
@@ -338,6 +387,73 @@ describe("syncGoogleCalendar (full sync)", () => {
       externalCalendarId: "primary",
       ids: ["gone-1", "gone-2"],
     });
+  });
+
+  test("削除対象 event の snapshot と依存 task が outcomes.deletions に紐づく (#144)", async () => {
+    const snapshots: DeletedEventSnapshot[] = [
+      {
+        id: "uuid-gone-1",
+        externalId: "gone-1",
+        title: "removed mtg",
+        startTime: "2026-05-04T00:00:00.000Z",
+        endTime: "2026-05-04T01:00:00.000Z",
+        visibilityOverride: "shown",
+      },
+    ];
+    const { gateway } = makeFakeGateway({ snapshots });
+    const listEvents = vi.fn<ListEventsFn>(async () => ({
+      items: [{ id: "gone-1", status: "cancelled" }],
+    }));
+
+    const result = await syncGoogleCalendar(
+      FAKE_SUPABASE,
+      makeDeps({
+        gateway,
+        listEvents,
+        findTasksDependingOnEvents: async (eventIds) => {
+          if (!eventIds.includes("uuid-gone-1")) return [];
+          return [{ taskId: "task-A", eventId: "uuid-gone-1" }];
+        },
+      }),
+    );
+
+    expect(result.outcomes).toHaveLength(1);
+    const out = result.outcomes[0]!;
+    expect(out.deletions).toHaveLength(1);
+    expect(out.deletions[0]!.eventSnapshot.externalId).toBe("gone-1");
+    expect(out.deletions[0]!.eventSnapshot.visibilityOverride).toBe("shown");
+    expect(out.deletions[0]!.dependentTaskIds).toEqual(["task-A"]);
+  });
+
+  test("複数 calendar が targets にあるとそれぞれ sync + outcomes が並ぶ", async () => {
+    const { gateway } = makeFakeGateway();
+    const listEvents = vi.fn<ListEventsFn>(async (params) => ({
+      items: [makeActiveEvent(`evt-${params.calendarId}`)],
+      nextSyncToken: `tok-${params.calendarId}`,
+    }));
+
+    const result = await syncGoogleCalendar(
+      FAKE_SUPABASE,
+      makeDeps({
+        gateway,
+        listEvents,
+        targets: [
+          {
+            externalAccountUuid: "acc-uuid",
+            externalAccountIdentifier: "user@example.com",
+            externalCalendarId: "primary",
+          },
+          {
+            externalAccountUuid: "acc-uuid",
+            externalAccountIdentifier: "user@example.com",
+            externalCalendarId: "team@x.com",
+          },
+        ],
+      }),
+    );
+
+    expect(result.outcomes.map((o) => o.externalCalendarId)).toEqual(["primary", "team@x.com"]);
+    expect(listEvents).toHaveBeenCalledTimes(2);
   });
 
   test("空結果の時は upsert/delete を呼ばない", async () => {

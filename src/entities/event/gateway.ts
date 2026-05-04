@@ -57,4 +57,34 @@ export interface EventGateway {
    * @returns 削除された行数
    */
   deleteByGoogleExternalIds(externalCalendarId: string, externalIds: string[]): Promise<number>;
+  /**
+   * 削除前の events 行を triple ベースで取得する (ADR 0034 L5/L9 / ADR 0035 §2 ii: snapshot 必須)。
+   * `event_deleted_by_source` / `calendar_unsubscribed` / `task_event_dependency_lost` の
+   * action_log payload を組み立てるために、削除直前の title / start / end / visibility_override と
+   * events.id を読み取る。
+   */
+  findGoogleEventSnapshots(
+    externalCalendarId: string,
+    externalIds: string[],
+  ): Promise<DeletedEventSnapshot[]>;
+  /**
+   * 指定 calendar に紐づく google_calendar source の全 events を取得する
+   * (ADR 0034 L9 unsubscribe フロー用)。`external_id` は NOT NULL 前提 (sync 経路で必ず埋める)。
+   */
+  findAllGoogleEventsByCalendar(externalCalendarId: string): Promise<DeletedEventSnapshot[]>;
+  /** 指定 calendar に紐づく google_calendar source の events を一括削除する。 */
+  deleteAllGoogleEventsByCalendar(externalCalendarId: string): Promise<number>;
 }
+
+/**
+ * 削除直前の events 行を action_log snapshot 用に表現したもの。
+ * `id` (kozutsumi 内 uuid) は depends_on_event_id 解析のために残す。
+ */
+export type DeletedEventSnapshot = {
+  id: string;
+  externalId: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  visibilityOverride: "none" | "shown" | "hidden";
+};

@@ -373,6 +373,16 @@ export type Database = {
         };
         Returns: string[];
       };
+      // ADR 0034 L6/L7 / Issue #144: subscription の auto_promote_to_timeline 切替 +
+      // 過去 event の旧 default 固定を 1 トランザクションで行う PL/pgSQL function。
+      // 戻り値は変更状況 / triple metadata / 固定された過去 event のスナップショット配列を含む jsonb。
+      fn_set_subscription_auto_promote: {
+        Args: {
+          p_subscription_id: string;
+          p_new_value: boolean;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       task_status: "idle" | "active" | "paused" | "done";

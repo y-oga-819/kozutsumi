@@ -10,12 +10,19 @@ type UserMenuProps = {
   avatarUrl: string | null;
   onResetSample?: () => void;
   onClearAll?: () => void;
+  onOpenSettings?: () => void;
 };
 
 /**
  * ヘッダー右端のアバター。タップでログアウト／サンプル操作メニューを開く。
  */
-export function UserMenu({ email, avatarUrl, onResetSample, onClearAll }: UserMenuProps) {
+export function UserMenu({
+  email,
+  avatarUrl,
+  onResetSample,
+  onClearAll,
+  onOpenSettings,
+}: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const router = useRouter();
@@ -66,6 +73,18 @@ export function UserMenu({ email, avatarUrl, onResetSample, onClearAll }: UserMe
         <div className="absolute right-0 top-9 z-50 w-52 rounded-md border border-bg-divider bg-bg-elevated p-2 shadow-lg">
           {email ? (
             <div className="truncate px-2 py-1 text-[11px] text-fg-muted">{email}</div>
+          ) : null}
+          {onOpenSettings ? (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenSettings();
+                setOpen(false);
+              }}
+              className="mt-1 w-full rounded px-2 py-1.5 text-left text-[12px] text-fg-emphasized transition-colors hover:bg-bg-divider"
+            >
+              設定
+            </button>
           ) : null}
           {onResetSample ? (
             <button

@@ -87,6 +87,60 @@ export async function listEvents(
   return (await response.json()) as GoogleCalendarEventsListResponse;
 }
 
+/**
+ * Google Calendar `calendarList.list` のレスポンス (subscription 候補一覧)。
+ * 必要最小限のフィールドだけを抽出する: subscription UI で表示・選択に使う。
+ */
+export type GoogleCalendarListEntry = {
+  id: string;
+  summary?: string;
+  summaryOverride?: string;
+  description?: string;
+  backgroundColor?: string;
+  foregroundColor?: string;
+  primary?: boolean;
+  accessRole?: "owner" | "writer" | "reader" | "freeBusyReader";
+  selected?: boolean;
+};
+
+export type GoogleCalendarListResponse = {
+  items?: GoogleCalendarListEntry[];
+  nextPageToken?: string;
+};
+
+const CALENDAR_LIST_PATH = "/users/me/calendarList";
+
+export async function listCalendars(params: {
+  accessToken: string;
+  pageToken?: string;
+  /** Google API minAccessRole: 'reader' で読み取り可能な calendar に絞る (kozutsumi はサブスク取り込みのみ)。 */
+  minAccessRole?: "freeBusyReader" | "reader" | "writer" | "owner";
+}): Promise<GoogleCalendarListResponse> {
+  const url = new URL(`${CALENDAR_API_BASE}${CALENDAR_LIST_PATH}`);
+  if (params.pageToken) url.searchParams.set("pageToken", params.pageToken);
+  if (params.minAccessRole) url.searchParams.set("minAccessRole", params.minAccessRole);
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+      Accept: "application/json",
+    },
+  });
+  if (response.status === 401) {
+    throw new GoogleApiUnauthorizedError();
+  }
+  if (!response.ok) {
+    const body = await safeJson(response);
+    throw new GoogleApiError(
+      `Google API error: ${response.status} ${response.statusText}`,
+      response.status,
+      body,
+    );
+  }
+  return (await response.json()) as GoogleCalendarListResponse;
+}
+
 function buildListEventsUrl(params: ListEventsParams): string {
   const url = new URL(
     `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(params.calendarId)}/events`,

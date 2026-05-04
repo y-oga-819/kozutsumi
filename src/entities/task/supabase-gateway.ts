@@ -153,4 +153,22 @@ export class SupabaseTaskGateway implements TaskGateway {
       sampleCount: row.sample_count,
     }));
   }
+
+  async findTasksDependingOnEvents(
+    eventIds: string[],
+  ): Promise<Array<{ taskId: string; eventId: string }>> {
+    if (eventIds.length === 0) return [];
+    const uid = await getUserId(this.supabase);
+    const { data, error } = await this.supabase
+      .from("tasks")
+      .select("id, depends_on_event_id")
+      .eq("user_id", uid)
+      .in("depends_on_event_id", eventIds);
+    if (error) throw error;
+    return (data ?? [])
+      .filter((row): row is { id: string; depends_on_event_id: string } =>
+        Boolean(row.depends_on_event_id),
+      )
+      .map((row) => ({ taskId: row.id, eventId: row.depends_on_event_id }));
+  }
 }

@@ -48,4 +48,12 @@ export interface TaskGateway {
    * 最小サンプル数判定はここでは行わず、呼び出し側 (`correctEstimate`) で判定する。
    */
   listCorrectionFactors(): Promise<CorrectionFactor[]>;
+  /**
+   * `tasks.depends_on_event_id` が指定 events.id のいずれかに一致する task の id 一覧。
+   * ADR 0034 L5/L9: event 物理削除前に「依存を失う」task を action_log に記録するため
+   * (`task_event_dependency_lost`)、events FK が SET NULL される前に呼ぶ。
+   */
+  findTasksDependingOnEvents(
+    eventIds: string[],
+  ): Promise<Array<{ taskId: string; eventId: string }>>;
 }
