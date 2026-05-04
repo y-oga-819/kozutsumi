@@ -21,13 +21,24 @@ type SessionShape = {
 };
 
 function makeSupabase(session: SessionShape | null): SupabaseClient {
+  // session が null なら getUser も null。正常系は明示的にユーザーを返す。
+  const user = session ? { id: "user-1" } : null;
   return {
     auth: {
       getSession: vi.fn(async () => ({
         data: { session },
         error: null,
       })),
+      getUser: vi.fn(async () => ({
+        data: { user },
+        error: null,
+      })),
     },
+    // event_deleted_by_source / task_event_dependency_lost 用の action_logs INSERT
+    // (route は outcomes 経由で発火する)。ここでは fire-and-forget の resolve のみ提供。
+    from: vi.fn(() => ({
+      insert: vi.fn(async () => ({ data: null, error: null })),
+    })),
   } as unknown as SupabaseClient;
 }
 
@@ -92,6 +103,7 @@ describe("POST /api/calendar/sync", () => {
       synced: 5,
       deleted: 1,
       lastSyncedAt: "2026-04-24T00:00:00.000Z",
+      outcomes: [],
     });
 
     const response = await POST();

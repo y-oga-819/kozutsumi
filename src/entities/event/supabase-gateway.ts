@@ -4,6 +4,7 @@ import type { Database, Tables, TablesInsert, TablesUpdate } from "@/shared/type
 
 import type {
   CreateEventInput,
+  DeletedEventSnapshot,
   EventGateway,
   UpdateEventInput,
   UpsertGoogleCalendarEventInput,
@@ -183,4 +184,63 @@ export class SupabaseEventGateway implements EventGateway {
     if (error) throw error;
     return count ?? 0;
   }
+
+  async findGoogleEventSnapshots(
+    externalCalendarId: string,
+    externalIds: string[],
+  ): Promise<DeletedEventSnapshot[]> {
+    if (externalIds.length === 0) return [];
+    const uid = await getUserId(this.supabase);
+    const { data, error } = await this.supabase
+      .from("events")
+      .select("id, external_id, title, start_time, end_time, visibility_override")
+      .eq("user_id", uid)
+      .eq("source", EVENT_SOURCE.GOOGLE_CALENDAR)
+      .eq("external_calendar_id", externalCalendarId)
+      .in("external_id", externalIds);
+    if (error) throw error;
+    return (data ?? []).map(toDeletedSnapshot);
+  }
+
+  async findAllGoogleEventsByCalendar(externalCalendarId: string): Promise<DeletedEventSnapshot[]> {
+    const uid = await getUserId(this.supabase);
+    const { data, error } = await this.supabase
+      .from("events")
+      .select("id, external_id, title, start_time, end_time, visibility_override")
+      .eq("user_id", uid)
+      .eq("source", EVENT_SOURCE.GOOGLE_CALENDAR)
+      .eq("external_calendar_id", externalCalendarId);
+    if (error) throw error;
+    return (data ?? []).map(toDeletedSnapshot);
+  }
+
+  async deleteAllGoogleEventsByCalendar(externalCalendarId: string): Promise<number> {
+    const uid = await getUserId(this.supabase);
+    const { error, count } = await this.supabase
+      .from("events")
+      .delete({ count: "exact" })
+      .eq("user_id", uid)
+      .eq("source", EVENT_SOURCE.GOOGLE_CALENDAR)
+      .eq("external_calendar_id", externalCalendarId);
+    if (error) throw error;
+    return count ?? 0;
+  }
+}
+
+function toDeletedSnapshot(row: {
+  id: string;
+  external_id: string | null;
+  title: string;
+  start_time: string;
+  end_time: string;
+  visibility_override: "none" | "shown" | "hidden";
+}): DeletedEventSnapshot {
+  return {
+    id: row.id,
+    externalId: row.external_id ?? "",
+    title: row.title,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    visibilityOverride: row.visibility_override,
+  };
 }

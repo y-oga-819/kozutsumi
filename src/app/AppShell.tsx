@@ -22,6 +22,7 @@ import { AddPanel } from "@/features/add-forms/AddPanel";
 import { DayTimeline } from "@/features/day-timeline/DayTimeline";
 import { EventDetailPanel } from "@/features/event-detail/EventDetailPanel";
 import { ProjectDetailPanel } from "@/features/project-detail/ProjectDetailPanel";
+import { SettingsPanel } from "@/features/settings/SettingsPanel";
 import { CalendarSyncButton } from "@/features/sync/CalendarSyncButton";
 import { ReauthBanner } from "@/features/sync/ReauthBanner";
 import { useCalendarSync } from "@/features/sync/useCalendarSync";
@@ -79,6 +80,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
     tasks,
     events,
     correctionFactors,
+    calendarSubscriptions,
     pendingTasks,
     doneTasks,
   } = useDashboardQueries();
@@ -87,6 +89,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
   const [eventDetailId, setEventDetailId] = useState<string | null>(null);
   const [projectDetailId, setProjectDetailId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // P3-15 / ADR 0021 §3: 詳細パネル open 時に当該タスクの AI 分解最新試行を 1 件だけ fetch。
   // detailId が null の間は無効化して supabase を叩かない。
@@ -215,6 +218,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
               avatarUrl={user.avatarUrl}
               onResetSample={resetSample}
               onClearAll={clearAll}
+              onOpenSettings={() => setSettingsOpen(true)}
             />
           </div>
 
@@ -223,6 +227,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
           {view === "stack" ? (
             <StackView
               events={events}
+              calendarSubscriptions={calendarSubscriptions}
               pendingTasks={pendingTasks}
               doneTasks={doneTasks}
               topTimer={topTimer}
@@ -300,6 +305,12 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
               onClose={() => setPauseModalOpen(false)}
             />
           ) : null}
+
+          <SettingsPanel
+            open={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            primaryExternalAccountId={calendarSubscriptions[0]?.externalAccountId ?? null}
+          />
         </div>
       </CorrectionFactorsProvider>
     </ProjectsProvider>
@@ -308,6 +319,11 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
 
 type StackViewProps = {
   events: Event[];
+  calendarSubscriptions: readonly {
+    source: string;
+    externalCalendarId: string;
+    autoPromoteToTimeline: boolean;
+  }[];
   pendingTasks: Task[];
   doneTasks: Task[];
   topTimer: TopTimerBinding;
@@ -322,6 +338,7 @@ type StackViewProps = {
 
 function StackView({
   events,
+  calendarSubscriptions,
   pendingTasks,
   doneTasks,
   topTimer,
@@ -335,7 +352,13 @@ function StackView({
 }: StackViewProps) {
   return (
     <div className="pb-[100px]">
-      <DayTimeline events={events} nowMin={nowMin} today={today} onOpenEvent={onOpenEvent} />
+      <DayTimeline
+        events={events}
+        subscriptions={calendarSubscriptions}
+        nowMin={nowMin}
+        today={today}
+        onOpenEvent={onOpenEvent}
+      />
       <TaskStack
         events={events}
         pendingTasks={pendingTasks}

@@ -4,21 +4,38 @@ import { fmtDuration, fmtMin, formatDate, localDateOf, minutesOfDay } from "../.
 import { buildSlots, computeDayBounds } from "./buildSlots";
 import { EventCard } from "./EventCard";
 import { TimelineBar } from "./TimelineBar";
+import { filterEventsForTimeline, type SubscriptionVisibility } from "./visibility";
 
 type DayTimelineProps = {
   events: Event[];
+  /**
+   * Issue #144 / ADR 0031 Layer 2: subscription の auto_promote_to_timeline と event の
+   * visibility_override (Layer 3) を合成して timeline 表示を決める。空配列だと google
+   * source の event は visibility_override='none' のとき非表示扱い (安全側)。
+   */
+  subscriptions: readonly SubscriptionVisibility[];
   nowMin: number;
   today: string;
   onOpenEvent: (id: string) => void;
 };
 
-export function DayTimeline({ events, nowMin, today, onOpenEvent }: DayTimelineProps) {
+export function DayTimeline({
+  events,
+  subscriptions,
+  nowMin,
+  today,
+  onOpenEvent,
+}: DayTimelineProps) {
   // 呼び出し側 (AppShell) は events を全期間取得して渡す。タイムラインは today に始まる
   // event だけを対象にする (minutesOfDay は HH:MM のみ抽出するため、日付フィルタが
   // 抜けると昨日 / 明日の event が今日のバーに重なる)。
+  // さらに subscription auto_promote / visibility_override の合成で timeline 非表示にした
+  // event を除外する (ADR 0031 Layer 2 + Layer 3、Issue #144)。
+  const subList = useMemo(() => [...subscriptions], [subscriptions]);
+  const visibleEvents = useMemo(() => filterEventsForTimeline(events, subList), [events, subList]);
   const todayEvents = useMemo(
-    () => events.filter((e) => localDateOf(e.startTime) === today),
-    [events, today],
+    () => visibleEvents.filter((e) => localDateOf(e.startTime) === today),
+    [visibleEvents, today],
   );
   const { dayStart, dayEnd } = computeDayBounds(todayEvents, nowMin);
   const slots = useMemo(

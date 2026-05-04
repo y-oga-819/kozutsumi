@@ -25,7 +25,13 @@ const events: Event[] = [ev("e1", "Meeting A", "2026-04-11T10:00:00", "2026-04-1
 describe("DayTimeline", () => {
   test("today を formatDate して表示する", () => {
     const { getByText } = render(
-      <DayTimeline events={[]} nowMin={10 * 60} today="2026-04-11" onOpenEvent={() => {}} />,
+      <DayTimeline
+        events={[]}
+        subscriptions={[]}
+        nowMin={10 * 60}
+        today="2026-04-11"
+        onOpenEvent={() => {}}
+      />,
     );
     expect(getByText("4/11 (土)")).toBeTruthy();
   });
@@ -34,6 +40,7 @@ describe("DayTimeline", () => {
     const { getByText } = render(
       <DayTimeline
         events={events}
+        subscriptions={[]}
         nowMin={9 * 60 + 30}
         today="2026-04-11"
         onOpenEvent={() => {}}
@@ -46,6 +53,7 @@ describe("DayTimeline", () => {
     const { getByText } = render(
       <DayTimeline
         events={events}
+        subscriptions={[]}
         nowMin={9 * 60 + 30}
         today="2026-04-11"
         onOpenEvent={() => {}}
@@ -63,7 +71,13 @@ describe("DayTimeline", () => {
       ev("last-week", "Last week event", "2026-04-04T10:00:00", "2026-04-04T11:00:00"),
     ];
     const { getByText, queryByText } = render(
-      <DayTimeline events={mixed} nowMin={9 * 60 + 30} today="2026-04-11" onOpenEvent={() => {}} />,
+      <DayTimeline
+        events={mixed}
+        subscriptions={[]}
+        nowMin={9 * 60 + 30}
+        today="2026-04-11"
+        onOpenEvent={() => {}}
+      />,
     );
     expect(getByText("Today event")).toBeTruthy();
     expect(queryByText("Yesterday event")).toBeNull();
