@@ -69,6 +69,9 @@ test.describe("設定パネル (calendar subscriptions)", () => {
 
     // 自動予定化 toggle: 押下で PATCH が飛ぶ。戻り値はサーバー側 atomic で
     // value: true → false へ反転。e2e は PATCH 発火 + DB 反映まで踏む。
+    // aria-label は SettingsPanel.tsx の `${label} を自動で予定化` で、displayName が
+    // 括弧入りの "(primary)" なので exact string で受ける (regex リテラルだと括弧が
+    // capture group 扱いされてマッチしない)。
     const patches: Array<{ url: string; status: number }> = [];
     page.on("response", async (res) => {
       const url = res.url();
@@ -77,7 +80,7 @@ test.describe("設定パネル (calendar subscriptions)", () => {
       }
     });
 
-    const toggle = dialog.getByLabel(/(primary) を自動で予定化/).first();
+    const toggle = dialog.getByLabel("(primary) を自動で予定化").first();
     await expect(toggle).toBeChecked();
     await toggle.click();
 
