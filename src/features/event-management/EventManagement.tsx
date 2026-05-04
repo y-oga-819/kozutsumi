@@ -166,9 +166,11 @@ export function EventManagement({
             : "取り込み済みの予定がありません。"}
         </p>
       ) : (
-        <ul role="list" className="m-0 list-none space-y-4 p-0 pb-[80px]">
+        // 日付グループは <section> で囲む (listitem 役割を持たせない: e2e の getByRole('listitem')
+        // が leaf の event row だけを返すようにするため)。leaf 行のみが role=listitem。
+        <div className="space-y-4 pb-[80px]">
           {groups.map(([dateKey, items]) => (
-            <li key={dateKey}>
+            <section key={dateKey} aria-label={dateKey}>
               <div className="mb-1 font-jp text-[10px] uppercase tracking-wider text-fg-faint">
                 {dateKey}
               </div>
@@ -187,9 +189,9 @@ export function EventManagement({
                   />
                 ))}
               </ul>
-            </li>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

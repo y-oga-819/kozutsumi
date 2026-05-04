@@ -80,12 +80,9 @@ test.describe("予定管理ページでの visibility_override 切替 (Issue #14
     const heading = page.getByRole("heading", { name: "予定管理" });
     await expect(heading).toBeVisible();
 
-    // 当該 event の row が default で表示される (auto_promote=true なので 予定化中)
-    const row = page
-      .getByRole("listitem")
-      .filter({ hasText: eventTitle })
-      // 内側 li (date group) と紛らわしいので、ボタンを含む leaf を取る
-      .filter({ has: page.getByRole("button", { name: /予定化(解除|する)/ }) });
+    // 当該 event の row が default で表示される (auto_promote=true なので 予定化中)。
+    // 日付グループは <section> なので getByRole('listitem') は leaf 行だけが返る。
+    const row = page.getByRole("listitem").filter({ hasText: eventTitle });
     await expect(row).toBeVisible();
     await expect(row.getByText("予定化中").first()).toBeVisible();
 
