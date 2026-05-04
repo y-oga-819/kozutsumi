@@ -1,7 +1,7 @@
 import { fireEvent, render as rtlRender, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { UpdateEventInput } from "../../entities/event/gateway";
-import type { Event } from "../../entities/event/types";
+import type { Event, EventVisibilityOverride } from "../../entities/event/types";
 import type { Project } from "../../entities/project/types";
 import { ProjectsProvider } from "../../entities/project/ProjectsContext";
 import { EventDetailPanel } from "./EventDetailPanel";
@@ -46,6 +46,8 @@ function renderPanel(
     onChangeProject: (id: string, projectId: string | null) => void;
     onUpdate: (id: string, patch: UpdateEventInput) => Promise<void> | void;
     onDelete: (id: string) => Promise<void> | void;
+    onSetVisibilityOverride: (id: string, value: EventVisibilityOverride) => Promise<void> | void;
+    subscriptionAutoPromote: boolean;
   }> = {},
 ) {
   const props = { event: baseEvent, onClose: noop, ...overrides };
@@ -311,6 +313,88 @@ describe("EventDetailPanel", () => {
       expect(await findByText("DB error")).toBeTruthy();
       // 編集モードのまま (タイトル input が残る)
       expect(getByLabelText("タイトル")).toBeTruthy();
+    });
+  });
+
+  // Issue #145 / ADR 0031 Layer 3 / ADR 0032: 予定化 / 予定化解除の toggle UI
+  describe("予定化 toggle (Issue #145)", () => {
+    test("onSetVisibilityOverride 未指定なら toggle ボタンを出さない", () => {
+      const { queryByRole } = renderPanel();
+      expect(queryByRole("button", { name: "予定化解除" })).toBeNull();
+      expect(queryByRole("button", { name: "予定化する" })).toBeNull();
+    });
+
+    test("override='none' + auto_promote=true → 予定化中 / 予定化解除 ボタン", () => {
+      const { getByText, getByRole } = renderPanel({
+        onSetVisibilityOverride: vi.fn(),
+        subscriptionAutoPromote: true,
+      });
+      expect(getByText("予定化中（自動）")).toBeTruthy();
+      expect(getByRole("button", { name: "予定化解除" })).toBeTruthy();
+    });
+
+    test("override='none' + auto_promote=false → 予定化解除中 / 予定化する ボタン", () => {
+      const { getByText, getByRole } = renderPanel({
+        onSetVisibilityOverride: vi.fn(),
+        subscriptionAutoPromote: false,
+      });
+      expect(getByText("予定化解除中（自動）")).toBeTruthy();
+      expect(getByRole("button", { name: "予定化する" })).toBeTruthy();
+    });
+
+    test("override='shown' は default に関係なく予定化中表示", () => {
+      const { getByText, queryByText } = renderPanel({
+        event: { ...baseEvent, visibilityOverride: "shown" },
+        onSetVisibilityOverride: vi.fn(),
+        subscriptionAutoPromote: false,
+      });
+      expect(getByText("予定化中")).toBeTruthy();
+      // (自動) ラベルは override='none' のときだけ
+      expect(queryByText("予定化中（自動）")).toBeNull();
+    });
+
+    test("override='hidden' は default に関係なく予定化解除中表示", () => {
+      const { getByText } = renderPanel({
+        event: { ...baseEvent, visibilityOverride: "hidden" },
+        onSetVisibilityOverride: vi.fn(),
+        subscriptionAutoPromote: true,
+      });
+      expect(getByText("予定化解除中")).toBeTruthy();
+    });
+
+    test("予定化解除ボタン → onSetVisibilityOverride('hidden')", async () => {
+      const onSetVisibilityOverride = vi.fn().mockResolvedValue(undefined);
+      const { getByRole } = renderPanel({
+        onSetVisibilityOverride,
+        subscriptionAutoPromote: true,
+      });
+      fireEvent.click(getByRole("button", { name: "予定化解除" }));
+      await waitFor(() => {
+        expect(onSetVisibilityOverride).toHaveBeenCalledWith("e1", "hidden");
+      });
+    });
+
+    test("予定化するボタン → onSetVisibilityOverride('shown')", async () => {
+      const onSetVisibilityOverride = vi.fn().mockResolvedValue(undefined);
+      const { getByRole } = renderPanel({
+        event: { ...baseEvent, visibilityOverride: "hidden" },
+        onSetVisibilityOverride,
+        subscriptionAutoPromote: true,
+      });
+      fireEvent.click(getByRole("button", { name: "予定化する" }));
+      await waitFor(() => {
+        expect(onSetVisibilityOverride).toHaveBeenCalledWith("e1", "shown");
+      });
+    });
+
+    test("onSetVisibilityOverride reject 時はエラー文言を表示", async () => {
+      const onSetVisibilityOverride = vi.fn().mockRejectedValue(new Error("rpc failed"));
+      const { getByRole, findByText } = renderPanel({
+        onSetVisibilityOverride,
+        subscriptionAutoPromote: true,
+      });
+      fireEvent.click(getByRole("button", { name: "予定化解除" }));
+      expect(await findByText("rpc failed")).toBeTruthy();
     });
   });
 

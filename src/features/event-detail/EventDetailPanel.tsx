@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { UpdateEventInput } from "../../entities/event/gateway";
-import { EVENT_SOURCE, type Event } from "../../entities/event/types";
+import { EVENT_SOURCE, type Event, type EventVisibilityOverride } from "../../entities/event/types";
 import { GoogleCalendarBadge } from "../../entities/event/GoogleCalendarBadge";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
@@ -35,6 +35,18 @@ type EventDetailPanelProps = {
    * バックを渡しても source='google_calendar' では削除ボタンを表示しない。
    */
   onDelete?: (id: string) => Promise<void> | void;
+  /**
+   * Issue #145 / ADR 0032 Layer 3: event 単位の予定化 override を切り替える。
+   * 'shown' / 'hidden' 双方向の toggle のみ受け付ける (日常 UI で 'none' へは戻せない)。
+   * 未指定なら toggle UI も表示しない (テストや特殊呼び出しで省略可)。
+   */
+  onSetVisibilityOverride?: (id: string, value: EventVisibilityOverride) => Promise<void> | void;
+  /**
+   * 当該 event の calendar subscription の `auto_promote_to_timeline` 値。
+   * `visibility_override='none'` のとき、effective visibility 計算に使う。
+   * 不明 (subscription なし / manual) のときは true (= 既定で表示) として扱う。
+   */
+  subscriptionAutoPromote?: boolean;
 };
 
 export function EventDetailPanel({
@@ -43,6 +55,8 @@ export function EventDetailPanel({
   onChangeProject,
   onUpdate,
   onDelete,
+  onSetVisibilityOverride,
+  subscriptionAutoPromote = true,
 }: EventDetailPanelProps) {
   const { projects, projectsById } = useProjects();
   const proj = event.projectId ? getProject(projectsById, event.projectId) : null;
@@ -67,7 +81,35 @@ export function EventDetailPanel({
   const [editingProject, setEditingProject] = useState(false);
   const [editing, setEditing] = useState(false);
   const [pending, setPending] = useState(false);
+  const [visibilityPending, setVisibilityPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Issue #145 / ADR 0031 Layer 3: 現状の effective visibility を計算し、ボタン文言を決める。
+  // - override='shown' → effective shown (default 逸脱 or default 一致は問わず表示中)
+  // - override='hidden' → effective hidden
+  // - override='none' → subscription.auto_promote に従う (manual / 未知 subscription は true 扱い)
+  const canToggleVisibility = !!onSetVisibilityOverride && !editing;
+  const effectiveShown =
+    event.visibilityOverride === "shown"
+      ? true
+      : event.visibilityOverride === "hidden"
+        ? false
+        : subscriptionAutoPromote;
+  const overrideActive = event.visibilityOverride !== "none";
+
+  const handleToggleVisibility = async () => {
+    if (visibilityPending || !onSetVisibilityOverride) return;
+    const next: EventVisibilityOverride = effectiveShown ? "hidden" : "shown";
+    setVisibilityPending(true);
+    setError(null);
+    try {
+      await onSetVisibilityOverride(event.id, next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "予定化の切替に失敗しました");
+    } finally {
+      setVisibilityPending(false);
+    }
+  };
 
   // 編集フォームの draft 値。編集モードに入る時に event 値で初期化する。
   const [draftTitle, setDraftTitle] = useState(event.title);
@@ -289,6 +331,33 @@ export function EventDetailPanel({
                 </div>
               </div>
             )}
+
+            {canToggleVisibility ? (
+              <div className="px-5 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-jp text-[10px] text-fg-weak">予定化</span>
+                  <span
+                    className={`rounded-[4px] border px-1.5 py-[1px] font-jp text-[10px] ${
+                      effectiveShown
+                        ? "border-accent-blue/40 text-accent-blue"
+                        : "border-bg-divider text-fg-weak"
+                    }`}
+                  >
+                    {effectiveShown ? "予定化中" : "予定化解除中"}
+                    {overrideActive ? "" : "（自動）"}
+                  </span>
+                  <div className="flex-1" />
+                  <button
+                    type="button"
+                    onClick={handleToggleVisibility}
+                    disabled={visibilityPending}
+                    className="rounded-[4px] border border-bg-divider bg-transparent px-2.5 py-[3px] font-jp text-[10px] text-fg-subtle disabled:opacity-60"
+                  >
+                    {effectiveShown ? "予定化解除" : "予定化する"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             {error ? (
               <div className="px-5 pb-2">

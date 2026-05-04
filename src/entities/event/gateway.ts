@@ -1,4 +1,4 @@
-import type { Event } from "./types";
+import type { Event, EventVisibilityOverride } from "./types";
 
 export type CreateEventInput = {
   title: string;
@@ -74,6 +74,12 @@ export interface EventGateway {
   findAllGoogleEventsByCalendar(externalCalendarId: string): Promise<DeletedEventSnapshot[]>;
   /** 指定 calendar に紐づく google_calendar source の events を一括削除する。 */
   deleteAllGoogleEventsByCalendar(externalCalendarId: string): Promise<number>;
+  /**
+   * Issue #145 / ADR 0032: event 単位の `visibility_override` を更新する。
+   * 戻り値は更新後の Event。Layer 3 操作 UI (EventDetailPanel / 予定管理ページ /
+   * SettingsPanel の override 一覧) から呼ばれる。
+   */
+  setVisibilityOverride(id: string, value: EventVisibilityOverride): Promise<Event>;
 }
 
 /**

@@ -9,7 +9,7 @@ import type {
   UpdateEventInput,
   UpsertGoogleCalendarEventInput,
 } from "./gateway";
-import { EVENT_SOURCE, type Event } from "./types";
+import { EVENT_SOURCE, type Event, type EventVisibilityOverride } from "./types";
 
 type Sb = SupabaseClient<Database>;
 
@@ -224,6 +224,17 @@ export class SupabaseEventGateway implements EventGateway {
       .eq("external_calendar_id", externalCalendarId);
     if (error) throw error;
     return count ?? 0;
+  }
+
+  async setVisibilityOverride(id: string, value: EventVisibilityOverride): Promise<Event> {
+    const { data, error } = await this.supabase
+      .from("events")
+      .update({ visibility_override: value })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return fromRow(data);
   }
 }
 
