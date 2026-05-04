@@ -11,7 +11,11 @@ import type { CreateProjectInput, UpdateProjectInput } from "@/entities/project/
 import type { Project } from "@/entities/project/types";
 import type { CreateTaskInput } from "@/entities/task/gateway";
 import type { Task, TaskCategory, TaskSize } from "@/entities/task/types";
-import { reorderTasksById } from "@/features/task-stack/reorderTasks";
+import {
+  insertAtTopPlusOne,
+  reorderGroupById,
+  reorderTasksById,
+} from "@/features/task-stack/reorderTasks";
 import { triggerCategorize } from "@/features/task-stack/triggerCategorize";
 import { triggerDecompose } from "@/features/task-stack/triggerDecompose";
 import { triggerResplit } from "@/features/task-stack/triggerResplit";
@@ -40,10 +44,19 @@ export type DashboardMutations = {
   /** DnD でのタスク並び替え。action_log: TASK_REORDERED。 */
   reorder: (fromId: string, toId: string) => void;
   /**
+   * ADR-0041: 親バッジ起点のグループ並び替え。`parentTaskId` を共有する全行を
+   * グループとしてまとめて `toId` の位置に移す。action_log: TASK_REORDERED を
+   * グループ要素ごとに 1 件発火し、metadata に `group_parent_id` を含める。
+   */
+  reorderGroup: (parentTaskId: string, toId: string) => void;
+  /**
    * AddPanel からのタスク作成。タスク insert 後に AI 分解 + AI category 推論を
    * fire-and-forget で投げる (P3-4 / P3-6, ADR 0015 / 0017)。
+   *
+   * ADR-0040: 新規タスクは現在の Top タスクの直下 (visible 上から 2 番目) に挿入する。
+   * 呼び出し元は stackOrder を渡さない (内部で cache から Top+1 を算出する)。
    */
-  createTaskWithAi: (input: CreateTaskInput, stackOrder: number) => Promise<void>;
+  createTaskWithAi: (input: CreateTaskInput) => Promise<void>;
   createEvent: (input: CreateEventInput) => Promise<void>;
   /** ADR 0010: google_calendar event の project_id だけ kozutsumi 側で編集可。 */
   updateEventProject: (id: string, projectId: string | null) => void;
@@ -472,26 +485,98 @@ export function useDashboardMutations(): DashboardMutations {
     [queryClient, reorderMutation],
   );
 
+  // ADR-0041: 親バッジ起点のグループ並べ替え。`parentTaskId` を共有する全 pending を
+  // グループとしてまとめて `toId` の位置に移す。
+  // action_log: グループ要素ごとに 1 件 `task_reordered` を発火し、metadata に
+  // `group_parent_id` を含める (ADR-0001 の「個別 type の payload 揺らぎは JSONB
+  // で吸収」原則の範囲内。新 type は起こさない)。Phase 4 ではこの flag で
+  // 「ユーザーがグループ単位で動かした」事象を 1 操作として再構成可能。
+  const reorderGroup = useCallback(
+    (parentTaskId: string, toId: string) => {
+      const cached = queryClient.getQueryData<Task[]>(dashboardKeys.tasks) ?? [];
+      const pending = cached.filter((t) => !isDone(t));
+      const done = cached.filter((t) => isDone(t));
+      const groupIds = new Set(
+        pending.filter((t) => t.parentTaskId === parentTaskId).map((t) => t.id),
+      );
+      if (groupIds.size === 0) return;
+      // グループ内 row へドロップは no-op (自分のグループに自分を落とさない)
+      if (groupIds.has(toId)) return;
+      if (pending.findIndex((t) => t.id === toId) < 0) return;
+
+      const reordered = reorderGroupById(pending, parentTaskId, toId);
+      queryClient.setQueryData<Task[]>(dashboardKeys.tasks, [...reordered, ...done]);
+
+      // グループ要素ごとに log: 起点行が分散している場合でも `group_parent_id` で
+      // 同じグループ移動だと再構成できる。to_position はグループ移動後の位置。
+      const toPositionByOldIdx = new Map<string, number>();
+      reordered.forEach((t, newIdx) => {
+        if (groupIds.has(t.id)) toPositionByOldIdx.set(t.id, newIdx);
+      });
+      pending.forEach((t, oldIdx) => {
+        if (!groupIds.has(t.id)) return;
+        log(ACTION_TYPES.TASK_REORDERED, {
+          task_id: t.id,
+          from_position: oldIdx,
+          to_position: toPositionByOldIdx.get(t.id) ?? oldIdx,
+          group_parent_id: parentTaskId,
+        });
+      });
+
+      reorderMutation.mutate(
+        reordered.map((t) => ({ id: t.id, stackOrder: t.stackOrder })),
+        {
+          onError: () => {
+            queryClient.invalidateQueries({ queryKey: dashboardKeys.tasks });
+          },
+        },
+      );
+    },
+    [queryClient, reorderMutation],
+  );
+
   const createTaskWithAi = useCallback(
-    async (input: CreateTaskInput, stackOrder: number) => {
-      const created = await createTaskMutation.mutateAsync({ ...input, stackOrder });
+    async (input: CreateTaskInput) => {
+      // ADR-0040: 新規タスクは server 側でいったん末尾相当で create し、
+      // 直後に Top+1 へ renumber する 2 段階で実装する。
+      // 仮値は cache から算出する pending 件数 (= 末尾相当 stack_order)。
+      const initialCached = queryClient.getQueryData<Task[]>(dashboardKeys.tasks) ?? [];
+      const initialPendingCount = initialCached.filter((t) => !isDone(t)).length;
+      const created = await createTaskMutation.mutateAsync({
+        ...input,
+        stackOrder: initialPendingCount,
+      });
+
+      // issue #167: cancelQueries を挟むことで「他経路で in-flight な tasks refetch
+      // (例: focus 戻り後の自動 refetch / 並走するイベント refetch) が
+      // setQueryData('decomposing') を上書きする」競合を防ぐ。
+      await queryClient.cancelQueries({ queryKey: dashboardKeys.tasks });
+
+      // 楽観 cache: created を Top の直下 (visible 上から 2 番目) に挿入し、
+      // pending を 0..n で振り直す (ADR-0040)。decomposing pill も同時に立てる。
+      const current = queryClient.getQueryData<Task[]>(dashboardKeys.tasks) ?? [];
+      // mutateAsync 後の再 fetch で created がすでに cache に居る可能性があるので除外する。
+      const currentPendingExcl = current.filter((t) => !isDone(t) && t.id !== created.id);
+      const currentDone = current.filter((t) => isDone(t));
+      const createdWithPill: Task = { ...created, decomposeStatus: "decomposing" };
+      const renumbered = insertAtTopPlusOne(currentPendingExcl, current, createdWithPill);
+      queryClient.setQueryData<Task[]>(dashboardKeys.tasks, [...renumbered, ...currentDone]);
+
+      // server 側も同じ並びに揃える (背面で進める)。失敗時は invalidate して DB 正に倒す。
+      reorderMutation.mutate(
+        renumbered.map((t) => ({ id: t.id, stackOrder: t.stackOrder })),
+        {
+          onError: () => {
+            queryClient.invalidateQueries({ queryKey: dashboardKeys.tasks });
+          },
+        },
+      );
+
       // P3-6 / ADR 0017: タスク作成成功後に AI 分解を fire-and-forget で投げる。
       // server 側でも `decompose_status='decomposing'` に倒すが、UI に分解中 pill を
       // 即時出すため optimistic に cache を書き換える。AI_ENABLED=false / 失敗時は
       // server が `none` に戻す (decompose-server の guard 経路)。
       //
-      // issue #167: cancelQueries を挟むことで「他経路で in-flight な tasks refetch
-      // (例: focus 戻り後の自動 refetch / 並走するイベント refetch) が
-      // setQueryData('decomposing') を上書きする」競合を防ぐ。
-      await queryClient.cancelQueries({ queryKey: dashboardKeys.tasks });
-      queryClient.setQueryData<Task[]>(dashboardKeys.tasks, (prev) => {
-        const list = prev ?? [];
-        const found = list.some((t) => t.id === created.id);
-        const updated = { ...created, decomposeStatus: "decomposing" as const };
-        return found
-          ? list.map((t) => (t.id === created.id ? { ...t, decomposeStatus: "decomposing" } : t))
-          : [...list, updated];
-      });
       // issue #167: server 側 decompose 完了後 (成功 / 失敗 / skipped 問わず) に
       // tasks を invalidate して refetch する。これがないと cache が `decomposing`
       // で固まり、親 `decomposed` への遷移と子フラット化が手動リロードまで反映されない。
@@ -507,7 +592,7 @@ export function useDashboardMutations(): DashboardMutations {
         queryClient.invalidateQueries({ queryKey: dashboardKeys.tasks });
       });
     },
-    [createTaskMutation, queryClient],
+    [createTaskMutation, queryClient, reorderMutation],
   );
 
   const triggerDecomposeWithOptimistic = useCallback(
@@ -556,6 +641,7 @@ export function useDashboardMutations(): DashboardMutations {
     updateCategory: (id, taskCategory) => updateCategoryMutation.mutate({ id, taskCategory }),
     updateSize: (id, taskSize) => updateSizeMutation.mutate({ id, taskSize }),
     reorder,
+    reorderGroup,
     createTaskWithAi,
     createEvent: (input) => createEventMutation.mutateAsync(input).then(() => undefined),
     updateEventProject: (id, projectId) => updateEventProjectMutation.mutate({ id, projectId }),

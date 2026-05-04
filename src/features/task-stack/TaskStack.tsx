@@ -43,12 +43,17 @@ type TaskStackProps = {
   /** 現在時刻 (ms)。依存イベントの相対時刻 / 直近判定で使う。0 は SSR 時の placeholder。 */
   now: number;
   /**
-   * 並び替え操作。`fromId` を `toId` の位置に移す。
+   * 単独行の並び替え操作。`fromId` を `toId` の位置に移す。
    * Stack 行の index ではなく id ベースで受け取るのは、`buildStackItems` が
    * decomposed 親を除外するため、UI 上の index と pending Task[] の index が
    * 一致しないことがあるため。
    */
   onReorder: (fromId: string, toId: string) => void;
+  /**
+   * ADR-0041: 親バッジ起点のグループ並べ替え。`parentTaskId` を共有する全行を
+   * グループとしてまとめて `toId` の位置に移す。
+   */
+  onReorderGroup: (parentTaskId: string, toId: string) => void;
   onToggleDone: (id: string) => void;
   onOpenDetail: (id: string) => void;
 };
@@ -60,6 +65,7 @@ export function TaskStack({
   topTimer,
   now,
   onReorder,
+  onReorderGroup,
   onToggleDone,
   onOpenDetail,
 }: TaskStackProps) {
@@ -71,15 +77,20 @@ export function TaskStack({
   );
 
   const handleReorderByIdx = useCallback(
-    (fromIdx: number, toIdx: number) => {
+    (fromIdx: number, toIdx: number, mode: "single" | "group") => {
       const fromItem = items[fromIdx];
       const toItem = items[toIdx];
       if (!fromItem || !toItem) return;
-      onReorder(fromItem.task.id, toItem.task.id);
+      if (mode === "group" && fromItem.kind === "leaf-child") {
+        onReorderGroup(fromItem.parent.id, toItem.task.id);
+      } else {
+        onReorder(fromItem.task.id, toItem.task.id);
+      }
     },
-    [items, onReorder],
+    [items, onReorder, onReorderGroup],
   );
-  const { dragIdx, overIdx, rowRefs, handlePointerDown } = useStackDnD(handleReorderByIdx);
+  const { dragIdx, overIdx, dragMode, rowRefs, handlePointerDown } =
+    useStackDnD(handleReorderByIdx);
 
   return (
     <>
@@ -89,10 +100,25 @@ export function TaskStack({
         並び順が意味を持つリスト。role=list / listitem を立てておくと
         スクリーンリーダーが項目数を読み上げ、e2e も semantic に取れる。
       */}
+      {/*
+        ADR-0041: グループドラッグ中は同一 parent_task_id を持つ全行を「動いている」
+        ように見せる (起点行だけだと「グループが動く」感覚が伝わらない)。
+        起点行 (`dragIdx`) が leaf-child のときに、その parent.id と一致する
+        全 items を fade させる。
+      */}
       <ul role="list" aria-label="タスクスタック" className="m-0 list-none p-0">
         {items.map((item, idx) => {
           const isFirst = idx === 0;
-          const isBeingDragged = dragIdx === idx;
+          const draggedItem = dragIdx !== null ? items[dragIdx] : undefined;
+          const draggedGroupParentId =
+            dragMode === "group" && draggedItem?.kind === "leaf-child"
+              ? draggedItem.parent.id
+              : null;
+          const isGroupMember =
+            draggedGroupParentId !== null &&
+            item.kind === "leaf-child" &&
+            item.parent.id === draggedGroupParentId;
+          const isBeingDragged = dragIdx === idx || isGroupMember;
           const isDropTarget = overIdx === idx && dragIdx !== null && dragIdx !== idx;
           const task = item.task;
           const parent = item.kind === "leaf-child" ? item.parent : undefined;
@@ -131,7 +157,10 @@ export function TaskStack({
                   isBeingDragged={isBeingDragged}
                   parent={parent}
                   progress={progress}
-                  onPointerDown={(e) => handlePointerDown(idx, e)}
+                  onPointerDown={(e) => handlePointerDown(idx, e, "single")}
+                  onGroupPointerDown={
+                    parent ? (e) => handlePointerDown(idx, e, "group") : undefined
+                  }
                   onClick={() => onOpenDetail(task.id)}
                 />
               )}

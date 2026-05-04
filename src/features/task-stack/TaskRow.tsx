@@ -24,6 +24,9 @@ import { StatusPill } from "./StatusPill";
  *
  * 完了 checkbox は出さない (Top-only complete; ADR 0016 §7)。
  * leaf-parent (親自身が Stack 行) は「⤷ 親」を出さず、status pill のみ。
+ *
+ * ADR-0041: 親バッジ (`⤷ 親名`) は同じ `parent_task_id` を持つ全行をグループとして
+ * まとめて動かすドラッグ起点になる。Grip 起点 (single drag) と並立する。
  */
 type TaskRowProps = {
   task: Task;
@@ -35,7 +38,13 @@ type TaskRowProps = {
   parent?: Task;
   /** 子タスクなら親に紐付く進捗。leaf-parent では undefined。 */
   progress?: Progress;
+  /** Grip ハンドル起点の単独ドラッグ pointerDown ハンドラ。 */
   onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
+  /**
+   * 親バッジ起点のグループドラッグ pointerDown ハンドラ (ADR-0041)。
+   * 子タスク (`parent !== undefined`) のときだけ親バッジに乗せる。
+   */
+  onGroupPointerDown?: (e: ReactPointerEvent<HTMLElement>) => void;
   onClick: () => void;
 };
 
@@ -47,6 +56,7 @@ export function TaskRow({
   parent,
   progress,
   onPointerDown,
+  onGroupPointerDown,
   onClick,
 }: TaskRowProps) {
   const { projectsById } = useProjects();
@@ -115,7 +125,21 @@ export function TaskRow({
         <div className="ml-[26px] mt-1 flex items-center gap-2">
           {showProgress && parent ? (
             <span
-              className="min-w-0 flex-1 truncate font-jp text-[9px]"
+              role="button"
+              tabIndex={0}
+              aria-label={`親グループ並び替え: ${parent.title}`}
+              onPointerDown={
+                onGroupPointerDown
+                  ? (e) => {
+                      e.stopPropagation();
+                      onGroupPointerDown(e);
+                    }
+                  : undefined
+              }
+              onClick={(e) => e.stopPropagation()}
+              className={`min-w-0 flex-1 truncate font-jp text-[9px] ${
+                onGroupPointerDown ? "cursor-grab touch-none" : ""
+              }`}
               style={{ color: `${getProject(projectsById, parent.projectId).color}cc` }}
               title={`親: ${parent.title}`}
             >

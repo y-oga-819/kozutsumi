@@ -120,6 +120,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
     updateCategory,
     updateSize,
     reorder,
+    reorderGroup,
     createTaskWithAi,
     createEvent,
     updateEventProject,
@@ -238,6 +239,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
               topTimer={topTimer}
               toggleDone={toggleDone}
               reorder={reorder}
+              reorderGroup={reorderGroup}
               nowMin={nowMin}
               now={nowMs}
               today={today}
@@ -304,7 +306,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
               projects={projects}
               events={events}
               onClose={() => setAddOpen(false)}
-              onCreateTask={(input) => createTaskWithAi(input, pendingTasks.length)}
+              onCreateTask={(input) => createTaskWithAi(input)}
               onCreateEvent={createEvent}
               onCreateProject={createProject}
               onOpenProject={setProjectDetailId}
@@ -352,6 +354,7 @@ type StackViewProps = {
   topTimer: TopTimerBinding;
   toggleDone: (id: string) => void;
   reorder: (fromId: string, toId: string) => void;
+  reorderGroup: (parentTaskId: string, toId: string) => void;
   nowMin: number;
   now: number;
   today: string;
@@ -367,6 +370,7 @@ function StackView({
   topTimer,
   toggleDone,
   reorder,
+  reorderGroup,
   nowMin,
   now,
   today,
@@ -389,6 +393,7 @@ function StackView({
         topTimer={topTimer}
         now={now}
         onReorder={reorder}
+        onReorderGroup={reorderGroup}
         onToggleDone={toggleDone}
         onOpenDetail={onOpenDetail}
       />

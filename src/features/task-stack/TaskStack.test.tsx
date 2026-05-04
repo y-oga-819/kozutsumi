@@ -491,6 +491,7 @@ describe("TaskStack", () => {
         doneTasks={[]}
         topTimer={idleTimer}
         onReorder={noop}
+        onReorderGroup={noop}
         onToggleDone={noop}
         onOpenDetail={noop}
       />,
@@ -533,6 +534,7 @@ describe("TaskStack", () => {
         doneTasks={[]}
         topTimer={idleTimer}
         onReorder={noop}
+        onReorderGroup={noop}
         onToggleDone={noop}
         onOpenDetail={noop}
       />,
@@ -552,6 +554,7 @@ describe("TaskStack", () => {
         doneTasks={doneTasks}
         topTimer={idleTimer}
         onReorder={noop}
+        onReorderGroup={noop}
         onToggleDone={noop}
         onOpenDetail={noop}
       />,
@@ -570,6 +573,7 @@ describe("TaskStack", () => {
         doneTasks={[]}
         topTimer={idleTimer}
         onReorder={noop}
+        onReorderGroup={noop}
         onToggleDone={noop}
         onOpenDetail={onOpenDetail}
       />,
