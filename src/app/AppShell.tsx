@@ -21,6 +21,7 @@ import { AddButton } from "@/features/add-forms/AddButton";
 import { AddPanel } from "@/features/add-forms/AddPanel";
 import { DayTimeline } from "@/features/day-timeline/DayTimeline";
 import { EventDetailPanel } from "@/features/event-detail/EventDetailPanel";
+import { EventManagement } from "@/features/event-management/EventManagement";
 import { ProjectDetailPanel } from "@/features/project-detail/ProjectDetailPanel";
 import { SettingsPanel } from "@/features/settings/SettingsPanel";
 import { CalendarSyncButton } from "@/features/sync/CalendarSyncButton";
@@ -44,7 +45,7 @@ import {
 import { writeSampleDataMode } from "@/shared/lib/sample-data";
 import { todayIso } from "@/shared/lib/time";
 
-type View = "stack" | "tree";
+type View = "stack" | "tree" | "events";
 
 type AppShellProps = {
   initialView: View;
@@ -123,6 +124,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
     updateEventProject,
     updateEvent,
     deleteEvent,
+    setEventVisibilityOverride,
     createProject,
     updateProject,
     deleteProject,
@@ -176,9 +178,11 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
   );
   const treeProjects = useMemo(() => mergeTreeProjects(projects, historyData), [projects]);
 
+  // Issue #145: tree タブ (Phase 1 PoC) は dogfooding でメンテされていないため
+  // 動線を「予定管理」に差し替える。/tree route 自体は残す (直接 URL では到達可能)。
   const tabs: { key: View; label: string; href: string }[] = [
     { key: "stack", label: "Stack", href: "/" },
-    { key: "tree", label: "Tree", href: "/tree" },
+    { key: "events", label: "予定", href: "/events" },
   ];
 
   return (
@@ -239,6 +243,13 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
               onOpenDetail={setDetailId}
               onOpenEvent={setEventDetailId}
             />
+          ) : view === "events" ? (
+            <EventManagement
+              events={events}
+              subscriptions={calendarSubscriptions}
+              onSetVisibilityOverride={setEventVisibilityOverride}
+              onOpenEvent={setEventDetailId}
+            />
           ) : (
             <TreeView historyData={historyData} projectOrder={projectOrderForTree} />
           )}
@@ -265,15 +276,23 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
           {eventDetailId &&
             (() => {
               const ev = events.find((e) => e.id === eventDetailId);
-              return ev ? (
+              if (!ev) return null;
+              const sub = calendarSubscriptions.find(
+                (s) => s.source === ev.source && s.externalCalendarId === ev.externalCalendarId,
+              );
+              // manual / orphan は subscription を持たないので default 表示扱い (ADR 0032)。
+              const subscriptionAutoPromote = sub ? sub.autoPromoteToTimeline : true;
+              return (
                 <EventDetailPanel
                   event={ev}
                   onClose={() => setEventDetailId(null)}
                   onChangeProject={updateEventProject}
                   onUpdate={updateEvent}
                   onDelete={deleteEvent}
+                  onSetVisibilityOverride={setEventVisibilityOverride}
+                  subscriptionAutoPromote={subscriptionAutoPromote}
                 />
-              ) : null;
+              );
             })()}
 
           <AddButton onClick={() => setAddOpen(true)} />
@@ -310,6 +329,8 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
             open={settingsOpen}
             onClose={() => setSettingsOpen(false)}
             primaryExternalAccountId={calendarSubscriptions[0]?.externalAccountId ?? null}
+            events={events}
+            onSetVisibilityOverride={setEventVisibilityOverride}
           />
         </div>
       </CorrectionFactorsProvider>

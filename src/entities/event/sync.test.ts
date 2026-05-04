@@ -187,6 +187,7 @@ function makeFakeGateway(opts: { snapshots?: DeletedEventSnapshot[] } = {}) {
     update: vi.fn(),
     delete: vi.fn(),
     deleteAllForCurrentUser: vi.fn(),
+    setVisibilityOverride: vi.fn(),
     upsertFromGoogleCalendar: vi.fn(async (inputs) => {
       upsertCalls.push(inputs);
       return inputs.length;

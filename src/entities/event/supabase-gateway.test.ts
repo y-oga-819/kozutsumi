@@ -202,6 +202,46 @@ describe("SupabaseEventGateway.update", () => {
 });
 
 // ---------------------------------------------------------------------------
+// setVisibilityOverride: Issue #145 / ADR 0032 — event 単位 override の更新
+// ---------------------------------------------------------------------------
+describe("SupabaseEventGateway.setVisibilityOverride", () => {
+  test("visibility_override 列だけを update し、更新後の Event を返す", async () => {
+    const updated = makeRow({ visibility_override: "shown" });
+    const { supabase, calls } = makeSupabase({
+      results: [
+        { data: updated }, // update().eq().select().single()
+      ],
+    });
+    const gw = new SupabaseEventGateway(supabase);
+
+    const result = await gw.setVisibilityOverride("e1", "shown");
+
+    expect(result.visibilityOverride).toBe("shown");
+    const eventsCalls = calls.filter((c) => c.table === "events");
+    const updateCall = eventsCalls.find((c) => c.method === "update");
+    expect(updateCall).toBeDefined();
+    expect(updateCall!.args[0]).toEqual({ visibility_override: "shown" });
+    // Google read-only 確認 (fetchSource) は呼ばない (visibility_override は kozutsumi 側拡張)。
+    const sourceSelects = eventsCalls.filter(
+      (c) => c.method === "select" && (c.args[0] as string) === "source",
+    );
+    expect(sourceSelects).toHaveLength(0);
+  });
+
+  test("hidden / none も同じ経路で update する", async () => {
+    for (const value of ["hidden", "none"] as const) {
+      const updated = makeRow({ visibility_override: value });
+      const { supabase, calls } = makeSupabase({ results: [{ data: updated }] });
+      const gw = new SupabaseEventGateway(supabase);
+      const r = await gw.setVisibilityOverride("e1", value);
+      expect(r.visibilityOverride).toBe(value);
+      const updateCall = calls.find((c) => c.method === "update");
+      expect(updateCall!.args[0]).toEqual({ visibility_override: value });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // delete: ADR 0010 / P2-4 — google_calendar は UI から削除不可
 // ---------------------------------------------------------------------------
 describe("SupabaseEventGateway.delete", () => {

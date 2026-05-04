@@ -6,7 +6,7 @@ import { useCallback } from "react";
 import { dashboardKeys } from "./useDashboardQueries";
 import { ACTION_TYPES, log } from "@/entities/action-log/logger";
 import type { CreateEventInput, UpdateEventInput } from "@/entities/event/gateway";
-import type { Event } from "@/entities/event/types";
+import type { Event, EventVisibilityOverride } from "@/entities/event/types";
 import type { CreateProjectInput, UpdateProjectInput } from "@/entities/project/gateway";
 import type { Project } from "@/entities/project/types";
 import type { CreateTaskInput } from "@/entities/task/gateway";
@@ -45,6 +45,12 @@ export type DashboardMutations = {
   updateEvent: (id: string, patch: UpdateEventInput) => Promise<void>;
   /** ADR 0010: manual event の削除。google_calendar は gateway 側で弾く。 */
   deleteEvent: (id: string) => Promise<void>;
+  /**
+   * Issue #145 / ADR 0032 Layer 3: event の visibility_override を更新。
+   * 'shown' / 'hidden' は EventDetailPanel と予定管理ページから、'none' は SettingsPanel
+   * の override 一覧 reset 専用導線から呼ぶ (ADR 0032: 日常 UI から none へは戻せない)。
+   */
+  setEventVisibilityOverride: (id: string, value: EventVisibilityOverride) => Promise<void>;
   createProject: (input: CreateProjectInput) => Promise<void>;
   updateProject: (id: string, patch: UpdateProjectInput) => Promise<void>;
   /** schema 上 ON DELETE SET NULL なので tasks/events も invalidate する。 */
@@ -284,6 +290,44 @@ export function useDashboardMutations(): DashboardMutations {
     },
   });
 
+  // Issue #145 / ADR 0031 Layer 3 / ADR 0032: event の visibility_override を更新する。
+  // server 側 (PATCH /api/events/[id]/visibility-override) で action_log
+  // (event_promoted / event_demoted / event_override_cleared) を発火し、
+  // is_override_of_default は subscription.auto_promote と to の関係から計算する。
+  // optimistic に events cache を書き換え、失敗したら rollback する。
+  const setEventVisibilityOverrideMutation = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: EventVisibilityOverride }) => {
+      const res = await fetch(`/api/events/${id}/visibility-override`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ value }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `visibility_override_failed: ${res.status}`);
+      }
+      return (await res.json()) as {
+        from: EventVisibilityOverride;
+        to: EventVisibilityOverride;
+        changed: boolean;
+      };
+    },
+    onMutate: async ({ id, value }) => {
+      await queryClient.cancelQueries({ queryKey: dashboardKeys.events });
+      const previous = queryClient.getQueryData<Event[]>(dashboardKeys.events);
+      queryClient.setQueryData<Event[]>(dashboardKeys.events, (prev) =>
+        (prev ?? []).map((e) => (e.id === id ? { ...e, visibilityOverride: value } : e)),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(dashboardKeys.events, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.events });
+    },
+  });
+
   // ADR 0010: manual イベントだけが UI から削除可能。google_calendar は
   // SupabaseEventGateway.delete が source を見て弾く。
   const deleteEventMutation = useMutation({
@@ -489,6 +533,8 @@ export function useDashboardMutations(): DashboardMutations {
     updateEvent: (id, patch) =>
       updateEventMutation.mutateAsync({ id, patch }).then(() => undefined),
     deleteEvent: (id) => deleteEventMutation.mutateAsync(id).then(() => undefined),
+    setEventVisibilityOverride: (id, value) =>
+      setEventVisibilityOverrideMutation.mutateAsync({ id, value }).then(() => undefined),
     createProject: (input) => createProjectMutation.mutateAsync(input).then(() => undefined),
     updateProject: (id, patch) =>
       updateProjectMutation.mutateAsync({ id, patch }).then(() => undefined),

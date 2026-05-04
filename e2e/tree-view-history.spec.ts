@@ -14,8 +14,9 @@ import { expect, test } from "./fixtures";
 test("Tree View renders mock history grouped by date with project legend", async ({
   signedInPage: page,
 }) => {
-  // Tree View へ遷移 (golden-path と同じ semantic locator)。
-  await page.getByRole("link", { name: "Tree" }).click();
+  // Issue #145: Tree タブはヘッダー動線から外したので、direct URL で遷移する。
+  // /tree route 自体は維持しているため描画 regression は引き続き踏める。
+  await page.goto("/tree");
   await page.waitForURL((url) => url.pathname === "/tree");
 
   // TreeView 全体は role=region (aria-label="作業履歴") で scope する。

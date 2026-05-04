@@ -86,11 +86,12 @@ test("Phase 1 golden path", async ({ signedInPage: page }) => {
   await expect(stack.getByRole("listitem").filter({ hasText: taskA })).toBeVisible();
   await expect(stack.getByRole("listitem").filter({ hasText: taskB })).toHaveCount(0);
 
-  // --- Tree View に遷移 ----------------------------------------------------
-  await page.getByRole("link", { name: "Tree" }).click();
-  await page.waitForURL((url) => url.pathname === "/tree");
-  // Tree View でも header の kozu/tsumi ロゴは同じ位置に残る。
+  // --- 予定管理ページに遷移 (Issue #145: tree 動線 → events 動線) -----------
+  await page.getByRole("link", { name: "予定" }).click();
+  await page.waitForURL((url) => url.pathname === "/events");
+  // 予定管理ページでも header の kozu/tsumi ロゴは同じ位置に残る。
   await expect(page.getByText("kozu").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "予定管理" })).toBeVisible();
 });
 
 /**
