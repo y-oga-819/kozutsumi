@@ -66,6 +66,22 @@ jobs:
             || echo "Could not read schema_migrations (table might not exist on first run)"
           echo "::endgroup::"
 
+      - name: Ensure HEAD contains all migrations from main (rebase guard)
+        run: |
+          # 通常 pull_request の checkout は merge ref なので main の migration files は揃う。
+          # mergeable=false (conflict) や workflow_dispatch を古い branch から叩いた時に、
+          # main にあって HEAD に無い migration があると preview DB が中途半端な状態になるので止める。
+          # 趣旨は ADR-0023 の missing-migrations 検査と同じ。
+          git fetch --depth=1 origin main
+          main_migs=$(git ls-tree -r --name-only origin/main -- supabase/migrations/ | sort)
+          head_migs=$(git ls-tree -r --name-only HEAD -- supabase/migrations/ | sort)
+          missing=$(comm -23 <(echo "$main_migs") <(echo "$head_migs"))
+          if [ -n "$missing" ]; then
+            echo "::error::main にあって HEAD に無い migration があります。main を取り込んで再 push してください。"
+            echo "$missing"
+            exit 1
+          fi
+
       - name: Apply migrations
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_PREVIEW_DB_URL }}
