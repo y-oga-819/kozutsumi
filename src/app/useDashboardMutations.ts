@@ -208,11 +208,13 @@ export function useDashboardMutations(): DashboardMutations {
     // DnD は optimistic で UI 側は onMutate で即反映、サーバー同期は背面で進める。
   });
 
+  // createTaskWithAi が cache を append + AI trigger 完了後に .finally invalidate
+  // するので、ここでは onSuccess invalidate を持たない (issue #167)。旧実装では
+  // onSuccess の invalidate がトリガする in-flight refetch と直後の
+  // setQueryData('decomposing') が競合し、refetch レスポンス (status='none')
+  // で楽観 pill が即座に上書きされていた。
   const createTaskMutation = useMutation({
     mutationFn: (input: CreateTaskInput) => taskGateway.create(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: dashboardKeys.tasks });
-    },
   });
 
   const createEventMutation = useMutation({
@@ -405,8 +407,11 @@ export function useDashboardMutations(): DashboardMutations {
       // server 側でも `decompose_status='decomposing'` に倒すが、UI に分解中 pill を
       // 即時出すため optimistic に cache を書き換える。AI_ENABLED=false / 失敗時は
       // server が `none` に戻す (decompose-server の guard 経路)。
-      // 既に invalidateQueries で refetch 中の cache に対しては map で上書き、
-      // refetch 前で entry が無ければ末尾に append する。
+      //
+      // issue #167: cancelQueries を挟むことで「他経路で in-flight な tasks refetch
+      // (例: focus 戻り後の自動 refetch / 並走するイベント refetch) が
+      // setQueryData('decomposing') を上書きする」競合を防ぐ。
+      await queryClient.cancelQueries({ queryKey: dashboardKeys.tasks });
       queryClient.setQueryData<Task[]>(dashboardKeys.tasks, (prev) => {
         const list = prev ?? [];
         const found = list.some((t) => t.id === created.id);
@@ -415,12 +420,20 @@ export function useDashboardMutations(): DashboardMutations {
           ? list.map((t) => (t.id === created.id ? { ...t, decomposeStatus: "decomposing" } : t))
           : [...list, updated];
       });
-      triggerDecompose(created.id);
+      // issue #167: server 側 decompose 完了後 (成功 / 失敗 / skipped 問わず) に
+      // tasks を invalidate して refetch する。これがないと cache が `decomposing`
+      // で固まり、親 `decomposed` への遷移と子フラット化が手動リロードまで反映されない。
+      // `triggerResplitWithOptimistic` と同じパターン (ADR 0027)。
+      void triggerDecompose(created.id).finally(() => {
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.tasks });
+      });
       // P3-4 / ADR 0015: AI 初期ラベリングも同経路で fire-and-forget。
       // 失敗 / AI_ENABLED=false は server が `task_category=null` のまま残す
-      // (ADR 0013 augmentation only)。client 側の optimistic 反映はしない —
-      // category は UX 上「気づいたら埋まっている」体験で良い。
-      triggerCategorize(created.id);
+      // (ADR 0013 augmentation only)。client 側の optimistic 反映はしないが、
+      // 完了後に invalidate して AI ラベルを refetch で反映する (issue #167)。
+      void triggerCategorize(created.id).finally(() => {
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.tasks });
+      });
     },
     [createTaskMutation, queryClient],
   );
@@ -434,7 +447,14 @@ export function useDashboardMutations(): DashboardMutations {
       );
       // 既存 log は陳腐化するので invalidate (新たな試行が完了したら再 fetch される)
       queryClient.invalidateQueries({ queryKey: dashboardKeys.decomposeLog(id) });
-      triggerDecompose(id);
+      // issue #167: server 側完了後 (成功 / 失敗 / skipped) に tasks / decomposeLog を
+      // invalidate して refetch する。これがないと「再分解」を押した後 UI が
+      // `decomposing` で固まり、親 `decomposed` 遷移と子フラット化、最新試行ログが
+      // 手動リロードまで反映されない (`createTaskWithAi` と同じ pattern)。
+      void triggerDecompose(id).finally(() => {
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.tasks });
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.decomposeLog(id) });
+      });
     },
     [queryClient],
   );

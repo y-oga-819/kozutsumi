@@ -1,4 +1,11 @@
-import { createAdminClient, getTasksForUser, seedProject, seedTask } from "./db";
+import {
+  createAdminClient,
+  getProjectByName,
+  getTaskByTitle,
+  getTasksForUser,
+  seedProject,
+  seedTask,
+} from "./db";
 import { expect, test } from "./fixtures";
 
 /**
@@ -160,6 +167,107 @@ test.describe("Variant E core path 不変条件 (ADR 0016)", () => {
 
     // ⤷ 親タスク名が下ゾーンに継承される (ADR 0016 §6 の親 dep 継承と並ぶ表示原則)。
     await expect(topItem.getByText(`⤷ ${parent.title}`)).toBeVisible();
+  });
+
+  test("AddPanel タスク追加 → 楽観 'AI 分解中' pill が即時可視化、decompose 完了で親消えて子フラット表示 (リロード不要 / issue #167)", async ({
+    signedInPageWithProject: page,
+    projectName,
+    testUserId: userId,
+  }) => {
+    // 旧実装は (a) `createTaskMutation.onSuccess` の invalidate が起こす
+    // in-flight refetch が直後の `setQueryData('decomposing')` を上書きし、
+    // (b) `triggerDecompose` が fire-and-forget で `.finally` invalidate を
+    // 持たないため、server 側の decompose 完了が手動リロードまで反映されなかった。
+    //
+    // この test は両方の経路を semantic locator + `page.route` モックで踏む:
+    // 1. AddPanel から追加 → 'AI 分解中' pill が *即時* 可視化されること
+    // 2. mock 経由で server 側の DB 結果 (子 insert + 親 `decomposed`) を仕込んだ
+    //    あとに `/api/ai/decompose` が response → client `.finally` invalidate →
+    //    refetch → 親が Stack から消え、子 2 件がフラットに並ぶこと
+    //
+    // mock route は `AI_ENABLED=true` 相当の挙動 (server が DB を書く + 200 を返す)
+    // を最小限に再現する。実 AI 経路の中身 (Gemini 呼び出し / parser) は
+    // src/entities/task/decompose-server.test.ts のユニットでカバー済み (ADR 0014)。
+    const admin = createAdminClient();
+    const project = await getProjectByName(admin, userId, projectName);
+    const taskTitle = "AI 分解対象 (issue 167)";
+    const childTitles = ["分解された子 1", "分解された子 2"];
+
+    // decompose / categorize の両方を block する。release されるまで response を
+    // 返さない。これによって楽観 pill のフェーズと、完了後の遷移フェーズを
+    // テスト側で時間的に分離して観測できる。
+    let releaseProceed: () => void = () => {};
+    const proceed = new Promise<void>((resolve) => {
+      releaseProceed = resolve;
+    });
+
+    await page.route("**/api/ai/decompose", async (route) => {
+      await proceed;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, outcome: { kind: "decomposed", childIds: [] } }),
+      });
+    });
+    await page.route("**/api/ai/categorize", async (route) => {
+      // categorize は本テストの主役ではないが、`.finally(invalidate)` が両方の
+      // 経路から走るので、decompose と同じ proceed gate に揃えて競合させない。
+      await proceed;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ skipped: true, reason: "ai_disabled" }),
+      });
+    });
+
+    await page.getByRole("button", { name: "新規追加" }).click();
+    const addDialog = page.getByRole("dialog", { name: "追加メニュー" });
+    await addDialog.getByRole("tab", { name: "タスク" }).click();
+    await addDialog.getByLabel("タイトル").fill(taskTitle);
+    await addDialog.getByLabel("プロジェクト").selectOption({ label: projectName });
+    await addDialog.getByRole("button", { name: "追加" }).click();
+    await expect(addDialog).toHaveCount(0);
+
+    const stack = page.getByRole("list", { name: "タスクスタック" });
+    const top = stack.getByRole("listitem").filter({ hasText: taskTitle });
+    await expect(top).toBeVisible();
+
+    // Stage A (issue #167 の片方の修正): `createTaskWithAi` が
+    // `cancelQueries` → `setQueryData('decomposing')` の順で書くようになり、
+    // 並走する refetch に楽観値を上書きされず、'AI 分解中' pill が即時表示される。
+    // StatusPill は `role=status` + `aria-live=polite` で読み上げ対象 (a11y)。
+    await expect(top.getByRole("status").filter({ hasText: "AI 分解中" })).toBeVisible();
+
+    // server 側の最終状態を仕込む: 子 2 件 insert + 親 `decompose_status='decomposed'`。
+    // mock route 内ではなくテスト側で行うのは、Stage A の楽観 pill 観測中は
+    // 親が `decomposing` (cache) のまま見えていてほしいため。
+    const parent = await getTaskByTitle(admin, userId, taskTitle);
+    for (let i = 0; i < childTitles.length; i++) {
+      await seedTask(admin, {
+        userId,
+        projectId: project.id,
+        title: childTitles[i],
+        stackOrder: (parent.stack_order ?? 0) + i + 1,
+        parentTaskId: parent.id,
+      });
+    }
+    const { error: updateError } = await admin
+      .from("tasks")
+      .update({ decompose_status: "decomposed" })
+      .eq("id", parent.id);
+    expect(updateError).toBeNull();
+
+    // mock を release → /api/ai/decompose 200 → client `.finally(invalidate)` →
+    // tasks refetch → 親 (decomposed) が buildStackItems で除外され、子がフラットに並ぶ。
+    releaseProceed();
+
+    // Stage B (issue #167 のもう片方の修正): `triggerDecompose` の `.finally(invalidate)`
+    // が server 側完了後に refetch を投げる経路。これがないと cache が `decomposing`
+    // で固まり、手動リロードまで親が Stack に残る。
+    await expect(stack.getByRole("listitem").filter({ hasText: taskTitle })).toHaveCount(0);
+    for (const t of childTitles) {
+      await expect(stack.getByRole("listitem").filter({ hasText: t })).toBeVisible();
+    }
   });
 
   test("Top-only complete: 行カードに『完了』ボタンが無い / Top で完了すると Done リストに移る", async ({
