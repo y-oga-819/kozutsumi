@@ -47,7 +47,7 @@ const missingMigrations = splitLines(missingMigrationsRaw);
 const isTable = (t) => (t.kind ?? "table") === "table";
 
 const report = buildReport(base, pr);
-const assertions = runAssertions(report, pr);
+const assertions = runAssertions(report, pr, missingMigrations);
 const md = renderMarkdown({
   report,
   assertions,
@@ -159,10 +159,24 @@ function shallowEqual(a, b) {
 
 // ---- Assertions (kozutsumi 規約チェック) ----
 
-function runAssertions(report, prSnapshot) {
+function runAssertions(report, prSnapshot, missingMigrations = []) {
   const errors = [];
   const warnings = [];
   const oks = [];
+
+  // ❌ main にあって PR ブランチに無い migration がある (rebase 不在)
+  // base 適用 → `supabase migration up` で PR 新規分のみ追加適用する CI フローでは、
+  // missing migration があっても apply 自体は通ってしまう (PR ブランチに含まれる migration の
+  // 集合だけで一貫しているため)。一方で merge 後の本番 `db push` は merge commit の
+  // supabase/migrations/ をすべて適用するため、欠けていた main 側の migration が遅れて
+  // 適用される = schema_migrations の version 順序が崩れる。これを CI で止める。
+  if (missingMigrations.length > 0) {
+    errors.push({
+      kind: "missing-migrations",
+      message: `main に ${missingMigrations.length} 件の migration があり、このブランチに含まれていません (rebase 不在)`,
+      fix: "main を取り込んで rebase する。main 側の migration を取り込んだ上で、自分の新規 migration の timestamp が main 最新より後になっているか確認する",
+    });
+  }
 
   // ❌ public の新テーブルに RLS が有効化されていない (view / matview は対象外)
   for (const t of report.tables.added) {
@@ -300,9 +314,10 @@ function renderMarkdown({ report, assertions, schemaDiff, newMigrations, missing
   lines.push("");
 
   // ---- rebase 警告 (main にあって HEAD に無い migration を検出) ----
+  // 検査セクションでも ❌ として出すが、最上部に出すことで PR を開いた時に最初に目に入る。
   if (missingMigrations.length > 0) {
     lines.push(
-      `> ⚠️ **main に ${missingMigrations.length} 件の migration があり、このブランチに含まれていません**。`,
+      `> ❌ **main に ${missingMigrations.length} 件の migration があり、このブランチに含まれていません**（CI fail）。`,
     );
     lines.push(">");
     lines.push(

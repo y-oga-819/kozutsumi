@@ -45,13 +45,19 @@ sticky コメントとして PR に投稿する。
   - `❌` 新規 view / matview に `security_invoker = true` が指定されていない（postgres の view は
     未指定だと **definer 権限で評価され RLS をバイパス**するため、kozutsumi では原則必須）
   - `❌` 既存 view の `security_invoker` が `true → false` に変更された（RLS 迂回経路ができる）
+  - `❌` main にあって HEAD に無い migration がある（rebase 不在 / PR ブランチが古い）
   - `⚠️` `public` の新テーブルで owner-only ポリシー 4 種（select / insert / update / delete）が揃っていない
   - `⚠️` 外部キーの ON DELETE policy が未指定（`NO ACTION` のまま）
 - `❌` が一つでもあれば workflow は fail（job exit code 非ゼロ）。`⚠️` は警告のみ
 - 比較は **PR の HEAD vs main の現 HEAD (`github.event.pull_request.base.sha`)** で行う。
   fork point ではなく現 HEAD と比較するのは **「今この PR を merge した時の最終スキーマ」を
-  示すため**。副次効果として、main にあって HEAD に無い migration があれば
-  「rebase が必要」シグナルとしてコメント冒頭に warning を出す（PR ブランチが古いことを検知できる）
+  示すため**
+- migration の適用は **本番 `supabase db push` と同じ deploy 経路を再生**する:
+  base migrations のみで `supabase db reset --no-seed` → base snapshot → HEAD migrations 復元
+  → `supabase migration up` で PR 新規分のみ追加適用 → PR snapshot。
+  両方を fresh `db reset` で取ると「base に PR 新規分を**追加適用**する」状況を再現できず、
+  PK 衝突（同 timestamp prefix）や out-of-order を CLI が拒否するケースが production まで
+  気づかない。`migration up` で本番経路を踏むことで CLI 自身が production と同じ error を吐く
 - main 状態への巻き戻しは `git restore --source="$BASE_SHA" --worktree --staged --
   supabase/migrations/` で行う（`git checkout <ref> --` は overlay モードで PR が追加した
   新規ファイルを消せないため、base 状態が再現できない）
@@ -92,9 +98,16 @@ sticky コメントとして PR に投稿する。
 既知の問題が混入するか」** で判定する:
 
 - `❌`: merge → workflow 手動 trigger で本番に流すと **必ず壊れる / セキュリティ違反になる**
-  （NOT NULL violation / RLS なし / enum 値削除）
+  （NOT NULL violation / RLS なし / enum 値削除 / rebase 不在で merge 後の本番 `db push` 順序破綻）
 - `⚠️`: 規約上望ましくないが、merge しても直ちに壊れない（owner policy 不足は他のクライアントが
   ないため即時の漏洩にはならない / ON DELETE 未指定は意図的なケースもありうる）
+
+rebase 不在 (missing migrations) を `❌` 扱いにする根拠: CI フロー側は base 適用 →
+`migration up` で PR 新規分のみ追加適用するため、PR ブランチに main 側の migration が
+欠けていても **CI 自体は通ってしまう**（PR ブランチの migration 集合だけで一貫しているため）。
+しかし merge 後の本番 `db push` は merge commit の `supabase/migrations/` をすべて適用するので、
+欠けていた main 側の migration が遅れて適用される = `schema_migrations.version` の順序が崩れる。
+本番に出てから気づく経路を CI で塞ぐため `❌` で fail させる。
 
 `⚠️` を fail に格上げするかどうかは運用しながら判断する（本 ADR では含めない）。
 
@@ -144,3 +157,16 @@ sticky コメントとして PR に投稿する。
       （main にあって HEAD に無い migration を検出してリスト表示）
     - 生 diff 比較前に pg_dump 17 の `\restrict` / `\unrestrict` ランダムトークンを除去
       （差分ゼロでも 2 行ノイズが出る問題の解消）
+  - **2026-05-04 改訂** (Closes #178):
+    - **本番 deploy 経路の再生に変更**: 旧実装は PR / base 両方とも `supabase db reset --no-seed`
+      で fresh 適用してから snapshot を取っていた。これは diff 比較目的としては正しいが、
+      本番 `supabase db push`（既存 schema_migrations に新規分のみ追加適用）の経路を再生できず、
+      PK 衝突（同 timestamp prefix）や out-of-order が production まで気づかない問題があった。
+      新フロー: base 適用 → base snapshot → HEAD migrations 復元 → `supabase migration up`
+      で PR 新規分のみ追加適用 → PR snapshot。`migration up` が CLI レベルで失敗すれば
+      production と同じ error で CI も fail する
+    - **rebase 不在（missing migrations）を `⚠️` → `❌` に格上げ**: 旧実装はコメント冒頭の
+      警告止まりで CI fail しなかった。merge 後の本番 `db push` で順序破綻リスクがあるため
+      CI 段階で止める。`compare.mjs` の `runAssertions` に `missing-migrations` error を追加
+    - main への push (`pull_request` 以外) では `db reset --no-seed` の sanity check を残す
+      （PR 経路の `migration up` は走らないため、fresh re-apply が壊れていないことの担保が必要）
