@@ -1,4 +1,4 @@
-# ADR 0042: AI 機能の race guard は条件付き UPDATE で claim する
+# ADR 0044: AI 機能の race guard は条件付き UPDATE で claim する
 
 - **Status**: Accepted
 - **Date**: 2026-05-04
