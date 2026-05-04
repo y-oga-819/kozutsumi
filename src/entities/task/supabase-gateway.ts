@@ -4,7 +4,7 @@ import { ACTION_TYPES, log } from "@/entities/action-log/logger";
 import type { Database, Tables, TablesInsert, TablesUpdate } from "@/shared/types/database";
 
 import type { CorrectionFactor } from "./correction";
-import type { CreateTaskInput, TaskGateway, UpdateTaskInput } from "./gateway";
+import type { CreateTaskInput, ProjectCascadeMode, TaskGateway, UpdateTaskInput } from "./gateway";
 import type { Task } from "./types";
 
 type Sb = SupabaseClient<Database>;
@@ -95,6 +95,36 @@ export class SupabaseTaskGateway implements TaskGateway {
       .single();
     if (error) throw error;
     return fromRow(data);
+  }
+
+  async updateTaskProjectCascade(
+    taskId: string,
+    newProjectId: string | null,
+    mode: ProjectCascadeMode,
+  ): Promise<{ affectedTaskIds: string[] }> {
+    if (mode === "single") {
+      // 単独タスクは既存の update 経路で十分 (RPC の atomic 担保が要らない)。
+      // returning なし update + id を 1 件返す。
+      const { error } = await this.supabase
+        .from("tasks")
+        .update({ project_id: newProjectId } satisfies TablesUpdate<"tasks">)
+        .eq("id", taskId);
+      if (error) throw error;
+      return { affectedTaskIds: [taskId] };
+    }
+
+    // with_children / with_siblings_and_parent は RPC 経由で 1 トランザクション化 (ADR 0039)。
+    // 戻り値は影響を受けた task id 配列 (target を含む)。
+    const fnName =
+      mode === "with_children"
+        ? "fn_update_task_project_with_children"
+        : "fn_update_task_project_with_siblings_and_parent";
+    const { data, error } = await this.supabase.rpc(fnName, {
+      p_task_id: taskId,
+      p_new_project_id: newProjectId,
+    });
+    if (error) throw error;
+    return { affectedTaskIds: data ?? [] };
   }
 
   async reorder(entries: readonly { id: string; stackOrder: number | null }[]): Promise<void> {

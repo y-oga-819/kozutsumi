@@ -195,6 +195,7 @@ describe("ACTION_TYPES", () => {
       TASK_DELETED: "task_deleted",
       TASK_TITLE_CHANGED: "task_title_changed",
       TASK_CATEGORY_CHANGED: "task_category_changed",
+      TASK_PROJECT_CHANGED: "task_project_changed",
       TASK_DEPENDENCY_SET: "task_dependency_set",
       TASK_DEPENDENCY_CLEARED: "task_dependency_cleared",
       INTERRUPTION_PUSHED: "interruption_pushed",

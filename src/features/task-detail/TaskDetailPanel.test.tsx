@@ -501,6 +501,157 @@ describe("TaskDetailPanel - task_size override (#170 / ADR 0038)", () => {
   });
 });
 
+// Issue #171 / ADR 0039: project 編集 UI と親→子 / 子→兄弟+親 への伝播確認 dialog。
+// 体験は category と揃える: ボタン → select → 値選択。
+// ただし伝播ありのとき (子持ち親 / 子) は select 後に確認 dialog を経由してから callback が呼ばれる。
+// 単独タスクは dialog なしで即発火。
+describe("TaskDetailPanel - project edit (Issue #171 / ADR 0039)", () => {
+  const multipleProjects: Project[] = [
+    { id: "slo", name: "SLO推進", color: "#2D9F45", isPrimary: true, createdAt: "" },
+    { id: "career", name: "転職活動", color: "#E85D04", isPrimary: false, createdAt: "" },
+  ];
+
+  function renderWithProjects(overrides: Partial<TaskDetailPanelProps>) {
+    const props: TaskDetailPanelProps = {
+      task: baseTask,
+      events: [],
+      onClose: noop,
+      onUpdate: noop,
+      onToggleDone: noop,
+      ...overrides,
+    };
+    return rtlRender(
+      <ProjectsProvider projects={multipleProjects}>
+        <CorrectionFactorsProvider factors={[]}>
+          <TaskDetailPanel {...props} />
+        </CorrectionFactorsProvider>
+      </ProjectsProvider>,
+    );
+  }
+
+  test("onChangeProject 未指定なら project 編集 UI を出さない (旧呼び出し互換)", () => {
+    const { queryByText } = renderPanel();
+    expect(queryByText("プロジェクト")).toBeNull();
+  });
+
+  test("onChangeProject 指定時、デフォルトは「<現在 project> を変更」ボタン", () => {
+    const { getByText } = renderWithProjects({ onChangeProject: vi.fn() });
+    expect(getByText(/SLO推進\s+を変更/)).toBeTruthy();
+  });
+
+  test("project 未設定 (空文字) なら「未設定 を変更」ボタン", () => {
+    const { getByText } = renderWithProjects({
+      task: { ...baseTask, projectId: "" },
+      onChangeProject: vi.fn(),
+    });
+    expect(getByText(/未設定\s+を変更/)).toBeTruthy();
+  });
+
+  test("ボタン押下で <select> に切り替わり、現在値が反映されている", () => {
+    const { getByText, getAllByRole } = renderWithProjects({ onChangeProject: vi.fn() });
+    fireEvent.click(getByText(/SLO推進\s+を変更/));
+    // 依存イベント / category / size と並ぶので select が複数になる前提。
+    // project は最初に出るので getAllByRole("combobox")[0] が project select。
+    const project = getAllByRole("combobox")[0] as HTMLSelectElement;
+    expect(project.value).toBe("slo");
+    const values = Array.from(project.options).map((o) => o.value);
+    expect(values).toEqual(["", "slo", "career"]);
+  });
+
+  test("単独タスク (tasks 未指定) で別 project を選ぶと dialog 出ずに即 onChangeProject を呼ぶ", () => {
+    const onChangeProject = vi.fn();
+    const { getByText, getAllByRole, queryByRole } = renderWithProjects({ onChangeProject });
+    fireEvent.click(getByText(/SLO推進\s+を変更/));
+    fireEvent.change(getAllByRole("combobox")[0], { target: { value: "career" } });
+    expect(onChangeProject).toHaveBeenCalledWith("t1", "career");
+    expect(queryByRole("dialog", { name: "プロジェクト変更の確認" })).toBeNull();
+  });
+
+  test("「未設定」(空文字) を選ぶと onChangeProject(taskId, null) を呼ぶ", () => {
+    const onChangeProject = vi.fn();
+    const { getByText, getAllByRole } = renderWithProjects({ onChangeProject });
+    fireEvent.click(getByText(/SLO推進\s+を変更/));
+    fireEvent.change(getAllByRole("combobox")[0], { target: { value: "" } });
+    expect(onChangeProject).toHaveBeenCalledWith("t1", null);
+  });
+
+  test("同値選択は onChangeProject を呼ばない", () => {
+    const onChangeProject = vi.fn();
+    const { getByText, getAllByRole } = renderWithProjects({ onChangeProject });
+    fireEvent.click(getByText(/SLO推進\s+を変更/));
+    fireEvent.change(getAllByRole("combobox")[0], { target: { value: "slo" } });
+    expect(onChangeProject).not.toHaveBeenCalled();
+  });
+
+  test("親タスク (子あり) で別 project を選ぶと dialog が出て onChangeProject はまだ呼ばれない", () => {
+    const onChangeProject = vi.fn();
+    const parent: Task = { ...baseTask, id: "parent" };
+    const child1: Task = { ...baseTask, id: "c1", parentTaskId: "parent" };
+    const child2: Task = { ...baseTask, id: "c2", parentTaskId: "parent" };
+    const { getByText, getAllByRole, getByRole } = renderWithProjects({
+      task: parent,
+      tasks: [parent, child1, child2],
+      onChangeProject,
+    });
+    fireEvent.click(getByText(/SLO推進\s+を変更/));
+    fireEvent.change(getAllByRole("combobox")[0], { target: { value: "career" } });
+    expect(onChangeProject).not.toHaveBeenCalled();
+    expect(getByRole("dialog", { name: "プロジェクト変更の確認" })).toBeTruthy();
+    // 件数文言: 子タスクが 2 件
+    expect(getByText(/2 件の子タスクも.*転職活動/)).toBeTruthy();
+  });
+
+  test("親タスク dialog: confirm で onChangeProject を呼んで dialog を閉じる", () => {
+    const onChangeProject = vi.fn();
+    const parent: Task = { ...baseTask, id: "parent" };
+    const child: Task = { ...baseTask, id: "c1", parentTaskId: "parent" };
+    const { getByText, getAllByRole, getByRole, queryByRole } = renderWithProjects({
+      task: parent,
+      tasks: [parent, child],
+      onChangeProject,
+    });
+    fireEvent.click(getByText(/SLO推進\s+を変更/));
+    fireEvent.change(getAllByRole("combobox")[0], { target: { value: "career" } });
+    fireEvent.click(getByRole("button", { name: "変更する" }));
+    expect(onChangeProject).toHaveBeenCalledWith("parent", "career");
+    expect(queryByRole("dialog", { name: "プロジェクト変更の確認" })).toBeNull();
+  });
+
+  test("親タスク dialog: cancel で onChangeProject は呼ばれず dialog を閉じる", () => {
+    const onChangeProject = vi.fn();
+    const parent: Task = { ...baseTask, id: "parent" };
+    const child: Task = { ...baseTask, id: "c1", parentTaskId: "parent" };
+    const { getByText, getAllByRole, getByRole, queryByRole } = renderWithProjects({
+      task: parent,
+      tasks: [parent, child],
+      onChangeProject,
+    });
+    fireEvent.click(getByText(/SLO推進\s+を変更/));
+    fireEvent.change(getAllByRole("combobox")[0], { target: { value: "career" } });
+    fireEvent.click(getByRole("button", { name: "キャンセル" }));
+    expect(onChangeProject).not.toHaveBeenCalled();
+    expect(queryByRole("dialog", { name: "プロジェクト変更の確認" })).toBeNull();
+  });
+
+  test("子タスクで別 project を選ぶと「親タスクと N 件の兄弟タスクも...」文言を表示する", () => {
+    const onChangeProject = vi.fn();
+    const parent: Task = { ...baseTask, id: "parent" };
+    const target: Task = { ...baseTask, id: "child-target", parentTaskId: "parent" };
+    const sibling: Task = { ...baseTask, id: "sibling", parentTaskId: "parent" };
+    const { getByText, getAllByRole, getByRole } = renderWithProjects({
+      task: target,
+      tasks: [parent, target, sibling],
+      onChangeProject,
+    });
+    fireEvent.click(getByText(/SLO推進\s+を変更/));
+    fireEvent.change(getAllByRole("combobox")[0], { target: { value: "career" } });
+    // 兄弟は target を除いて 1 件
+    expect(getByText(/親タスクと 1 件の兄弟タスクも.*転職活動/)).toBeTruthy();
+    fireEvent.click(getByRole("button", { name: "変更する" }));
+    expect(onChangeProject).toHaveBeenCalledWith("child-target", "career");
+  });
+});
+
 // AI 分解情報エリア (P3-15 / ADR 0021 §3)。
 // 親が `latestDecomposeLog` か `onTriggerDecompose` を渡したときだけセクションが描画される。
 describe("TaskDetailPanel - AI 分解情報エリア (P3-15)", () => {

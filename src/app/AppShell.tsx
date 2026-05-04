@@ -119,6 +119,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
     updateDependency,
     updateCategory,
     updateSize,
+    updateTaskProject,
     reorder,
     reorderGroup,
     createTaskWithAi,
@@ -261,6 +262,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
             <TaskDetailPanel
               task={detailTask}
               events={events}
+              tasks={tasks}
               now={nowMs}
               onClose={() => setDetailId(null)}
               onUpdate={updateBody}
@@ -269,6 +271,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
               onChangeDependency={updateDependency}
               onChangeCategory={updateCategory}
               onChangeSize={updateSize}
+              onChangeProject={updateTaskProject}
               aiEnabled={aiEnabled}
               latestDecomposeLog={decomposeLogQuery.data ?? null}
               isDecomposeLogLoading={decomposeLogQuery.isPending}
