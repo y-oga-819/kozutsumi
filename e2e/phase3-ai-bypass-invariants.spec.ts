@@ -264,10 +264,18 @@ test.describe("Variant E core path 不変条件 (ADR 0016)", () => {
     // Stage B (issue #167 のもう片方の修正): `triggerDecompose` の `.finally(invalidate)`
     // が server 側完了後に refetch を投げる経路。これがないと cache が `decomposing`
     // で固まり、手動リロードまで親が Stack に残る。
-    await expect(stack.getByRole("listitem").filter({ hasText: taskTitle })).toHaveCount(0);
+    //
+    // 親 (decomposed) は Stack から消え、子 2 件だけがフラットに並ぶ。
+    // listitem 数 = 2 と各子の可視性 + `AI 分解中` pill 非可視で「親が listitem として
+    // 描画されていない」が担保される。子の下ゾーンには `⤷ ${taskTitle}` が出るので
+    // 親 title での filter は使えない (上の decomposed 親 + 子 3 件テストと同じ理由)。
+    await expect(stack.getByRole("listitem")).toHaveCount(childTitles.length);
     for (const t of childTitles) {
       await expect(stack.getByRole("listitem").filter({ hasText: t })).toBeVisible();
     }
+    // 楽観 pill (`role=status` 'AI 分解中') が消える = 親が Stack から外れた / cache が
+    // server 側完了状態に追従した、の二重確認 (子は decomposing pill を持たない)。
+    await expect(stack.getByRole("status").filter({ hasText: "AI 分解中" })).toHaveCount(0);
   });
 
   test("Top-only complete: 行カードに『完了』ボタンが無い / Top で完了すると Done リストに移る", async ({
