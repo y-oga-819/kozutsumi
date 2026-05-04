@@ -1,0 +1,6 @@
+-- preview migrate workflow の smoke test。
+-- ADR-0042 / 0043 で追加した db-migrate-preview.yml が pull_request 経由で起動し、
+-- preview Supabase project に supabase db push が通ることを確認するための一時 migration。
+--
+-- ⚠️ このファイルは merge 前に削除する。squash merge で main の履歴には残らない。
+-- DB への副作用なし (本ファイルはコメントのみ)。
