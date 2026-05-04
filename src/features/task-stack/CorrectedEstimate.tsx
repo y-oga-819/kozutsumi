@@ -1,4 +1,6 @@
 import type { CorrectedEstimate as CorrectedEstimateValue } from "@/entities/task/correction";
+import { TASK_SIZE_LABELS } from "@/entities/task/task-size";
+import type { TaskSize } from "@/entities/task/types";
 import { fmtDuration } from "@/shared/lib/time";
 
 /**
@@ -6,7 +8,10 @@ import { fmtDuration } from "@/shared/lib/time";
  *
  * - 補正後を主表示 / 元値を muted で副表示。ラベル・取消線・矢印は使わない (ADR 0026)。
  * - 補正なし (`correctedMinutes === null`) は元値だけを既存と同じ trim で出す。
- * - `estimate === null` (元値も無い) は何も描画しない (caller は条件分岐不要)。
+ * - `estimate === null` でも `taskSize` があれば、ADR 0045 の方針で主観サイズラベル
+ *   (`TASK_SIZE_LABELS[taskSize]`) を fg-faint で添える。分換算 (`TASK_SIZE_TO_MINUTES`)
+ *   は使わず、文字種 (`30分` / `半日` / `1日超`) で主観値であることを潜在的に区別させる。
+ * - `estimate === null` かつ `taskSize` も無いときは何も描画しない。
  *
  * 区切り記号は ADR 0026 の方針に従い middle dot `·` を採用。
  *
@@ -16,15 +21,30 @@ import { fmtDuration } from "@/shared/lib/time";
  */
 type Props = {
   estimate: CorrectedEstimateValue | null;
+  /**
+   * estimated_minutes 不在時の主観サイズ fallback (ADR 0045)。
+   * `estimate === null` のときだけ参照され、non-null なら主観ラベルを fg-faint で出す。
+   */
+  taskSize?: TaskSize | null;
   variant: "top" | "row";
 };
 
-export function CorrectedEstimate({ estimate, variant }: Props) {
-  if (estimate === null) return null;
-
+export function CorrectedEstimate({ estimate, taskSize, variant }: Props) {
   const mainSizeClass = variant === "top" ? "text-[10px]" : "text-[9px]";
   // 元値は併記時に一段小さく出して階層を作る (ADR 0026: 大小コントラスト)。
   const rawSizeClass = variant === "top" ? "text-[9px]" : "text-[8px]";
+
+  if (estimate === null) {
+    // ADR 0045: estimated_minutes 不在 + task_size あり → 主観ラベルを fg-faint で添える。
+    if (taskSize) {
+      return (
+        <span aria-label="サイズ" className={`${mainSizeClass} text-fg-faint`}>
+          {TASK_SIZE_LABELS[taskSize]}
+        </span>
+      );
+    }
+    return null;
+  }
 
   if (estimate.correctedMinutes === null) {
     // 補正なし: 元値だけ、従来通り faint で表示する (UI 後退無し)。

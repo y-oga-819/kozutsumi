@@ -223,6 +223,12 @@ export function TaskDetailPanel({
                 <span aria-label="見積もり" className="text-[9px] tabular-nums text-fg-faint">
                   {fmtDuration(estimate.rawMinutes)}
                 </span>
+              ) : task.taskSize ? (
+                // ADR 0045: estimated_minutes 不在 + task_size あり → 主観ラベルを fg-faint で添える。
+                // 自然文ライン (「あなたの見積もり ... 平均 X 倍」) は補正対象でないため出さない。
+                <span aria-label="サイズ" className="text-[9px] text-fg-faint">
+                  {TASK_SIZE_LABELS[task.taskSize]}
+                </span>
               ) : null}
               {dep && (
                 <span className="rounded-[3px] bg-[#E85D0415] px-1.5 py-px font-jp text-[9px] text-accent-amber">
