@@ -105,7 +105,9 @@ export function TaskRow({
           style={{ background: proj.color }}
         />
         <span className="flex-1 truncate font-jp text-[12px] text-fg-muted">{task.title}</span>
-        {estimate && <CorrectedEstimate estimate={estimate} variant="row" />}
+        {(estimate || task.taskSize) && (
+          <CorrectedEstimate estimate={estimate} taskSize={task.taskSize} variant="row" />
+        )}
       </div>
       {/* Row 2: dep event (右詰) */}
       {dep && (

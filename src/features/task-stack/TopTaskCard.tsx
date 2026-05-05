@@ -143,9 +143,9 @@ export function TopTaskCard({
                 中断: {pauseReasonLabel(pauseReason)}
               </span>
             )}
-            {estimate && (
+            {(estimate || task.taskSize) && (
               <span className="ml-auto">
-                <CorrectedEstimate estimate={estimate} variant="top" />
+                <CorrectedEstimate estimate={estimate} taskSize={task.taskSize} variant="top" />
               </span>
             )}
           </div>

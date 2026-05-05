@@ -13,9 +13,28 @@ import { CorrectedEstimate } from "./CorrectedEstimate";
  */
 
 describe("CorrectedEstimate", () => {
-  test("estimate=null のときは何も描画しない", () => {
+  test("estimate=null かつ taskSize 無しのときは何も描画しない", () => {
     const { container } = render(<CorrectedEstimate estimate={null} variant="top" />);
     expect(container.firstChild).toBeNull();
+  });
+
+  test("ADR 0045: estimate=null + task_size あり → 主観ラベルを faint で添える", () => {
+    const { getByText, getByLabelText } = render(
+      <CorrectedEstimate estimate={null} taskSize="30m" variant="top" />,
+    );
+    // TASK_SIZE_LABELS の和文ラベル (分換算ではなく文字種で主観値を区別)
+    expect(getByText("30分")).toBeTruthy();
+    // 視覚階層: fg-faint
+    expect(getByLabelText("サイズ").className).toMatch(/text-fg-faint/);
+    // 主観値は分換算しない (ADR 0038 の精神)
+    expect(getByLabelText("サイズ").className).not.toMatch(/tabular-nums/);
+  });
+
+  test("ADR 0045: large は『1日超』ラベルで表示される (代表分 null でも消えない)", () => {
+    const { getByText } = render(
+      <CorrectedEstimate estimate={null} taskSize="large" variant="top" />,
+    );
+    expect(getByText("1日超")).toBeTruthy();
   });
 
   test("補正なしは元値だけを faint で出す (現行 UI 後退無し)", () => {
