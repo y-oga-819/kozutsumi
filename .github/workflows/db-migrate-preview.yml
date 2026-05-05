@@ -1,28 +1,23 @@
 name: DB migrate (preview)
 
 # preview Supabase project に migration を適用する。
-# 設計判断は ADR-0042 / ADR-0043 を参照。
+# 設計判断は ADR-0042 / ADR-0048 を参照（ADR-0043 は ADR-0048 で supersede された）。
 #
-# Trigger:
-# - pull_request (opened/synchronize/reopened) で supabase/migrations/** が変わったとき
-# - workflow_dispatch (手動 / debug)
+# Trigger: workflow_dispatch のみ。
+# operator が Vercel preview を確認したい瞬間に明示的に打つ運用 (ADR-0048)。
 #
 # secret は SUPABASE_PREVIEW_DB_URL のみ。step env で渡す
 # (job env / workflow env には置かない: ADR-0020 の hardening 方針を踏襲)。
 # 本番 SUPABASE_DB_URL は本 workflow から参照しない。
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - "supabase/migrations/**"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  # preview DB は 1 個共有 (ADR-0043 の後勝ち戦略)。
+  # preview DB は 1 個共有 (ADR-0042)。
   # migrate / reset は同じ group でシリアライズし、本番への副作用を物理的に排除する。
   group: preview-db
   cancel-in-progress: false
@@ -104,5 +99,5 @@ jobs:
             echo "### DB migrate (preview)"
             echo ""
             echo "- Trigger: \`${{ github.event_name }}\`"
-            echo "- ADR: [0042](../blob/main/docs/adr/0042-preview-env-uses-separate-supabase-project.md) / [0043](../blob/main/docs/adr/0043-preview-db-migration-auto-apply-on-pr-push.md)"
+            echo "- ADR: [0042](../blob/main/docs/adr/0042-preview-env-uses-separate-supabase-project.md) / [0048](../blob/main/docs/adr/0048-preview-db-migration-manual-dispatch.md)"
           } >> "$GITHUB_STEP_SUMMARY"

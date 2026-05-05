@@ -1,6 +1,6 @@
 # ADR 0043: preview DB への migration は PR push 起点の GitHub Actions で自動適用する（共有 1 project / 後勝ち）
 
-- **Status**: Accepted
+- **Status**: Superseded by [ADR-0048](./0048-preview-db-migration-manual-dispatch.md)
 - **Date**: 2026-05-04
 - **Related**: [ADR-0019](./0019-db-migration-via-manual-github-actions.md) / [ADR-0020](./0020-db-migration-credential-as-db-connection-string.md) / [ADR-0023](./0023-pr-migration-diff-auto-comment.md) / [ADR-0042](./0042-preview-env-uses-separate-supabase-project.md)
 
