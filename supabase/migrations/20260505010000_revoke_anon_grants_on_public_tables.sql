@@ -21,18 +21,16 @@
 --   defense-in-depth が崩れる経路がある。table-level でも anon を弾く。
 -- * **idempotent**。REVOKE は重複実行しても no-op。preview / 新規 project では既に anon GRANT が
 --   無いので何も変化しない (本番のみ実体変化)。
--- * **default privileges は 2 ロール分**。本番では `pg_default_acl` の granting role が
---   `postgres` と `supabase_admin` の両方に anon entry を持っているため、両方 REVOKE する。
---   preview / 新規 project では両 entry が無いので no-op。
--- * **supabase_admin の REVOKE は権限不足を許容する**。`ALTER DEFAULT PRIVILEGES FOR ROLE X`
---   は実行 role が X の member であることを要求する。新しめの Supabase template では
---   migration 実行 role (postgres) が supabase_admin の member ではなく、preview / 新規 project で
---   `permission denied to change default privileges (42501)` で失敗する (本 migration の preview 適用で
---   実例を踏んだ)。preview / 新規 project には supabase_admin の anon entry がそもそも無いため、
---   実体的な不整合は発生しない (skip 安全)。
---   本番は legacy template で `postgres` が `supabase_admin` の member である可能性が高いが、
---   仮に member でなければ silent skip するため、適用後の `\dp` 検証で `anon` 行が
---   消えているか必ず確認する (ADR-0019 の手動 workflow + 事前 / 事後比較で担保)。
+-- * **本 migration の射程は postgres role が触れる範囲のみ**。すなわち:
+--     - 既存 table の table-level GRANT (REVOKE ALL ON public.<table> FROM anon)
+--     - postgres ロールの default privileges (ALTER DEFAULT PRIVILEGES FOR ROLE postgres ...)
+--   `pg_default_acl` には本番のみ supabase_admin ロールの anon entry も存在するが、
+--   `ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin` は postgres が supabase_admin の
+--   member であることを要求し、新しめの Supabase template では member ではない
+--   (preview 適用で `permission denied to change default privileges (42501)` で実例を踏んだ)。
+--   migration では扱わず、本番のみ Supabase Studio (= supabase_admin 経路) から手動 SQL で REVOKE する。
+--   PR の release checklist に手動 SQL を明記。preview / 新規 project には supabase_admin の
+--   anon entry が無いため、本番限定の一回限り legacy cleanup として扱う。
 -- * **本番への適用は ADR-0019 の手動 workflow 経由**。事前に `\dp public.<table>` で anon GRANT が
 --   存在することを確認してから適用、適用後に anon 行が消えていることを検証する。
 -- * **anon REVOKE は authenticated / postgres / service_role 経路に影響しない**。それぞれ
@@ -59,25 +57,10 @@ revoke all on
   from anon;
 
 -- =====================================================================
--- 2. 今後新規 table を作っても anon に自動 GRANT が付かないようにする
+-- 2. 今後新規 table を作っても anon に自動 GRANT が付かないようにする (postgres role 分)
 -- =====================================================================
 --
--- 本番の `pg_default_acl` には postgres / supabase_admin 両ロールに anon entry が
--- 残っているため、両方 REVOKE する。preview / 新規 project では entry が無いため no-op。
+-- supabase_admin role 分は postgres から扱えないため migration では扱わない (上記設計判断ノート参照)。
 
 alter default privileges for role postgres in schema public
   revoke all on tables from anon;
-
--- supabase_admin 分は権限不足を許容する (上記設計判断ノート参照)。
--- 本番で postgres が supabase_admin の member なら REVOKE が効き、そうでなければ silent skip。
--- 適用後の `\dp public.*` / `pg_default_acl` 検証で実効を確認する。
-do $$
-begin
-  alter default privileges for role supabase_admin in schema public
-    revoke all on tables from anon;
-  raise notice 'Revoked anon default privileges on supabase_admin in schema public.';
-exception
-  when insufficient_privilege then
-    raise notice 'Skipped supabase_admin default privileges REVOKE: migration role lacks membership. Verify post-apply via pg_default_acl.';
-end;
-$$;
