@@ -573,7 +573,8 @@ export function useDashboardMutations(): DashboardMutations {
         reordered.map((t) => ({ id: t.id, stackOrder: t.stackOrder })),
         {
           onError: () => {
-            // 失敗したら再取得して辻褄を合わせる (UI は一瞬戻るが DB 正とする)
+            // issue #185: RPC 経由で 1 transaction なので失敗時は DB が変更前のまま。
+            // invalidate で UI を確実に DB に揃える (中途半端な partial 反映は起こらない)。
             queryClient.invalidateQueries({ queryKey: dashboardKeys.tasks });
           },
         },
@@ -624,6 +625,8 @@ export function useDashboardMutations(): DashboardMutations {
         reordered.map((t) => ({ id: t.id, stackOrder: t.stackOrder })),
         {
           onError: () => {
+            // issue #185: RPC 経由で atomic。失敗時は DB が変更前のままなので
+            // invalidate で UI を DB に揃えれば足りる。
             queryClient.invalidateQueries({ queryKey: dashboardKeys.tasks });
           },
         },
