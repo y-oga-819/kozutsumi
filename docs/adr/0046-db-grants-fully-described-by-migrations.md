@@ -1,4 +1,4 @@
-# ADR 0045: public schema の table-level GRANT は migration が完全記述する
+# ADR 0046: public schema の table-level GRANT は migration が完全記述する
 
 - **Status**: Accepted
 - **Date**: 2026-05-04

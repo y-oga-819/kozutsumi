@@ -2,7 +2,7 @@
 --
 -- References:
 -- * Issue #200: preview Supabase project で authenticated に table-level GRANT が無く 42501 で全 REST が 403
--- * docs/adr/0045-db-grants-fully-described-by-migrations.md
+-- * docs/adr/0046-db-grants-fully-described-by-migrations.md
 --     public schema の table-level GRANT は migration が完全記述する原則
 -- * docs/adr/0001-action-logs-from-phase1.md
 --     anon に grant しない (Phase 1 方針)。RLS で行アクセスは制御済み
@@ -13,15 +13,15 @@
 --     preview reset / 再生成のたびに同じ問題が再発するため migration 化が必要
 --
 -- 設計判断:
--- * **table-level GRANT は permissive、RLS が gatekeeper** (ADR 0045)。
+-- * **table-level GRANT は permissive、RLS が gatekeeper** (ADR 0046)。
 --   `authenticated` に SELECT/INSERT/UPDATE/DELETE を一律に与え、
 --   実際の行アクセスは既存の RLS policy (user_id = auth.uid()) で制御する。
 --   action_logs は policy 上 UPDATE/DELETE は許可していないが、
 --   table-level GRANT を 4 種揃えても RLS が拒むため安全。
--- * **anon には grant しない** (ADR-0001 / ADR-0045 と整合)。
+-- * **anon には grant しない** (ADR-0001 / ADR-0046 と整合)。
 --   Phase 1 では未認証ユーザーに DB を直接触らせない方針。
 -- * **idempotent**。GRANT は重複実行しても no-op。本番に当てても既存暗黙 GRANT を破壊しない。
---   本番では事実上 no-op、preview では実体変化を起こす (ADR 0045 の趣旨)。
+--   本番では事実上 no-op、preview では実体変化を起こす (ADR 0046 の趣旨)。
 -- * **ALTER DEFAULT PRIVILEGES** で **postgres ロールが今後 public schema に作る table は
 --   自動で authenticated に GRANT** される。これにより新規 table 追加時に同じ罠を踏まない。
 --   (注) ALTER DEFAULT PRIVILEGES は **本 migration を流すロールが今後作る** object に効く。
