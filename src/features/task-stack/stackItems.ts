@@ -28,6 +28,13 @@ export type StackItemsResult = {
  *   - `decompose_status === 'decomposed'` → 子に置き換わるので Stack には出さない (除外)
  *   - それ以外 (`none` / `decomposing` / `skipped`) → `leaf-parent` で出す
  *
+ * 視覚順は DB の `(stack_order, created_at)` 順そのまま。子と親兄弟が同じ視覚平面に
+ * 並ぶため、`stack_order` 空間も同一ユーザースコープで衝突しないように振られている
+ * 前提に立つ ([ADR 0047](../../../docs/adr/0047-decompose-resplit-shift-scope-global.md):
+ * `fn_decompose_parent_task` / `fn_resplit_child_task` がユーザースコープ全体で後続
+ * シフトする)。この前提が崩れた状態 (旧 migration が残した `stack_order` 衝突等) は
+ * data migration で解消されている。
+ *
  * @param pendingTasks Stack に並べたい順 (= stack_order 昇順)
  * @param allTasks parent 解決のための全件 (pending + done を渡す)
  */

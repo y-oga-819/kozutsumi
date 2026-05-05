@@ -39,21 +39,62 @@ describe("reorderTasksById", () => {
   });
 
   test("decomposed 親が pending に混在しても、UI 行 (子+通常) が指定した順に並び、親は移動しない", () => {
-    // pending は stack_order 昇順。decomposed 親 p は子 c1/c2 の間に紛れている。
+    // ADR 0047 後の DB 状態: 親 p (0) → 子 c1, c2 (1, 2) → 単独 s (3)。
     // UI (buildStackItems) では p は除外され items = [c1, c2, s] と見える。
     // ユーザが items 上で「s を c1 の前に」ドラッグしたとき、p が動いたり
     // s の代わりに p が動くといったバグが起きないことを確認する (regression)。
     const pending = [
-      t({ id: "c1", parentTaskId: "p", stackOrder: 0 }),
-      t({ id: "c2", parentTaskId: "p", stackOrder: 1 }),
-      t({ id: "p", decomposeStatus: "decomposed", stackOrder: 2 }),
+      t({ id: "p", decomposeStatus: "decomposed", stackOrder: 0 }),
+      t({ id: "c1", parentTaskId: "p", stackOrder: 1 }),
+      t({ id: "c2", parentTaskId: "p", stackOrder: 2 }),
       t({ id: "s", stackOrder: 3 }),
     ];
 
     const result = reorderTasksById(pending, "s", "c1");
 
-    expect(result.map((x) => x.id)).toEqual(["s", "c1", "c2", "p"]);
+    // s が c1 の位置に入り、p は元の位置を保つ。
+    expect(result.map((x) => x.id)).toEqual(["p", "s", "c1", "c2"]);
     expect(result.map((x) => x.stackOrder)).toEqual([0, 1, 2, 3]);
+  });
+
+  test("Issue #204 派生: 子グループの間に未分解タスクを挿入できる", () => {
+    // ADR 0047 後の DB 状態: A(0,decomp), a1(1), a2(2), B(3,decomp), b1(4), b2(5), X(6)
+    // 視覚: a1, a2, b1, b2, X
+    // ユーザが X を a2 と b1 の間 (= b1 の位置) に落とす。
+    const pending = [
+      t({ id: "A", decomposeStatus: "decomposed", stackOrder: 0 }),
+      t({ id: "a1", parentTaskId: "A", stackOrder: 1 }),
+      t({ id: "a2", parentTaskId: "A", stackOrder: 2 }),
+      t({ id: "B", decomposeStatus: "decomposed", stackOrder: 3 }),
+      t({ id: "b1", parentTaskId: "B", stackOrder: 4 }),
+      t({ id: "b2", parentTaskId: "B", stackOrder: 5 }),
+      t({ id: "X", stackOrder: 6 }),
+    ];
+
+    const result = reorderTasksById(pending, "X", "b1");
+
+    // pending 順は A, a1, a2, B, X, b1, b2 になり、視覚は a1, a2, X, b1, b2 になる。
+    // (B は decomposed なので buildStackItems で除外される)
+    expect(result.map((x) => x.id)).toEqual(["A", "a1", "a2", "B", "X", "b1", "b2"]);
+    expect(result.map((x) => x.stackOrder)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  });
+
+  test("Issue #204 派生: 子グループ内の任意位置に別タスクを差し込める", () => {
+    // ADR 0047 後: A(0,decomp), a1(1), a2(2), a3(3), Y(4)
+    // 視覚: a1, a2, a3, Y。Y を a1 と a2 の間 (= a2 の位置) に落とす。
+    const pending = [
+      t({ id: "A", decomposeStatus: "decomposed", stackOrder: 0 }),
+      t({ id: "a1", parentTaskId: "A", stackOrder: 1 }),
+      t({ id: "a2", parentTaskId: "A", stackOrder: 2 }),
+      t({ id: "a3", parentTaskId: "A", stackOrder: 3 }),
+      t({ id: "Y", stackOrder: 4 }),
+    ];
+
+    const result = reorderTasksById(pending, "Y", "a2");
+
+    // pending: A, a1, Y, a2, a3。視覚: a1, Y, a2, a3
+    expect(result.map((x) => x.id)).toEqual(["A", "a1", "Y", "a2", "a3"]);
+    expect(result.map((x) => x.stackOrder)).toEqual([0, 1, 2, 3, 4]);
   });
 
   test("fromId === toId は no-op (元配列のコピーを返す)", () => {
@@ -83,14 +124,14 @@ describe("reorderTasksById", () => {
 
 describe("reorderGroupById (ADR-0041)", () => {
   test("親 P の子グループを兄弟 x の位置に移動: 相対順序を保ったまままとめて動く", () => {
-    // pending = [c1, c2, p (hidden), s, x] (visible = [c1, c2, s, x])
+    // ADR 0047 後の DB 状態: p(0,decomp), c1(1), c2(2), s(3), x(4)
+    // visible = [c1, c2, s, x]
     // groupIds は parent_task_id === 'p' を持つ行 (= c1, c2) のみ。
     // decomposed 親 p 自身は parentTaskId=null なのでグループ要素ではない。
-    // p の stack_order は hidden の都合で見かけ上影響しない。
     const pending = [
-      t({ id: "c1", parentTaskId: "p", stackOrder: 0 }),
-      t({ id: "c2", parentTaskId: "p", stackOrder: 1 }),
-      t({ id: "p", decomposeStatus: "decomposed", stackOrder: 2 }),
+      t({ id: "p", decomposeStatus: "decomposed", stackOrder: 0 }),
+      t({ id: "c1", parentTaskId: "p", stackOrder: 1 }),
+      t({ id: "c2", parentTaskId: "p", stackOrder: 2 }),
       t({ id: "s", stackOrder: 3 }),
       t({ id: "x", stackOrder: 4 }),
     ];
@@ -105,34 +146,35 @@ describe("reorderGroupById (ADR-0041)", () => {
   });
 
   test("分断中のグループ (P の子が複数の塊に分かれている) も全行が 1 グループとして動く", () => {
-    // pending = [c1, N, c2, c3, p (hidden), s] (visible = [c1, N, c2, c3, s])
-    // group = [c1, c2, c3] (parentTaskId === 'p')、N と p と s はグループ外。
+    // 分断は user の DnD 操作で発生する状態 (c1, c2, c3 が p の子だが間に N が入っている)。
+    // ADR 0047 の初期 layout は連続だが、reorder で分断され得る。
     const pending = [
-      t({ id: "c1", parentTaskId: "p", stackOrder: 0 }),
-      t({ id: "N", stackOrder: 1 }),
-      t({ id: "c2", parentTaskId: "p", stackOrder: 2 }),
-      t({ id: "c3", parentTaskId: "p", stackOrder: 3 }),
-      t({ id: "p", decomposeStatus: "decomposed", stackOrder: 4 }),
+      t({ id: "p", decomposeStatus: "decomposed", stackOrder: 0 }),
+      t({ id: "c1", parentTaskId: "p", stackOrder: 1 }),
+      t({ id: "N", stackOrder: 2 }),
+      t({ id: "c2", parentTaskId: "p", stackOrder: 3 }),
+      t({ id: "c3", parentTaskId: "p", stackOrder: 4 }),
       t({ id: "s", stackOrder: 5 }),
     ];
 
     const result = reorderGroupById(pending, "p", "s");
 
-    // others = [N, p, s]、group = [c1, c2, c3]。s 手前にグループ挿入で
-    // pending = [N, p, c1, c2, c3, s]。visible = [N, c1, c2, c3, s] で
+    // others = [p, N, s]、group = [c1, c2, c3]。s 手前にグループ挿入で
+    // pending = [p, N, c1, c2, c3, s]。visible = [N, c1, c2, c3, s] で
     // 分断状態 (c1, N, c2, c3) がグループ単位で再収束される。
-    expect(result.map((r) => r.id)).toEqual(["N", "p", "c1", "c2", "c3", "s"]);
+    expect(result.map((r) => r.id)).toEqual(["p", "N", "c1", "c2", "c3", "s"]);
     expect(result.map((r) => r.stackOrder)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
   test("グループ内の row へドロップは no-op", () => {
     const pending = [
-      t({ id: "c1", parentTaskId: "p", stackOrder: 0 }),
-      t({ id: "c2", parentTaskId: "p", stackOrder: 1 }),
-      t({ id: "s", stackOrder: 2 }),
+      t({ id: "p", decomposeStatus: "decomposed", stackOrder: 0 }),
+      t({ id: "c1", parentTaskId: "p", stackOrder: 1 }),
+      t({ id: "c2", parentTaskId: "p", stackOrder: 2 }),
+      t({ id: "s", stackOrder: 3 }),
     ];
     const result = reorderGroupById(pending, "p", "c2");
-    expect(result.map((r) => r.id)).toEqual(["c1", "c2", "s"]);
+    expect(result.map((r) => r.id)).toEqual(["p", "c1", "c2", "s"]);
   });
 
   test("該当 parent_task_id を持つ task が無いと no-op", () => {
@@ -177,9 +219,8 @@ describe("insertAtTopPlusOne (ADR-0040)", () => {
   });
 
   test("decomposed 親が pending の先頭に居ても、visible Top (= 子) の直下に入る", () => {
-    // pending = [decomposed 親 P, child_P_1, child_P_2, sibling]
-    // visible Top = child_P_1 (P は除外される)
-    // 新規 N は child_P_1 の直下 (= 親グループを分断する位置)
+    // ADR 0047 後: P(0,decomp), c1(1), c2(2), s(3)
+    // visible = [c1, c2, s]。Top = c1。N は c1 の直後 (= idx 2 の位置) に入る。
     const pending = [
       t({ id: "P", decomposeStatus: "decomposed", stackOrder: 0 }),
       t({ id: "c1", parentTaskId: "P", stackOrder: 1 }),
@@ -190,7 +231,6 @@ describe("insertAtTopPlusOne (ADR-0040)", () => {
 
     const result = insertAtTopPlusOne(pending, pending, newTask);
 
-    // pending の中で c1 の直後 (= idx 2 の位置) に N が入り、全て renumber される。
     expect(result.map((r) => r.id)).toEqual(["P", "c1", "N", "c2", "s"]);
     expect(result.map((r) => r.stackOrder)).toEqual([0, 1, 2, 3, 4]);
   });
