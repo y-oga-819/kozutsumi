@@ -22,11 +22,20 @@ export type StackItemsResult = {
 /**
  * `pendingTasks` を順序保ったまま Item に変換する。
  *
- * - 子タスク (`parentTaskId !== null`) は `leaf-child` に。
- *   親が見つからないデータ不整合は `leaf-parent` で fallback (落とさない)。
  * - 親タスク (`parentTaskId === null`):
- *   - `decompose_status === 'decomposed'` → 子に置き換わるので Stack には出さない (除外)
+ *   - `decompose_status === 'decomposed'` → 自身は Stack に出さず、その親に紐づく
+ *     pending な子をその位置に連続して emit する (ADR 0016 §1 + Issue #204)。
  *   - それ以外 (`none` / `decomposing` / `skipped`) → `leaf-parent` で出す
+ * - 子タスク (`parentTaskId !== null`):
+ *   - 親が pending 側にいる decomposed parent なら、親の位置で既に emit 済みなので skip。
+ *   - 親が `allTasks` には居るが pending 側に居ない (親が done 等の不整合) ケース、
+ *     および親が完全に missing なケースは natural order でその場に emit する (落とさない)。
+ *
+ * Issue #204: 旧実装は decomposed 親を skip しつつ子を natural order で emit していたため、
+ * トップレベル親と子が同じ `stack_order` を取り得る AI 分解直後 (fn_decompose_parent_task は
+ * 親の stack_order をそのまま base にして子を 0..N-1 で振る) に、`(stack_order, created_at)`
+ * 昇順だと「親兄弟と子」が交互に挟まる並びになっていた (例: ABCDE で B を分解 →
+ * A b C b D b E)。子を「親の位置」に集約して emit することで連続させる。
  *
  * @param pendingTasks Stack に並べたい順 (= stack_order 昇順)
  * @param allTasks parent 解決のための全件 (pending + done を渡す)
@@ -38,18 +47,48 @@ export function buildStackItems(
   const tasksById = new Map<string, Task>();
   for (const t of allTasks) tasksById.set(t.id, t);
 
+  // pending 側に存在する decomposed 親の id 集合。子の「親の位置に集約」と
+  // 「自然位置での重複 emit 抑止」の両方の判定に使う。
+  const decomposedParentIds = new Set<string>();
+  for (const t of pendingTasks) {
+    if (t.parentTaskId === null && t.decomposeStatus === "decomposed") {
+      decomposedParentIds.add(t.id);
+    }
+  }
+
+  // 入力順 = stack_order 昇順を保ったまま、上記 decomposed 親に紐づく pending 子配列を作る。
+  // 親が pending に居ない (= done 等) ケースの子は集約対象外なので含めない。
+  const pendingChildrenByParent = new Map<string, Task[]>();
+  for (const t of pendingTasks) {
+    if (t.parentTaskId === null) continue;
+    if (!decomposedParentIds.has(t.parentTaskId)) continue;
+    const arr = pendingChildrenByParent.get(t.parentTaskId);
+    if (arr) arr.push(t);
+    else pendingChildrenByParent.set(t.parentTaskId, [t]);
+  }
+
   const items: StackItem[] = [];
   for (const t of pendingTasks) {
     if (t.parentTaskId !== null) {
+      // 親が pending 側の decomposed parent なら、その親の位置でまとめて emit するので
+      // 自然位置では出さない (Issue #204)。
+      if (decomposedParentIds.has(t.parentTaskId)) continue;
       const parent = tasksById.get(t.parentTaskId);
       if (parent) {
+        // 親が done / decompose_status != decomposed 等の不整合系。落とさず自然位置に。
         items.push({ kind: "leaf-child", id: t.id, task: t, parent });
         continue;
       }
-      // 親が無いデータ不整合は落とさず leaf-parent として表示
+      // 親が allTasks にも無いデータ不整合は leaf-parent で fallback。
+      items.push({ kind: "leaf-parent", id: t.id, task: t });
+      continue;
     }
     if (t.decomposeStatus === "decomposed") {
-      // 子に置き換わるので Stack には出さない (ADR 0016 §1)
+      // 子を「この親の位置」に連続 emit (Issue #204)。
+      const children = pendingChildrenByParent.get(t.id) ?? [];
+      for (const c of children) {
+        items.push({ kind: "leaf-child", id: c.id, task: c, parent: t });
+      }
       continue;
     }
     items.push({ kind: "leaf-parent", id: t.id, task: t });
