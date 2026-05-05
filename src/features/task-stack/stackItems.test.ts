@@ -31,10 +31,22 @@ const t = (overrides: Partial<Task> & { id: string }): Task => ({ ...baseTask, .
 
 describe("buildStackItems", () => {
   test("decomposed 親は Stack 行から除外され、子だけがフラットに並ぶ", () => {
-    const parent = t({ id: "p", title: "親", decomposeStatus: "decomposed" });
-    const c1 = t({ id: "c1", title: "子1", parentTaskId: "p" });
-    const c2 = t({ id: "c2", title: "子2", parentTaskId: "p" });
-    const standalone = t({ id: "s", title: "単独タスク", decomposeStatus: "none" });
+    // ADR 0047: 新 fn_decompose_parent_task では親 (stack_order=0) → 子 (1, 2) → 単独 (3)
+    // と sequential に振られる。視覚順 = DB 順。
+    const parent = t({
+      id: "p",
+      title: "親",
+      stackOrder: 0,
+      decomposeStatus: "decomposed",
+    });
+    const c1 = t({ id: "c1", title: "子1", parentTaskId: "p", stackOrder: 1 });
+    const c2 = t({ id: "c2", title: "子2", parentTaskId: "p", stackOrder: 2 });
+    const standalone = t({
+      id: "s",
+      title: "単独タスク",
+      stackOrder: 3,
+      decomposeStatus: "none",
+    });
 
     const { items } = buildStackItems([parent, c1, c2, standalone], [parent, c1, c2, standalone]);
 
@@ -54,76 +66,43 @@ describe("buildStackItems", () => {
     expect(items.every((it) => it.kind === "leaf-parent")).toBe(true);
   });
 
-  test("Issue #204: AI 分解直後でも子は親の位置に連続して並ぶ (兄弟と交互にならない)", () => {
-    // fn_decompose_parent_task が出力する DB 状態を再現:
-    // - トップレベル A, B, C, D, E (stack_order 0..4, 全て parent=null)
-    // - B を AI 分解 → b1, b2, b3 が parent=B / stack_order=1, 2, 3 で挿入され、
-    //   B 自身は decompose_status='decomposed' になる
-    // SupabaseTaskGateway.list は (stack_order, created_at) 昇順なので、
-    // 親が子より先に created なら入力 pendingTasks の並びは下記になる:
-    const A = t({ id: "A", stackOrder: 0, createdAt: "2026-04-27T00:00:00" });
-    const B = t({
-      id: "B",
-      stackOrder: 1,
-      createdAt: "2026-04-27T00:01:00",
-      decomposeStatus: "decomposed",
-    });
-    const b1 = t({
-      id: "b1",
-      parentTaskId: "B",
-      stackOrder: 1,
-      createdAt: "2026-04-27T01:00:00",
-    });
-    const C = t({ id: "C", stackOrder: 2, createdAt: "2026-04-27T00:02:00" });
-    const b2 = t({
-      id: "b2",
-      parentTaskId: "B",
-      stackOrder: 2,
-      createdAt: "2026-04-27T01:00:01",
-    });
-    const D = t({ id: "D", stackOrder: 3, createdAt: "2026-04-27T00:03:00" });
-    const b3 = t({
-      id: "b3",
-      parentTaskId: "B",
-      stackOrder: 3,
-      createdAt: "2026-04-27T01:00:02",
-    });
-    const E = t({ id: "E", stackOrder: 4, createdAt: "2026-04-27T00:04:00" });
+  test("Issue #204: AI 分解直後の DB 状態 (ADR 0047 後) で子は親の位置に連続する", () => {
+    // ADR 0047 後の fn_decompose_parent_task が出力する DB 状態を再現:
+    // 元 pending: A(0), B(1), C(2), D(3), E(4) のうち B を AI 分解。
+    // 後続 (C, D, E) を +3 シフト → C(5), D(6), E(7)
+    // 子を B.stack_order+1, +2, +3 で insert → b1(2), b2(3), b3(4)
+    // B 自身は stack_order=1 のまま decompose_status='decomposed'
+    const A = t({ id: "A", stackOrder: 0 });
+    const B = t({ id: "B", stackOrder: 1, decomposeStatus: "decomposed" });
+    const b1 = t({ id: "b1", parentTaskId: "B", stackOrder: 2 });
+    const b2 = t({ id: "b2", parentTaskId: "B", stackOrder: 3 });
+    const b3 = t({ id: "b3", parentTaskId: "B", stackOrder: 4 });
+    const C = t({ id: "C", stackOrder: 5 });
+    const D = t({ id: "D", stackOrder: 6 });
+    const E = t({ id: "E", stackOrder: 7 });
 
-    const pending = [A, B, b1, C, b2, D, b3, E];
+    // SupabaseTaskGateway.list の (stack_order, created_at) 昇順そのまま
+    const pending = [A, B, b1, b2, b3, C, D, E];
     const { items } = buildStackItems(pending, pending);
 
     expect(items.map((i) => i.id)).toEqual(["A", "b1", "b2", "b3", "C", "D", "E"]);
   });
 
-  test("子が natural order で散らばっていても、親の位置に集約して並ぶ", () => {
-    // 上のテストの一般化: 入力順がどうあれ、子は decomposed 親の位置で連続する。
-    const X = t({ id: "X", stackOrder: 0 });
-    const Y = t({ id: "Y", stackOrder: 1, decomposeStatus: "decomposed" });
-    const y1 = t({ id: "y1", parentTaskId: "Y", stackOrder: 1 });
-    const y2 = t({ id: "y2", parentTaskId: "Y", stackOrder: 2 });
-    const Z = t({ id: "Z", stackOrder: 99 });
+  test("複数 decomposed 親が並んでも、それぞれの子グループが連続して並ぶ", () => {
+    // ADR 0047: 2 つの分解済み親が並ぶケース。視覚 = a1, a2, b1, b2, b3, X
+    const A = t({ id: "A", stackOrder: 0, decomposeStatus: "decomposed" });
+    const a1 = t({ id: "a1", parentTaskId: "A", stackOrder: 1 });
+    const a2 = t({ id: "a2", parentTaskId: "A", stackOrder: 2 });
+    const B = t({ id: "B", stackOrder: 3, decomposeStatus: "decomposed" });
+    const b1 = t({ id: "b1", parentTaskId: "B", stackOrder: 4 });
+    const b2 = t({ id: "b2", parentTaskId: "B", stackOrder: 5 });
+    const b3 = t({ id: "b3", parentTaskId: "B", stackOrder: 6 });
+    const X = t({ id: "X", stackOrder: 7 });
 
-    // pendingTasks: 子が Y より前にも後にも散らばる極端ケース
-    const pending = [y1, X, Y, y2, Z];
+    const pending = [A, a1, a2, B, b1, b2, b3, X];
     const { items } = buildStackItems(pending, pending);
 
-    // Y の位置で y1, y2 が連続して emit される。Y より前に居た y1 も
-    // 重複 emit されない (emittedChildIds で抑止)。
-    expect(items.map((i) => i.id)).toEqual(["X", "y1", "y2", "Z"]);
-  });
-
-  test("親が pending に居ない (= done 等) decomposed の子は natural order で残る", () => {
-    // 親が done 側に落ちて pendingTasks に存在しないケース。
-    // この時は子を「親の位置」に集約できないので、自然位置で leaf-child として emit する。
-    const doneParent = t({ id: "P", status: "done", decomposeStatus: "decomposed" });
-    const c = t({ id: "c", parentTaskId: "P", stackOrder: 0 });
-    const standalone = t({ id: "s", stackOrder: 1 });
-
-    const { items } = buildStackItems([c, standalone], [doneParent, c, standalone]);
-
-    expect(items.map((i) => i.id)).toEqual(["c", "s"]);
-    expect(items[0].kind).toBe("leaf-child");
+    expect(items.map((i) => i.id)).toEqual(["a1", "a2", "b1", "b2", "b3", "X"]);
   });
 
   test("子の parent が見つからない場合は leaf-parent で fallback (落とさない)", () => {
