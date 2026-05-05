@@ -1,7 +1,7 @@
 name: DB reset (preview)
 
 # preview Supabase project を main 状態に戻す。
-# 設計判断は ADR-0043 を参照。
+# 設計判断は ADR-0042 / ADR-0048 を参照（ADR-0043 は ADR-0048 で supersede された）。
 #
 # やること:
 # - public schema を drop → 作り直し
@@ -32,7 +32,7 @@ permissions:
   contents: read
 
 concurrency:
-  # migrate-preview と同じ group で serialize する (ADR-0043)。
+  # migrate-preview と同じ group で serialize する (ADR-0042 で共有 1 project とした帰結)。
   group: preview-db
   cancel-in-progress: false
 
@@ -101,5 +101,5 @@ jobs:
             echo "### DB reset (preview)"
             echo ""
             echo "- Trigger: \`${{ github.event_name }}\`"
-            echo "- ADR: [0042](../blob/main/docs/adr/0042-preview-env-uses-separate-supabase-project.md) / [0043](../blob/main/docs/adr/0043-preview-db-migration-auto-apply-on-pr-push.md)"
+            echo "- ADR: [0042](../blob/main/docs/adr/0042-preview-env-uses-separate-supabase-project.md) / [0048](../blob/main/docs/adr/0048-preview-db-migration-manual-dispatch.md)"
           } >> "$GITHUB_STEP_SUMMARY"
