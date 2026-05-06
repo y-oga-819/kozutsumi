@@ -5,7 +5,14 @@ import { useMemo, useState } from "react";
 import type { CalendarSubscription } from "@/entities/calendar-subscription/types";
 import { GoogleCalendarBadge } from "@/entities/event/GoogleCalendarBadge";
 import { EVENT_SOURCE, type Event, type EventVisibilityOverride } from "@/entities/event/types";
-import { fmtDuration, formatClock, localDateOf } from "@/shared/lib/time";
+import {
+  fmtDuration,
+  formatAllDayRange,
+  formatClock,
+  isAllDayEvent,
+  isDeadlineEvent,
+  localDateOf,
+} from "@/shared/lib/time";
 
 import { computeEventVisibilityState } from "./visibilityState";
 
@@ -221,6 +228,9 @@ function EventRow({
   const overrideActive = overrideValue !== "none";
   const next: EventVisibilityOverride = effectiveShown ? "hidden" : "shown";
   const buttonLabel = effectiveShown ? "予定化解除" : "予定化する";
+  // ADR-0050: 終日 / ゼロ長は専用ラベルで描画する。
+  const isAllDay = isAllDayEvent(event);
+  const isDeadline = !isAllDay && isDeadlineEvent(event);
   const start = formatClock(event.startTime);
   const end = formatClock(event.endTime);
   const minutes = Math.max(
@@ -278,7 +288,23 @@ function EventRow({
           </div>
         )}
         <div className="mt-0.5 text-[10px] tabular-nums text-fg-weak">
-          {start}–{end} ({fmtDuration(minutes)})
+          {isAllDay ? (
+            <>
+              <span
+                aria-label="終日"
+                className="mr-1.5 rounded-[3px] border border-bg-divider px-1 py-px font-jp text-[9px] text-fg-subtle"
+              >
+                終日
+              </span>
+              {formatAllDayRange(event)}
+            </>
+          ) : isDeadline ? (
+            <span aria-label={`${start} 締切`}>⏰ {start}</span>
+          ) : (
+            <>
+              {start}–{end} ({fmtDuration(minutes)})
+            </>
+          )}
         </div>
       </div>
       <div className="flex shrink-0 items-center">

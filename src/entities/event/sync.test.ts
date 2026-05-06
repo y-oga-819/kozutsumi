@@ -57,14 +57,17 @@ describe("resolveEventTimes", () => {
     expect(resolveEventTimes({ id: "e3", start: {}, end: {} })).toBeNull();
   });
 
-  test("end === start のゼロ長イベントは null を返す (events_time_order 違反回避 / Issue #219)", () => {
+  test("end === start のゼロ長イベントは取り込む (ADR-0050 / Issue #222 締切系)", () => {
     expect(
       resolveEventTimes({
         id: "zero-length",
         start: { dateTime: "2026-04-23T10:00:00+09:00" },
         end: { dateTime: "2026-04-23T10:00:00+09:00" },
       }),
-    ).toBeNull();
+    ).toEqual({
+      start: "2026-04-23T01:00:00.000Z",
+      end: "2026-04-23T01:00:00.000Z",
+    });
   });
 
   test("end < start の逆順イベントは null を返す (events_time_order 違反回避 / Issue #219)", () => {
@@ -77,14 +80,17 @@ describe("resolveEventTimes", () => {
     ).toBeNull();
   });
 
-  test("終日イベントで start.date === end.date のゼロ長は null を返す", () => {
+  test("終日イベントで start.date === end.date のゼロ日終日も取り込む (ADR-0050)", () => {
     expect(
       resolveEventTimes({
         id: "all-day-zero",
         start: { date: "2026-04-23" },
         end: { date: "2026-04-23" },
       }),
-    ).toBeNull();
+    ).toEqual({
+      start: "2026-04-22T15:00:00.000Z",
+      end: "2026-04-22T15:00:00.000Z",
+    });
   });
 });
 
@@ -209,7 +215,7 @@ describe("partitionEvents", () => {
     ]);
   });
 
-  test("ゼロ長 / 逆順イベントは skipped に invalid_time_range として分類される (Issue #219)", () => {
+  test("ゼロ長は upsert に乗り、逆順だけ skipped に invalid_time_range として残る (ADR-0050)", () => {
     const events: GoogleCalendarEvent[] = [
       {
         id: "ok",
@@ -233,14 +239,8 @@ describe("partitionEvents", () => {
 
     const result = partitionEvents(events, "shared");
 
-    expect(result.upserts.map((u) => u.externalId)).toEqual(["ok"]);
+    expect(result.upserts.map((u) => u.externalId)).toEqual(["ok", "zero"]);
     expect(result.skipped).toEqual([
-      {
-        externalCalendarId: "shared",
-        externalId: "zero",
-        title: "ゼロ長",
-        reason: "invalid_time_range",
-      },
       {
         externalCalendarId: "shared",
         externalId: "reversed",
@@ -536,7 +536,7 @@ describe("syncGoogleCalendar (full sync)", () => {
     expect(listEvents).toHaveBeenCalledTimes(2);
   });
 
-  test("不正な時刻の予定は upsert からスキップされ SyncResult.skipped に集約される (Issue #219)", async () => {
+  test("逆順の予定は upsert からスキップされ SyncResult.skipped に集約される (Issue #219 / ADR-0050)", async () => {
     const { gateway, upsertCalls } = makeFakeGateway();
     const listEvents = vi.fn<ListEventsFn>(async (params) => {
       if (params.calendarId === "primary") {
@@ -549,10 +549,10 @@ describe("syncGoogleCalendar (full sync)", () => {
         items: [
           makeActiveEvent("shared-ok"),
           {
-            id: "shared-zero",
-            summary: "ゼロ長",
-            start: { dateTime: "2026-04-23T12:00:00Z" },
-            end: { dateTime: "2026-04-23T12:00:00Z" },
+            id: "shared-reversed",
+            summary: "逆順",
+            start: { dateTime: "2026-04-23T13:00:00Z" },
+            end: { dateTime: "2026-04-23T12:30:00Z" },
           },
         ],
         nextSyncToken: "tok-shared",
@@ -584,8 +584,8 @@ describe("syncGoogleCalendar (full sync)", () => {
     expect(result.skipped).toEqual([
       {
         externalCalendarId: "shared@group.calendar.google.com",
-        externalId: "shared-zero",
-        title: "ゼロ長",
+        externalId: "shared-reversed",
+        title: "逆順",
         reason: "invalid_time_range",
       },
     ]);

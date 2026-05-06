@@ -1,9 +1,14 @@
 import { describe, expect, test } from "vitest";
 import {
+  allDayDayCount,
+  formatAllDayRange,
   formatDate,
+  formatJstMonthDay,
   formatRelativeTime,
   fmtDuration,
   fmtMin,
+  isAllDayEvent,
+  isDeadlineEvent,
   localDateOf,
   timeToMin,
   toDateTimeLocalInput,
@@ -93,6 +98,126 @@ describe("localDateOf", () => {
 
   test("月日は 2 桁ゼロ埋めする", () => {
     expect(localDateOf("2026-01-02T03:04:05")).toBe("2026-01-02");
+  });
+});
+
+describe("isAllDayEvent (ADR-0050)", () => {
+  test("JST 00:00 開始 + 24h で終日と判定する", () => {
+    expect(
+      isAllDayEvent({
+        // 2026-05-06 JST 00:00 = 2026-05-05 15:00 UTC
+        startTime: "2026-05-05T15:00:00.000Z",
+        endTime: "2026-05-06T15:00:00.000Z",
+      }),
+    ).toBe(true);
+  });
+
+  test("JST 00:00 開始 + 24h の倍数 (複数日終日) も true", () => {
+    expect(
+      isAllDayEvent({
+        startTime: "2026-05-05T15:00:00.000Z",
+        endTime: "2026-05-08T15:00:00.000Z", // 3 日連続
+      }),
+    ).toBe(true);
+  });
+
+  test("JST 00:00 開始でも duration が 24h 未満なら false", () => {
+    expect(
+      isAllDayEvent({
+        startTime: "2026-05-05T15:00:00.000Z",
+        endTime: "2026-05-06T03:00:00.000Z",
+      }),
+    ).toBe(false);
+  });
+
+  test("JST 00:00 開始でも duration が 0 なら false (ゼロ長は終日ではない)", () => {
+    expect(
+      isAllDayEvent({
+        startTime: "2026-05-05T15:00:00.000Z",
+        endTime: "2026-05-05T15:00:00.000Z",
+      }),
+    ).toBe(false);
+  });
+
+  test("JST 00:00 でない開始は false (通常の timed event)", () => {
+    expect(
+      isAllDayEvent({
+        // 2026-05-06 JST 10:00
+        startTime: "2026-05-06T01:00:00.000Z",
+        endTime: "2026-05-06T02:00:00.000Z",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("isDeadlineEvent (ADR-0050)", () => {
+  test("start === end は true", () => {
+    expect(
+      isDeadlineEvent({
+        startTime: "2026-05-06T09:00:00.000Z",
+        endTime: "2026-05-06T09:00:00.000Z",
+      }),
+    ).toBe(true);
+  });
+
+  test("start !== end は false", () => {
+    expect(
+      isDeadlineEvent({
+        startTime: "2026-05-06T09:00:00.000Z",
+        endTime: "2026-05-06T10:00:00.000Z",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("allDayDayCount", () => {
+  test("単日終日は 1", () => {
+    expect(
+      allDayDayCount({
+        startTime: "2026-05-05T15:00:00.000Z",
+        endTime: "2026-05-06T15:00:00.000Z",
+      }),
+    ).toBe(1);
+  });
+
+  test("3 日連続終日は 3", () => {
+    expect(
+      allDayDayCount({
+        startTime: "2026-05-05T15:00:00.000Z",
+        endTime: "2026-05-08T15:00:00.000Z",
+      }),
+    ).toBe(3);
+  });
+});
+
+describe("formatJstMonthDay", () => {
+  test("UTC ISO を JST の M/D で返す", () => {
+    // 2026-05-05 15:00 UTC = 2026-05-06 JST
+    expect(formatJstMonthDay("2026-05-05T15:00:00.000Z")).toBe("5/6");
+  });
+
+  test("日付境界ケース (UTC 23:30 = JST 翌 8:30) でも JST 日付を返す", () => {
+    expect(formatJstMonthDay("2026-05-05T23:30:00.000Z")).toBe("5/6");
+  });
+});
+
+describe("formatAllDayRange", () => {
+  test("単日終日は M/D だけ返す", () => {
+    expect(
+      formatAllDayRange({
+        startTime: "2026-05-05T15:00:00.000Z",
+        endTime: "2026-05-06T15:00:00.000Z",
+      }),
+    ).toBe("5/6");
+  });
+
+  test("複数日終日は inclusive 末日まで M/D → M/D 形式で返す", () => {
+    expect(
+      formatAllDayRange({
+        startTime: "2026-05-05T15:00:00.000Z",
+        endTime: "2026-05-08T15:00:00.000Z", // exclusive end (= 5/9 JST 00:00 ではなく 5/8 JST 24:00)
+      }),
+    ).toBe("5/6 → 5/8");
   });
 });
 
