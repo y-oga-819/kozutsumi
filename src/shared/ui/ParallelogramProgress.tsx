@@ -2,7 +2,7 @@
  * AI 分解後の親の進捗を平行四辺形 (skewX) セグメントで可視化する。
  * ADR 0016 §5: 数字併記の重複を避け、子の完了境界と「Stack 上の自分の番」を
  * ひとつのバーで読み取れるようにする。
- * ADR 0051: 大量分解 (N>10) でも segment 幅は固定し、container 超過時は wrap で次行へ。
+ * ADR 0055: 大量分解 (N>10) でも segment 幅は固定し、container 超過時は wrap で次行へ。
  *
  * - 完了: 親色で塗り
  * - 現在 (= 自分の番、未完了): 親色の枠強調 + 中抜き
@@ -29,7 +29,7 @@ const GAP_PX = 3;
 
 /**
  * size ごとに segment の幅・高さ・「1 行に並べる最大件数」を持つ。
- * maxPerRow を超えると `flex-wrap` で次の行へ折り返す (ADR 0051)。
+ * maxPerRow を超えると `flex-wrap` で次の行へ折り返す (ADR 0055)。
  */
 const SEGMENT: Record<Size, { w: number; h: number; maxPerRow: number }> = {
   md: { w: 12, h: 8, maxPerRow: 15 },
