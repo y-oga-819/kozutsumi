@@ -2,9 +2,13 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
+import { toast } from "sonner";
 
 import { ACTION_TYPES, log } from "@/entities/action-log/logger";
 import type { CalendarSyncTrigger } from "@/entities/action-log/types";
+import type { SkippedEvent } from "@/entities/event/sync";
+
+import { setSkippedEvents } from "./skippedEventsCache";
 
 const SYNC_ENDPOINT = "/api/calendar/sync";
 const EVENTS_QUERY_KEY = ["events"] as const;
@@ -13,6 +17,7 @@ export type CalendarSyncResult = {
   synced: number;
   deleted: number;
   lastSyncedAt: string;
+  skipped: SkippedEvent[];
 };
 
 /**
@@ -44,7 +49,11 @@ export function useCalendarSync(): UseCalendarSyncResult {
   const [needsReauth, setNeedsReauth] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
-  const mutation = useMutation<CalendarSyncResult, Error, CalendarSyncTrigger>({
+  const mutation = useMutation<
+    CalendarSyncResult & { trigger: CalendarSyncTrigger },
+    Error,
+    CalendarSyncTrigger
+  >({
     mutationFn: async (trigger) => {
       const res = await fetch(SYNC_ENDPOINT, { method: "POST" });
       if (res.status === 401) {
@@ -60,12 +69,18 @@ export function useCalendarSync(): UseCalendarSyncResult {
         deleted: body.deleted,
         trigger,
       });
-      return body;
+      return { ...body, trigger };
     },
     onSuccess: (data) => {
       setNeedsReauth(false);
       setLastSyncedAt(data.lastSyncedAt);
+      // 失敗 (skipped) はバナーで永続表示するため、trigger に依らずキャッシュを更新する。
+      setSkippedEvents(queryClient, data.skipped);
       void queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY });
+      // トーストはユーザーが自分で同期を発火した時だけ出す (lazy sync は鬱陶しいので無音)。
+      if (data.trigger === "manual") {
+        showSyncToast(data.synced, data.skipped.length);
+      }
     },
     onError: (err) => {
       if (err.message === CALENDAR_SYNC_REAUTH_REQUIRED) {
@@ -98,4 +113,21 @@ async function safeJson(res: Response): Promise<unknown> {
   } catch {
     return null;
   }
+}
+
+/**
+ * 手動同期のフィードバックトースト。skipped > 0 のときだけ詳細リンクを促す文言を出す。
+ * 詳細はバナー側の dialog に集約する (トースト本体に列挙しない)。
+ */
+export function showSyncToast(syncedCount: number, skippedCount: number): void {
+  if (skippedCount > 0) {
+    toast.warning(
+      `${syncedCount} 件取り込み・${skippedCount} 件は時刻が不正のためスキップしました`,
+      {
+        description: "上部のバナーから詳細を確認できます",
+      },
+    );
+    return;
+  }
+  toast.success(`${syncedCount} 件の予定を取り込みました`);
 }

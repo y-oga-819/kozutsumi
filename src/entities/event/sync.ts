@@ -54,6 +54,18 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_TITLE = "(タイトルなし)";
 
 /**
+ * 取り込みをスキップした 1 件分の情報。Issue #219 の events_time_order 違反、または時刻情報欠損などで
+ * mapper が `null` を返したものをまとめて UI に伝える (バナー / トーストの「N 件スキップ」表示)。
+ */
+export type SkippedEvent = {
+  externalCalendarId: string;
+  externalId: string;
+  /** Google から取れたタイトル。`undefined` の場合は UI 側で「(タイトルなし)」にフォールバックする。 */
+  title: string | undefined;
+  reason: "invalid_time_range" | "missing_time";
+};
+
+/**
  * 1 calendar 分の sync 結果。複数 calendar の集約は呼び出し側で sum する。
  * `triple` は action_log の triple metadata (`event_deleted_by_source` 等) を作るために
  * 呼び出し側へ渡す source-agnostic 識別子。
@@ -69,6 +81,8 @@ export type CalendarSyncOutcome = {
     eventSnapshot: DeletedEventSnapshot;
     dependentTaskIds: string[];
   }>;
+  /** 取り込みをスキップした event 一覧。空配列なら全件取り込み済み。 */
+  skipped: SkippedEvent[];
 };
 
 export type SyncResult = {
@@ -77,6 +91,8 @@ export type SyncResult = {
   lastSyncedAt: string;
   /** 同期した calendar 単位の outcome 配列。1 calendar = 1 entry。 */
   outcomes: CalendarSyncOutcome[];
+  /** 全 calendar 集約後のスキップ予定。UI が件数 / 詳細を表示する材料。 */
+  skipped: SkippedEvent[];
 };
 
 /**
@@ -165,6 +181,7 @@ export async function syncGoogleCalendar(
       synced: result.synced,
       deleted: result.deleted,
       deletions: result.deletions,
+      skipped: result.skipped,
     });
 
     // calendar 単位の lastSyncedAt を保存する (1 calendar 失敗 → 他 calendar は完了状態を残す)。
@@ -186,6 +203,7 @@ export async function syncGoogleCalendar(
     deleted: totalDeleted,
     lastSyncedAt,
     outcomes,
+    skipped: outcomes.flatMap((o) => o.skipped),
   };
 }
 
@@ -271,7 +289,7 @@ async function syncOneCalendar(
     break;
   }
 
-  const { upserts, cancelled } = partitionEvents(collected, target.externalCalendarId);
+  const { upserts, cancelled, skipped } = partitionEvents(collected, target.externalCalendarId);
 
   let synced = 0;
   if (upserts.length > 0) {
@@ -313,6 +331,7 @@ async function syncOneCalendar(
     synced,
     deleted,
     deletions,
+    skipped,
     nextSyncToken,
   };
 }
@@ -512,18 +531,41 @@ export function partitionEvents(
 ): {
   upserts: UpsertGoogleCalendarEventInput[];
   cancelled: string[];
+  skipped: SkippedEvent[];
 } {
   const upserts: UpsertGoogleCalendarEventInput[] = [];
   const cancelled: string[] = [];
+  const skipped: SkippedEvent[] = [];
   for (const ev of events) {
     if (ev.status === "cancelled") {
       cancelled.push(ev.id);
       continue;
     }
     const mapped = mapGoogleEventToUpsertInput(ev, externalCalendarId);
-    if (mapped) upserts.push(mapped);
+    if (mapped) {
+      upserts.push(mapped);
+      continue;
+    }
+    skipped.push({
+      externalCalendarId,
+      externalId: ev.id,
+      title: ev.summary,
+      reason: classifySkipReason(ev),
+    });
   }
-  return { upserts, cancelled };
+  return { upserts, cancelled, skipped };
+}
+
+/**
+ * `mapGoogleEventToUpsertInput` が `null` を返した event の理由を分類する。
+ * - 時刻情報が片側欠損 / 両側欠損 → `missing_time`
+ * - 時刻はあるが end <= start → `invalid_time_range` (events_time_order 違反 / Issue #219)
+ */
+function classifySkipReason(event: GoogleCalendarEvent): SkippedEvent["reason"] {
+  const hasDateTimePair = Boolean(event.start?.dateTime && event.end?.dateTime);
+  const hasDatePair = Boolean(event.start?.date && event.end?.date);
+  if (!hasDateTimePair && !hasDatePair) return "missing_time";
+  return "invalid_time_range";
 }
 
 export function mapGoogleEventToUpsertInput(
@@ -548,19 +590,24 @@ export function mapGoogleEventToUpsertInput(
 export function resolveEventTimes(
   event: GoogleCalendarEvent,
 ): { start: string; end: string } | null {
+  let times: { start: string; end: string } | null = null;
   if (event.start?.dateTime && event.end?.dateTime) {
-    return {
+    times = {
       start: new Date(event.start.dateTime).toISOString(),
       end: new Date(event.end.dateTime).toISOString(),
     };
-  }
-  if (event.start?.date && event.end?.date) {
-    return {
+  } else if (event.start?.date && event.end?.date) {
+    times = {
       start: allDayDateToJstUtc(event.start.date),
       end: allDayDateToJstUtc(event.end.date),
     };
   }
-  return null;
+  if (!times) return null;
+  // events_time_order check (end_time > start_time) を満たさない event は丸ごとスキップする。
+  // 1 件でも違反があると Supabase の batch upsert が calendar 単位で全件ロールバックされ、
+  // その calendar の取り込みが完全に失われるため (Issue #219)。
+  if (Date.parse(times.end) <= Date.parse(times.start)) return null;
+  return times;
 }
 
 export function extractMeetUrl(event: GoogleCalendarEvent): string | null {

@@ -89,6 +89,8 @@ export async function POST() {
       synced: result.synced,
       deleted: result.deleted,
       lastSyncedAt: result.lastSyncedAt,
+      // skipped 情報を UI まで持ち出してバナー / トーストの「N 件スキップ」表示に使う (Issue #219 続き)。
+      skipped: result.skipped,
     });
   } catch (error) {
     if (error instanceof ProviderTokenMissingError || error instanceof RefreshTokenExpiredError) {

@@ -104,6 +104,7 @@ describe("POST /api/calendar/sync", () => {
       deleted: 1,
       lastSyncedAt: "2026-04-24T00:00:00.000Z",
       outcomes: [],
+      skipped: [],
     });
 
     const response = await POST();
@@ -114,8 +115,44 @@ describe("POST /api/calendar/sync", () => {
       synced: 5,
       deleted: 1,
       lastSyncedAt: "2026-04-24T00:00:00.000Z",
+      skipped: [],
     });
     expect(syncGoogleCalendar).toHaveBeenCalledTimes(1);
+  });
+
+  test("正常系: skipped がある場合はそのまま 200 で配列を返す", async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      makeSupabase({
+        provider_token: "access-1",
+        provider_refresh_token: "refresh-1",
+      }),
+    );
+    vi.mocked(syncGoogleCalendar).mockResolvedValue({
+      synced: 2,
+      deleted: 0,
+      lastSyncedAt: "2026-04-24T00:00:00.000Z",
+      outcomes: [],
+      skipped: [
+        {
+          externalCalendarId: "shared@group.calendar.google.com",
+          externalId: "evt-broken",
+          title: "ゼロ長",
+          reason: "invalid_time_range",
+        },
+      ],
+    });
+
+    const response = await POST();
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { skipped: unknown };
+    expect(body.skipped).toEqual([
+      {
+        externalCalendarId: "shared@group.calendar.google.com",
+        externalId: "evt-broken",
+        title: "ゼロ長",
+        reason: "invalid_time_range",
+      },
+    ]);
   });
 
   test("その他の例外は 500 を返す", async () => {

@@ -7,6 +7,9 @@ import type {
   CalendarSubscription,
   SetAutoPromoteResult,
 } from "@/entities/calendar-subscription/types";
+import type { SkippedEvent } from "@/entities/event/sync";
+import { setSkippedEvents } from "@/features/sync/skippedEventsCache";
+import { showSyncToast } from "@/features/sync/useCalendarSync";
 import type { GoogleCalendarListEntry } from "@/shared/google/calendar";
 
 const SUBSCRIPTIONS_QUERY_KEY = ["calendar", "subscriptions"] as const;
@@ -90,10 +93,24 @@ export function useCalendarSubscriptions() {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error ?? `subscribe_failed: ${res.status}`);
       }
-      return (await res.json()) as { subscription: CalendarSubscription };
+      return (await res.json()) as {
+        subscription: CalendarSubscription;
+        sync: {
+          synced: number;
+          deleted: number;
+          lastSyncedAt: string;
+          skipped: SkippedEvent[];
+        } | null;
+      };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       void invalidate();
+      // 初回同期は手動操作の延長なので、結果トースト + skipped をバナー用キャッシュに反映する。
+      // sync が null のケース (provider_token_missing 等で初回同期がスキップされた場合) は無視。
+      if (data.sync) {
+        setSkippedEvents(queryClient, data.sync.skipped);
+        showSyncToast(data.sync.synced, data.sync.skipped.length);
+      }
     },
   });
 

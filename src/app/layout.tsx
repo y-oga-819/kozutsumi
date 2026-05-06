@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Noto_Sans_JP } from "next/font/google";
+import { Toaster } from "sonner";
 
 import { QueryProvider } from "@/shared/query/QueryProvider";
 
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ja" className={`${ibmPlexMono.variable} ${notoSansJp.variable}`}>
       <body className="mx-auto min-h-screen max-w-[480px] bg-bg-primary font-mono text-fg-default">
         <QueryProvider>{children}</QueryProvider>
+        <Toaster position="top-center" richColors closeButton />
       </body>
     </html>
   );
