@@ -1,4 +1,4 @@
-# ADR 0051: 大量分解時の進捗バーは平行四辺形 segment を固定幅 + wrap で表示する
+# ADR 0055: 大量分解時の進捗バーは平行四辺形 segment を固定幅 + wrap で表示する
 
 - **Status**: Accepted
 - **Date**: 2026-05-06
