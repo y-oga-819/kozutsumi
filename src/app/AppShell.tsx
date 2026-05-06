@@ -26,6 +26,7 @@ import { ProjectDetailPanel } from "@/features/project-detail/ProjectDetailPanel
 import { SettingsPanel } from "@/features/settings/SettingsPanel";
 import { CalendarSyncButton } from "@/features/sync/CalendarSyncButton";
 import { ReauthBanner } from "@/features/sync/ReauthBanner";
+import { SyncSkippedBanner } from "@/features/sync/SyncSkippedBanner";
 import { useCalendarSync } from "@/features/sync/useCalendarSync";
 import { useLazyCalendarSync } from "@/features/sync/useLazyCalendarSync";
 import { TaskDetailPanel } from "@/features/task-detail/TaskDetailPanel";
@@ -230,6 +231,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
           </div>
 
           <ReauthBanner visible={calendarSync.needsReauth} onDismiss={calendarSync.dismissReauth} />
+          <SyncSkippedBanner />
 
           {view === "stack" ? (
             <StackView

@@ -117,6 +117,7 @@ export async function POST(req: Request) {
             synced: syncOutcome.synced,
             deleted: syncOutcome.deleted,
             lastSyncedAt: syncOutcome.lastSyncedAt,
+            skipped: syncOutcome.skipped,
           }
         : null,
     });

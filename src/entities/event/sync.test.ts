@@ -191,7 +191,7 @@ describe("partitionEvents", () => {
         end: { dateTime: "2026-04-23T13:00:00Z" },
       },
       { id: "deleted-2", status: "cancelled" },
-      // 壊れたイベントは無視する
+      // 壊れたイベントは skipped に分類する
       { id: "broken", start: {}, end: {} },
     ];
 
@@ -199,6 +199,55 @@ describe("partitionEvents", () => {
 
     expect(result.cancelled).toEqual(["deleted-1", "deleted-2"]);
     expect(result.upserts.map((u) => u.externalId)).toEqual(["active-1", "active-2"]);
+    expect(result.skipped).toEqual([
+      {
+        externalCalendarId: "primary",
+        externalId: "broken",
+        title: undefined,
+        reason: "missing_time",
+      },
+    ]);
+  });
+
+  test("ゼロ長 / 逆順イベントは skipped に invalid_time_range として分類される (Issue #219)", () => {
+    const events: GoogleCalendarEvent[] = [
+      {
+        id: "ok",
+        summary: "通常",
+        start: { dateTime: "2026-04-23T10:00:00Z" },
+        end: { dateTime: "2026-04-23T11:00:00Z" },
+      },
+      {
+        id: "zero",
+        summary: "ゼロ長",
+        start: { dateTime: "2026-04-23T12:00:00Z" },
+        end: { dateTime: "2026-04-23T12:00:00Z" },
+      },
+      {
+        id: "reversed",
+        summary: "逆順",
+        start: { dateTime: "2026-04-23T13:00:00Z" },
+        end: { dateTime: "2026-04-23T12:30:00Z" },
+      },
+    ];
+
+    const result = partitionEvents(events, "shared");
+
+    expect(result.upserts.map((u) => u.externalId)).toEqual(["ok"]);
+    expect(result.skipped).toEqual([
+      {
+        externalCalendarId: "shared",
+        externalId: "zero",
+        title: "ゼロ長",
+        reason: "invalid_time_range",
+      },
+      {
+        externalCalendarId: "shared",
+        externalId: "reversed",
+        title: "逆順",
+        reason: "invalid_time_range",
+      },
+    ]);
   });
 });
 
@@ -485,6 +534,62 @@ describe("syncGoogleCalendar (full sync)", () => {
 
     expect(result.outcomes.map((o) => o.externalCalendarId)).toEqual(["primary", "team@x.com"]);
     expect(listEvents).toHaveBeenCalledTimes(2);
+  });
+
+  test("不正な時刻の予定は upsert からスキップされ SyncResult.skipped に集約される (Issue #219)", async () => {
+    const { gateway, upsertCalls } = makeFakeGateway();
+    const listEvents = vi.fn<ListEventsFn>(async (params) => {
+      if (params.calendarId === "primary") {
+        return {
+          items: [makeActiveEvent("ok-1")],
+          nextSyncToken: "tok-primary",
+        };
+      }
+      return {
+        items: [
+          makeActiveEvent("shared-ok"),
+          {
+            id: "shared-zero",
+            summary: "ゼロ長",
+            start: { dateTime: "2026-04-23T12:00:00Z" },
+            end: { dateTime: "2026-04-23T12:00:00Z" },
+          },
+        ],
+        nextSyncToken: "tok-shared",
+      };
+    });
+
+    const result = await syncGoogleCalendar(
+      FAKE_SUPABASE,
+      makeDeps({
+        gateway,
+        listEvents,
+        targets: [
+          {
+            externalAccountUuid: "acc-uuid",
+            externalAccountIdentifier: "user@example.com",
+            externalCalendarId: "primary",
+          },
+          {
+            externalAccountUuid: "acc-uuid",
+            externalAccountIdentifier: "user@example.com",
+            externalCalendarId: "shared@group.calendar.google.com",
+          },
+        ],
+      }),
+    );
+
+    expect(result.synced).toBe(2);
+    expect(upsertCalls.flatMap((c) => c.map((e) => e.externalId))).toEqual(["ok-1", "shared-ok"]);
+    expect(result.skipped).toEqual([
+      {
+        externalCalendarId: "shared@group.calendar.google.com",
+        externalId: "shared-zero",
+        title: "ゼロ長",
+        reason: "invalid_time_range",
+      },
+    ]);
+    expect(result.outcomes.find((o) => o.externalCalendarId === "primary")?.skipped).toEqual([]);
   });
 
   test("空結果の時は upsert/delete を呼ばない", async () => {
