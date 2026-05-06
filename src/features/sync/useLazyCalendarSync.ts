@@ -2,8 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-import type { CalendarSyncState, CalendarSyncStateGateway } from "@/entities/calendar-sync/gateway";
-import { SupabaseCalendarSyncStateGateway } from "@/entities/calendar-sync/supabase-gateway";
+import type { CalendarSyncState } from "@/entities/calendar-sync/gateway";
 import type { CalendarSyncTrigger } from "@/entities/action-log/types";
 import { createClient } from "@/shared/supabase/client";
 
@@ -60,26 +59,26 @@ export function shouldTriggerLazy(state: CalendarSyncState | null, now: Date): b
 
 async function defaultGetState(): Promise<CalendarSyncState | null> {
   const supabase = createClient();
-  // ADR 0031/0033: sync_state は (source, external_account_id, external_calendar_id) で識別する。
-  // client 側では read-only に primary Google account を解決し、未存在なら null を返して
-  // 「sync が一度も走っていない」(= trigger 候補) として扱う。
-  // external_accounts の lazy 作成は server 側 sync 経路 (sync.ts) で行う。
+  // ADR 0049: external_calendar_id は Google API resolve した実 id (primary なら email)。
+  // client から特定 calendar 行を狙い撃ちできないので、user の google_calendar sync_state 行のうち
+  // **最新の lastSyncedAt** を staleness 判定に使う。「直近どこかが sync 成功したか」が判断軸。
+  // 行が 1 件もなければ未 sync として null を返し、lazy trigger 候補にする。
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: account } = await supabase
-    .from("external_accounts")
-    .select("id")
+  const { data: rows, error } = await supabase
+    .from("user_calendar_sync_state")
+    .select("last_synced_at, sync_token")
     .eq("user_id", user.id)
     .eq("source", "google_calendar")
-    .limit(1)
-    .maybeSingle();
-  if (!account) return null;
-  const gateway: CalendarSyncStateGateway = new SupabaseCalendarSyncStateGateway(supabase);
-  return gateway.get({
-    source: "google_calendar",
-    externalAccountId: account.id,
-    externalCalendarId: "primary",
-  });
+    .order("last_synced_at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const row = rows?.[0];
+  if (!row) return null;
+  return {
+    lastSyncedAt: row.last_synced_at,
+    syncToken: row.sync_token,
+  };
 }

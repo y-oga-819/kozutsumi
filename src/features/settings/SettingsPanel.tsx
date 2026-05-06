@@ -29,8 +29,10 @@ type SettingsPanelProps = {
  * - subscription 一覧: 取り込み中の calendar (auto_promote の現在値も表示)。
  * - 候補一覧: Google API で取得した calendar list のうち、未 subscribe のもの。
  *
- * 取り込み中は disabled にして連打を防ぐ。primary calendar (= migration seed の subscription) も
- * 通常の操作対象として扱う (取り込み解除可)。
+ * 取り込み中は disabled にして連打を防ぐ。primary calendar (= 初回 sync 時に lazy seed される
+ * subscription、ADR 0049) も通常の操作対象として扱う (取り込み解除可)。
+ * 候補との dedup は `external_calendar_id` の文字列比較。primary は Google API resolve した実 id
+ * (= email) で保存しているため、Google calendarList の `id` とそのまま一致する (ADR 0049)。
  */
 export function SettingsPanel({
   open,
