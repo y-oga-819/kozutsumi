@@ -76,7 +76,7 @@ const MS_PER_HOUR = 60 * MS_PER_MIN;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
 
 // ADR-0050: 終日 / ゼロ長 event を heuristic で扱う。
-// kozutsumi は JST 固定 (ADR-0049 で言及した将来課題) のため、終日判定も JST 基準で行う。
+// kozutsumi は JST 固定 (ADR-0052 で言及した将来課題) のため、終日判定も JST 基準で行う。
 const JST_OFFSET_MS = 9 * MS_PER_HOUR;
 
 type EventTimes = { startTime: string; endTime: string };
