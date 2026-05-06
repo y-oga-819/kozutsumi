@@ -202,6 +202,12 @@ async function runResplit(
     return { kind: "failed", reason: "insert_failed" };
   }
 
+  // ADR 0051 D3: lineage 解決。target が「どの初期 AI 分解 / 前回 resplit から生まれたか」の
+  // action_logs.id を引いて snapshot に inline する。Phase 4 で「初期分解 → user 編集 →
+  // resplit → ...」の chain を log id 連鎖で再構成可能にする。fail-soft: 取得失敗 / 該当
+  // なしは null (= user 手動子起点 / retention で消えた / クエリ失敗、いずれも集計側で許容)。
+  const sourceDecompositionLogId = await resolveSourceDecompositionLogId(supabase, target.id);
+
   // ADR 0030: column.task_id は新規子のうち先頭 (= 主体行)。
   // metadata.resplit_target_snapshot は削除直前の target。Phase 4 の暗黙フィードバック
   // 分析で「ユーザーが粒度を変えた」シグナル + dangling task_id 解決のために inline 保存する。
@@ -217,12 +223,63 @@ async function runResplit(
       // ADR 0038 / Issue #169: 主観サイズも snapshot に含めて再分解前後の比較を可能に。
       task_size: target.task_size,
       created_at: target.created_at,
+      source_decomposition_log_id: sourceDecompositionLogId,
     },
     new_child_ids: newChildIds,
     raw_response: responseText,
   });
 
   return { kind: "resplit_succeeded", newChildIds };
+}
+
+/**
+ * ADR 0051 D3: target child の lineage 元 `action_logs.id` を解決する。
+ *
+ * 解決順序 (新しい lineage を優先):
+ * 1. `task_child_resplit` で `metadata.new_child_ids` に target.id を含むものがあるか
+ *    (= target が前回の resplit で生まれた子)。複数あれば最新の created_at を採る
+ * 2. なければ `task_decomposed` で `metadata.child_ids` に target.id を含むものを引く
+ *    (= target が初期 AI 分解で生まれた子)
+ * 3. どちらも見つからなければ null (= user 手動追加起点 / retention で消えた)
+ *
+ * fail-soft: クエリ error / 取得失敗は null。学習素材の劣化を許容、core 操作止めない
+ * (ADR 0013, ADR 0035 §6)。jsonb 配列 containment は PostgREST の `cs` 演算子で表現される
+ * (`.contains("metadata", { new_child_ids: [id] })`)。GIN index がなければ seq scan に
+ * なるが、resplit 自体が AI 1 リクエスト含む slow path なので相対 cost は無視できる範囲。
+ */
+async function resolveSourceDecompositionLogId(
+  supabase: SupabaseClient<Database>,
+  targetId: string,
+): Promise<string | null> {
+  // 1. resplit chain (target が前回 resplit の new_child_ids に含まれるか)
+  const { data: priorResplit, error: resplitErr } = await supabase
+    .from("action_logs")
+    .select("id")
+    .eq("action_type", "task_child_resplit")
+    .contains("metadata", { new_child_ids: [targetId] })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (resplitErr) {
+    console.error("[ai/resplit] lineage resolve (resplit chain) failed", resplitErr);
+    return null;
+  }
+  if (priorResplit) return priorResplit.id;
+
+  // 2. 初期 AI 分解 (target が task_decomposed の child_ids に含まれるか)
+  const { data: priorDecompose, error: decomposeErr } = await supabase
+    .from("action_logs")
+    .select("id")
+    .eq("action_type", "task_decomposed")
+    .contains("metadata", { child_ids: [targetId] })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (decomposeErr) {
+    console.error("[ai/resplit] lineage resolve (decompose) failed", decomposeErr);
+    return null;
+  }
+  return priorDecompose?.id ?? null;
 }
 
 /**

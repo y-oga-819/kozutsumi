@@ -67,12 +67,20 @@ export type DecomposeFailReason =
  * - child_deleted : 分解結果の子が削除された (= 分解粒度が細かすぎた示唆)
  * - child_edited  : 分解結果の子のタイトル / 見積もりが書き換えられた
  * - parent_merged : 親が削除されて子が孤児化した (= ADR 0018 の「親統合」)
+ * - child_added   : `decompose_status='decomposed'` の親に user が手動で子を追加した
+ *                   (ADR 0051 D2)。純粋な手動階層作成 (親が `decomposed` でない場合) は
+ *                   学習信号として価値が薄いので対象外。`decompose_status` 列の値で
+ *                   schema レベルで自然に区別される。
  *
  * 「子の再分解」は ADR 0030 で独立した action_type `task_child_resplit` に切り出した
  * (metadata に snapshot / new_child_ids / raw_response を inline で持つ必要があり、
  *  decomposition_modified の薄い metadata 構造に乗せると型の一貫性が崩れるため)。
  */
-export type DecompositionModifiedKind = "child_deleted" | "child_edited" | "parent_merged";
+export type DecompositionModifiedKind =
+  | "child_deleted"
+  | "child_edited"
+  | "parent_merged"
+  | "child_added";
 
 export type PauseReason = "meeting" | "interruption" | "voluntary";
 
@@ -103,6 +111,11 @@ export type ActionMetadataMap = {
   // ADR 0035 §5: 削除系は元 entity が物理削除されるため snapshot を必須化する。
   // 過去ログ (snapshot 列が無かった頃) は backfill しない (ADR 0035 §6)。
   // Phase 4 の回避パターン分析: 「どんな未着手タスクが削除されたか」を再構成可能にする。
+  //
+  // ADR 0051 D4: `was_decomposition_child` を追加。削除前 `parent_task_id != null`
+  // かつ親が `decompose_status='decomposed'` だった場合に true。Phase 4 で「分解粒度の偏り」
+  // 分析時、AI 由来 vs user 起源の子削除を分離するための flag。判定不能時 (親不明 / 取得失敗)
+  // は false に倒す (ADR 0035 §6: backfill しない原則 = 不確実は「該当しない」側に振る)。
   task_deleted: {
     task_id: string;
     snapshot: {
@@ -111,6 +124,7 @@ export type ActionMetadataMap = {
       task_category: string | null;
       status: "idle" | "active" | "paused" | "done";
       parent_task_id: string | null;
+      was_decomposition_child: boolean;
     };
   };
   task_title_changed: {
@@ -189,6 +203,13 @@ export type ActionMetadataMap = {
   // 分析で「ユーザーが粒度を変えた」シグナル + dangling task_id 解決のために inline で保存する。
   // new_child_ids は再分解で生まれた子 id 配列 (順序は stack_order 昇順)。
   // raw_response は Gemini の生応答 (詳細パネルの折りたたみ表示 / 学習素材)。
+  //
+  // ADR 0051 D3: `source_decomposition_log_id` を resplit_target_snapshot に追加。
+  // 再分解された子が「どの初期 AI 分解 (`task_decomposed`) または前回 resplit
+  // (`task_child_resplit`) で生まれたか」の `action_logs.id` を持つ。多段 resplit chain は
+  // ひとつ前の `task_child_resplit` ログ id で連鎖を表現し、再帰的に初期分解まで遡れる。
+  // null になるケース: (a) 親が user 手動追加 (`child_added`) 起点 / (b) retention で
+  // 元 log が消えた / (c) lineage 解決クエリの fail-soft (集計で許容、ADR 0013)。
   task_child_resplit: {
     task_id: string;
     parent_id: string;
@@ -202,6 +223,7 @@ export type ActionMetadataMap = {
       // 既存タスク・未設定では null。
       task_size: string | null;
       created_at: string;
+      source_decomposition_log_id: string | null;
     };
     new_child_ids: string[];
     raw_response: string;

@@ -97,6 +97,7 @@ describe("log()", () => {
         task_category: "coding",
         status: "idle",
         parent_task_id: null,
+        was_decomposition_child: false,
       },
     });
     await flushMicrotasks();
@@ -112,6 +113,7 @@ describe("log()", () => {
           task_category: "coding",
           status: "idle",
           parent_task_id: null,
+          was_decomposition_child: false,
         },
       },
       actor_type: "user",
@@ -377,6 +379,7 @@ describe("log(task_child_resplit)", () => {
         task_category: "doc",
         task_size: "30m",
         created_at: "2026-04-30T10:00:00.000Z",
+        source_decomposition_log_id: "decompose-log-1",
       },
       new_child_ids: ["new-child-1", "new-child-2", "new-child-3"],
       raw_response: '[{"title":"導入部の構成"},{"title":"本文を書く"},{"title":"最終確認"}]',
@@ -397,6 +400,7 @@ describe("log(task_child_resplit)", () => {
           task_category: "doc",
           task_size: "30m",
           created_at: "2026-04-30T10:00:00.000Z",
+          source_decomposition_log_id: "decompose-log-1",
         },
         new_child_ids: ["new-child-1", "new-child-2", "new-child-3"],
         raw_response: '[{"title":"導入部の構成"},{"title":"本文を書く"},{"title":"最終確認"}]',

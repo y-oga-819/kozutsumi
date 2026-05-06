@@ -39,11 +39,36 @@ function makeSupabase(plan: Plan): {
 
   const from = vi.fn((table: string) => {
     if (table === "action_logs") {
+      // ADR 0051 D3: 2 系統の chain がある:
+      //   (a) insert(...).select("id").single(): logServerSide の log 書き込み
+      //   (b) select("id").eq("action_type",...).contains(...).order(...).limit(...).maybeSingle():
+      //       resolveSourceDecompositionLogId の lineage 検索
+      // (b) は test では「該当なし (= 手動 child_added 起点 / retention 消失)」を返す
+      // のがデフォルトで OK。lineage のテスト目的の場合は plan に上書きを足す。
       return {
         insert: (payload: unknown) => {
           calls.actionLogs.push(payload);
-          return Promise.resolve({ error: plan.insertActionLogs.error });
+          return {
+            select: () => ({
+              single: () =>
+                Promise.resolve({
+                  data: plan.insertActionLogs.error ? null : { id: "log-id-mock" },
+                  error: plan.insertActionLogs.error,
+                }),
+            }),
+          };
         },
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            contains: vi.fn(() => ({
+              order: vi.fn(() => ({
+                limit: vi.fn(() => ({
+                  maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
+                })),
+              })),
+            })),
+          })),
+        })),
       };
     }
 
