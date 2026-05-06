@@ -255,6 +255,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
               events={events}
               subscriptions={calendarSubscriptions}
               onSetVisibilityOverride={setEventVisibilityOverride}
+              onSetRecurringVisibilityOverride={setRecurringEventVisibilityOverride}
               onOpenEvent={setEventDetailId}
             />
           ) : (

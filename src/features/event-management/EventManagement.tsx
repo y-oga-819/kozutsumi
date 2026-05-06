@@ -4,7 +4,13 @@ import { useMemo, useState } from "react";
 
 import type { CalendarSubscription } from "@/entities/calendar-subscription/types";
 import { GoogleCalendarBadge } from "@/entities/event/GoogleCalendarBadge";
-import { EVENT_SOURCE, type Event, type EventVisibilityOverride } from "@/entities/event/types";
+import { RecurringScopeModal } from "@/entities/event/RecurringScopeModal";
+import {
+  EVENT_SOURCE,
+  type Event,
+  type EventVisibilityOverride,
+  type EventVisibilityOverrideScope,
+} from "@/entities/event/types";
 import {
   fmtDuration,
   formatAllDayRange,
@@ -24,6 +30,17 @@ type EventManagementProps = {
    * 'none' へのリセットは含まない (日常 UI では reset 不可、SettingsPanel 専用導線)。
    */
   onSetVisibilityOverride: (id: string, value: EventVisibilityOverride) => Promise<void>;
+  /**
+   * Issue #229 / ADR 0056: recurring event の系列 override (bulk apply + rule 永続化)。
+   * scope='this_and_following' | 'all' のみ受け付ける ('single' は onSetVisibilityOverride を使う)。
+   * 未指定なら recurring instance に対しても 3 択 modal を出さず既存の single 操作のみ
+   * (テストや特殊呼び出しで省略可)。
+   */
+  onSetRecurringVisibilityOverride?: (
+    id: string,
+    value: "shown" | "hidden",
+    scope: Exclude<EventVisibilityOverrideScope, "single">,
+  ) => Promise<void>;
   /** 詳細パネルを開きたいとき。未指定なら詳細リンクを出さない (テスト用に省略可)。 */
   onOpenEvent?: (id: string) => void;
 };
@@ -52,11 +69,18 @@ export function EventManagement({
   events,
   subscriptions,
   onSetVisibilityOverride,
+  onSetRecurringVisibilityOverride,
   onOpenEvent,
 }: EventManagementProps) {
   const [filter, setFilter] = useState<FilterMode>("all");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // ADR 0056: recurring instance に対して開かれた scope modal の状態。
+  // 操作対象 event id と倒したい方向 (`shown` / `hidden`) を保持。
+  const [scopeModal, setScopeModal] = useState<{
+    eventId: string;
+    targetValue: "shown" | "hidden";
+  } | null>(null);
 
   // 安定した参照のため useMemo (subscriptions が変わったときだけ再計算)。
   const subVisibilities = useMemo(
@@ -113,11 +137,40 @@ export function EventManagement({
     return [...map.entries()];
   }, [filtered]);
 
-  const handleToggle = async (id: string, next: EventVisibilityOverride) => {
-    setPendingId(id);
+  const handleToggle = async (event: Event, next: EventVisibilityOverride) => {
+    // ADR 0056: recurring instance かつ系列操作 callback が渡されているときだけ 3 択 modal を出す。
+    // 単発 event (recurringEventId === null) や callback 未指定は従来の single 操作のまま。
+    const supportsRecurringScope =
+      !!onSetRecurringVisibilityOverride &&
+      event.recurringEventId !== null &&
+      (next === "shown" || next === "hidden");
+    if (supportsRecurringScope) {
+      setScopeModal({ eventId: event.id, targetValue: next as "shown" | "hidden" });
+      return;
+    }
+    setPendingId(event.id);
     setError(null);
     try {
-      await onSetVisibilityOverride(id, next);
+      await onSetVisibilityOverride(event.id, next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "予定化の切替に失敗しました");
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  const handleScopeSelect = async (scope: EventVisibilityOverrideScope) => {
+    if (!scopeModal) return;
+    const { eventId, targetValue } = scopeModal;
+    setPendingId(eventId);
+    setError(null);
+    try {
+      if (scope === "single") {
+        await onSetVisibilityOverride(eventId, targetValue);
+      } else {
+        await onSetRecurringVisibilityOverride!(eventId, targetValue, scope);
+      }
+      setScopeModal(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "予定化の切替に失敗しました");
     } finally {
@@ -190,7 +243,7 @@ export function EventManagement({
                     overrideValue={state.override}
                     isOverrideOfDefault={state.isOverrideOfDefault}
                     calendarLabel={calendarLabel}
-                    onToggle={(next) => handleToggle(event.id, next)}
+                    onToggle={(next) => handleToggle(event, next)}
                     onOpenEvent={onOpenEvent}
                     busy={pendingId === event.id}
                   />
@@ -200,6 +253,14 @@ export function EventManagement({
           ))}
         </div>
       )}
+      {scopeModal ? (
+        <RecurringScopeModal
+          targetValue={scopeModal.targetValue}
+          pending={pendingId === scopeModal.eventId}
+          onSelect={handleScopeSelect}
+          onClose={() => setScopeModal(null)}
+        />
+      ) : null}
     </div>
   );
 }
