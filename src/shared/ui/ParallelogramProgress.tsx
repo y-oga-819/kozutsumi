@@ -2,6 +2,7 @@
  * AI 分解後の親の進捗を平行四辺形 (skewX) セグメントで可視化する。
  * ADR 0016 §5: 数字併記の重複を避け、子の完了境界と「Stack 上の自分の番」を
  * ひとつのバーで読み取れるようにする。
+ * ADR 0051: 大量分解 (N>10) でも segment 幅は固定し、container 超過時は wrap で次行へ。
  *
  * - 完了: 親色で塗り
  * - 現在 (= 自分の番、未完了): 親色の枠強調 + 中抜き
@@ -24,17 +25,10 @@ type ParallelogramProgressProps = {
   size?: Size;
 };
 
-function segmentSize(total: number, size: Size): { w: number; h: number } {
-  // 子数によって 3 段階で縮小 (~5 / ~9 / 10+)。10 子で 480px 幅に収まる目安。
-  if (size === "md") {
-    if (total <= 5) return { w: 16, h: 9 };
-    if (total <= 9) return { w: 12, h: 8 };
-    return { w: 9, h: 7 };
-  }
-  if (total <= 5) return { w: 10, h: 6 };
-  if (total <= 9) return { w: 8, h: 5 };
-  return { w: 6, h: 4 };
-}
+const SEGMENT: Record<Size, { w: number; h: number }> = {
+  md: { w: 12, h: 8 },
+  sm: { w: 8, h: 5 },
+};
 
 export function ParallelogramProgress({
   total,
@@ -43,7 +37,7 @@ export function ParallelogramProgress({
   color,
   size = "md",
 }: ParallelogramProgressProps) {
-  const { w: segWidth, h: segHeight } = segmentSize(total, size);
+  const { w: segWidth, h: segHeight } = SEGMENT[size];
   return (
     <div
       role="progressbar"
@@ -55,7 +49,7 @@ export function ParallelogramProgress({
           ? `進捗 ${doneCount}/${total}、現在 ${currentIndex}/${total}`
           : `進捗 ${doneCount}/${total}`
       }
-      className="flex shrink-0 items-center gap-[3px]"
+      className="flex min-w-0 flex-wrap items-center gap-[3px]"
     >
       {Array.from({ length: total }).map((_, i) => {
         const idx = i + 1;
@@ -74,6 +68,7 @@ export function ParallelogramProgress({
               background: isDone ? color : "transparent",
               border: `${borderWidth}px solid ${borderColor}`,
               borderRadius: 1,
+              flexShrink: 0,
             }}
           />
         );
