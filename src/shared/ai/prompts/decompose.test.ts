@@ -26,14 +26,18 @@ describe("buildDecomposePrompt", () => {
     expect(prompt).toContain("未設定");
   });
 
-  test("出力形式の制約 (件数 / 自立タイトル / JSON のみ) が prompt に含まれる", () => {
+  test("出力形式の制約 (自然な単位 / 自立タイトル / JSON のみ) が prompt に含まれる (ADR 0049: 件数上限は持たない)", () => {
     const prompt = buildDecomposePrompt({
       title: "x",
       body: "",
       estimatedMinutes: null,
     });
 
-    expect(prompt).toContain("2〜7 件");
+    // ADR 0049: 静的な件数上限を持たず、AI に「自然な単位」で判断させる
+    expect(prompt).toContain("自然な単位");
+    expect(prompt).toContain("件数の上限は無く");
+    // 件数指示の旧文言 (X〜Y 件) が消えていることを明示
+    expect(prompt).not.toMatch(/\d+〜\d+ 件/);
     expect(prompt).toContain("空配列");
     expect(prompt).toContain("JSON 配列のみ");
     // ADR 0016 Notes「子タイトルの自立性」を担保する具体例
@@ -232,8 +236,8 @@ describe("parseDecomposeResponse", () => {
     expect(result).toEqual([]);
   });
 
-  test("8 件以上は先頭 7 件で切る (AI 暴走時の安全弁)", () => {
-    const items = Array.from({ length: 12 }, (_, i) => ({
+  test("ADR 0049: 件数の上限を持たず、30 件以上の分解もそのまま採用する", () => {
+    const items = Array.from({ length: 35 }, (_, i) => ({
       title: `子${i + 1}`,
       body: "",
       estimated_minutes: 15,
@@ -242,9 +246,9 @@ describe("parseDecomposeResponse", () => {
 
     const result = parseDecomposeResponse(JSON.stringify(items));
 
-    expect(result).toHaveLength(7);
+    expect(result).toHaveLength(35);
     expect(result?.[0].title).toBe("子1");
-    expect(result?.[6].title).toBe("子7");
+    expect(result?.[34].title).toBe("子35");
   });
 
   test("title が空 / 80 文字超過のエントリは捨て、残りを採用する", () => {
