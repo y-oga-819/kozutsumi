@@ -27,7 +27,7 @@ import type { DeletedEventSnapshot, EventGateway, UpsertGoogleCalendarEventInput
 import { SupabaseEventGateway } from "./supabase-gateway";
 
 /**
- * Google Calendar → events テーブル 同期本体 (ADR 0005 / 0006 / 0010 / 0031 / 0033 / 0034 / 0049)。
+ * Google Calendar → events テーブル 同期本体 (ADR 0005 / 0006 / 0010 / 0031 / 0033 / 0034 / 0052)。
  *
  * - 対象は user の subscription にある全 calendar (Issue #144)。primary 固定 (旧 ADR 0008) は廃止。
  * - 同期方式 (ADR 0006、calendar 単位):
@@ -42,7 +42,7 @@ import { SupabaseEventGateway } from "./supabase-gateway";
  *
  * subscription が 1 件もない user (新規 OAuth ユーザー) は、Google `calendarList.list` を叩いて
  * `primary: true` な calendar の **実 id** (= ユーザーのメールアドレス) を解決し、その id で
- * subscription を 1 行 seed する (ADR 0049)。リテラル `'primary'` を保存しない。
+ * subscription を 1 行 seed する (ADR 0052)。リテラル `'primary'` を保存しない。
  */
 
 const SYNC_WINDOW_PAST_DAYS = 7;
@@ -110,7 +110,7 @@ export type SyncGoogleCalendarDeps = {
   listEvents: (params: ListEventsParams) => Promise<GoogleCalendarEventsListResponse>;
   /**
    * Google `calendarList.list` の薄ラッパー。新規 OAuth ユーザーの primary calendar 実 id 解決に使う
-   * (ADR 0049)。test では mock を注入する。
+   * (ADR 0052)。test では mock を注入する。
    */
   listCalendars: (params: {
     accessToken: string;
@@ -121,7 +121,7 @@ export type SyncGoogleCalendarDeps = {
   refreshAccessToken: (supabase: SupabaseClient<Database>) => Promise<GoogleProviderAccess>;
   /**
    * 認証済 user の sync 対象 subscription を解決する。本 hook が空配列を返した場合、syncGoogleCalendar 本体が
-   * Google API で primary calendar の実 id を解決して subscription を 1 行 seed する (ADR 0049)。
+   * Google API で primary calendar の実 id を解決して subscription を 1 行 seed する (ADR 0052)。
    */
   resolveSubscriptionTargets: (supabase: SupabaseClient<Database>) => Promise<SubscriptionTarget[]>;
   /**
@@ -159,7 +159,7 @@ export async function syncGoogleCalendar(
 
   let targets = await deps.resolveSubscriptionTargets(supabase);
   if (targets.length === 0) {
-    // ADR 0049: 新規 OAuth ユーザー / subscription 未保有ユーザーには primary calendar の
+    // ADR 0052: 新規 OAuth ユーザー / subscription 未保有ユーザーには primary calendar の
     // 実 id (= メールアドレス) で subscription を 1 行 seed する。リテラル 'primary' は保存しない。
     targets = await seedPrimarySubscriptionFromApi(supabase, initial.accessToken, deps);
   }
@@ -340,7 +340,7 @@ async function syncOneCalendar(
  * 認証済 user の既存 subscription 一覧 (google_calendar) を読み取って返す。
  *
  * subscription が 1 件もない (新規 OAuth ユーザー / 全部 unsubscribe したユーザー) は空配列を返す。
- * 呼び出し側 (`syncGoogleCalendar`) が必要に応じて Google API resolve 経由の lazy seed を行う (ADR 0049)。
+ * 呼び出し側 (`syncGoogleCalendar`) が必要に応じて Google API resolve 経由の lazy seed を行う (ADR 0052)。
  */
 export async function defaultResolveSubscriptionTargets(
   supabase: SupabaseClient<Database>,
@@ -371,7 +371,7 @@ export async function defaultResolveSubscriptionTargets(
 }
 
 /**
- * subscription が 1 件もない user の primary calendar を Google API resolve して seed する (ADR 0049)。
+ * subscription が 1 件もない user の primary calendar を Google API resolve して seed する (ADR 0052)。
  *
  * - Google `calendarList.list` を叩いて `primary: true` な entry の `id` (= メールアドレス) を取得
  * - `external_accounts` を upsert (既存なら再利用)

@@ -1,4 +1,4 @@
-# ADR 0049: primary calendar の external_calendar_id は Google API で resolve した実 id を使う
+# ADR 0052: primary calendar の external_calendar_id は Google API で resolve した実 id を使う
 
 - **Status**: Accepted
 - **Date**: 2026-05-06

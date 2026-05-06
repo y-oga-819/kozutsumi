@@ -59,7 +59,7 @@ export function shouldTriggerLazy(state: CalendarSyncState | null, now: Date): b
 
 async function defaultGetState(): Promise<CalendarSyncState | null> {
   const supabase = createClient();
-  // ADR 0049: external_calendar_id は Google API resolve した実 id (primary なら email)。
+  // ADR 0052: external_calendar_id は Google API resolve した実 id (primary なら email)。
   // client から特定 calendar 行を狙い撃ちできないので、user の google_calendar sync_state 行のうち
   // **最新の lastSyncedAt** を staleness 判定に使う。「直近どこかが sync 成功したか」が判断軸。
   // 行が 1 件もなければ未 sync として null を返し、lazy trigger 候補にする。

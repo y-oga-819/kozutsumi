@@ -25,7 +25,7 @@ export type UpdateEventInput = {
 /**
  * Google Calendar から取り込む 1 イベント分の入力。
  * `project_id` は kozutsumi 側で設定する拡張 (ADR 0010) なので、upsert payload には含めず既存値を保持する。
- * `externalCalendarId` (ADR 0033 / 0049) は subscription を介して呼び出し元が決める。primary calendar は
+ * `externalCalendarId` (ADR 0033 / 0052) は subscription を介して呼び出し元が決める。primary calendar は
  * Google API resolve した実 id (= email)。リテラル `'primary'` は使わない。
  * `visibility_override` も同期で再 upsert されても触らない (ADR 0034 L4)。
  */
