@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import { createAdminClient, getTaskByTitle, seedTask, waitForActionLog } from "./db";
 import { expect, test } from "./fixtures";
@@ -41,8 +41,8 @@ test.describe("DnD 並び替え (task_reordered + tasks.stack_order)", () => {
     await dragRowAboveRow(page, titles[2], titles[0]);
 
     // task_reordered ログが、つかんだ task の id + 該当 from/to で 1 件以上残る。
-    // findDropTarget は「半分より上」で from を返す挙動なので to_position=0。
-    // (dragRowAboveRow は upper-quarter を狙うので、midpoint より上 → 0 が選ばれる)
+    // findDropTarget は「半分より上」で idx を返す挙動なので to_position=0。
+    // (dragRowAboveRow は target の top + 数 px 固定 offset を狙うので必ず upper half)
     const movedC = await getTaskByTitle(admin, userId, titles[2]);
     const reorderLog = await waitForActionLog(
       admin,
@@ -140,12 +140,12 @@ async function getProjectId(
  * useStackDnD は HTML5 DnD ではなく custom pointer events なので mouse API で
  * pointermove を複数回 emit する必要がある (5px 以上動かさないと drag 判定が立たない)。
  *
- * drop 座標は target row の upper-quarter (top + height/4) を狙う:
- *   - findDropTarget は `clientY < rect.top + rect.height/2` で idx を返す
- *   - 上端固定 + 数 px の oFFset (ex. +4) は、TopTaskCard の async load (projects /
- *     correction factors / now 経過時間 badge) や DropIndicator (h-0.5) 挿入で
- *     row 高さが微変動した際に upper half を踏み外して隣 idx に落ちる flake を生む
- *   - height/4 なら row 高さが伸縮しても midpoint の半分の余裕で upper half に残る
+ * #224: TopTaskCard の async load (projects / correction factors) や
+ * DropIndicator (h-0.5) 挿入で計測 → mouse.down() の間に row が動くと、
+ * (a) grip 要素を踏み外して onPointerDown が発火しない / (b) target の Y が
+ * ずれて隣 idx に落ちる、の 2 通りの flake を生む。stableBoundingBox で
+ * layout が止まってから計測し、drag 開始後 (DropIndicator 挿入後) に target を
+ * 再計測することで両方を抑える。
  */
 async function dragRowAboveRow(
   page: Page,
@@ -155,27 +155,34 @@ async function dragRowAboveRow(
   const stack = page.getByRole("list", { name: "タスクスタック" });
   const sourceRow = stack.getByRole("listitem").filter({ hasText: sourceTitle });
   const targetRow = stack.getByRole("listitem").filter({ hasText: targetTitle });
-
   const grip = sourceRow.locator(".cursor-grab").first();
-  const gripBox = await grip.boundingBox();
-  const targetBox = await targetRow.boundingBox();
-  if (!gripBox || !targetBox) throw new Error("row/grip not measurable");
 
+  const gripBox = await stableBoundingBox(grip);
   const startX = gripBox.x + gripBox.width / 2;
   const startY = gripBox.y + gripBox.height / 2;
-  // target の midline より上に落とす → findDropTarget が target idx を返す。
-  const endX = startX;
-  const endY = targetBox.y + Math.floor(targetBox.height / 4);
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
-  await page.mouse.move(startX, startY - 20, { steps: 5 });
-  await page.mouse.move(endX, endY, { steps: 10 });
+  // 1 move で >5px 移動して isDragging を確実に起動させる
+  // (steps を細かく刻むと最初の数 step が threshold 未満になり、CI 負荷下で
+  // pointermove が間引かれると drag が起動しないことがある)。
+  await page.mouse.move(startX, startY - 10, { steps: 3 });
+
+  // drag 開始後 (DropIndicator 挿入で target 行が 2px 下に押される) に再計測する。
+  const targetBox = await stableBoundingBox(targetRow);
+  // upper-quarter ではなく min(8, h/4) の固定 px を使う:
+  // 行高が H 以下に縮んでも常に top+8px 以下に落ち、H が 16px 以上あれば
+  // midline (H/2) を下回るので findDropTarget が target idx を返す。
+  const offset = Math.max(4, Math.min(8, Math.floor(targetBox.height / 4)));
+  const endY = targetBox.y + offset;
+
+  await page.mouse.move(startX, endY, { steps: 10 });
   await page.mouse.up();
 }
 
 /**
  * `sourceTitle` を `targetTitle` の bottom より下にドロップする (= 末尾扱い)。
+ * #224: 計測タイミング flake は dragRowAboveRow と同じ対応 (stableBoundingBox)。
  */
 async function dragRowBelowRow(
   page: Page,
@@ -185,23 +192,62 @@ async function dragRowBelowRow(
   const stack = page.getByRole("list", { name: "タスクスタック" });
   const sourceRow = stack.getByRole("listitem").filter({ hasText: sourceTitle });
   const targetRow = stack.getByRole("listitem").filter({ hasText: targetTitle });
-
   const grip = sourceRow.locator(".cursor-grab").first();
-  const gripBox = await grip.boundingBox();
-  const targetBox = await targetRow.boundingBox();
-  if (!gripBox || !targetBox) throw new Error("row/grip not measurable");
 
+  const gripBox = await stableBoundingBox(grip);
   const startX = gripBox.x + gripBox.width / 2;
   const startY = gripBox.y + gripBox.height / 2;
-  const endX = startX;
-  // 全行 midline より下 → findDropTarget が末尾 idx を返す。
-  const endY = targetBox.y + targetBox.height + 20;
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
-  await page.mouse.move(startX, startY + 20, { steps: 5 });
-  await page.mouse.move(endX, endY, { steps: 10 });
+  // 1 move で >5px 移動して isDragging を確実に起動させる。
+  await page.mouse.move(startX, startY + 10, { steps: 3 });
+
+  const targetBox = await stableBoundingBox(targetRow);
+  // 全行 midline より下 → findDropTarget が末尾 idx を返す。
+  const endY = targetBox.y + targetBox.height + 20;
+
+  await page.mouse.move(startX, endY, { steps: 10 });
   await page.mouse.up();
+}
+
+/**
+ * #224: `Locator.boundingBox()` を連続 2 回読んで layout が止まるまで poll する。
+ *
+ * TopTaskCard が `useProjects` / `useCorrectionFactors` を読みに行くため、
+ * `await page.reload()` 直後 + listitem visible 待ち合わせ後でも、行高さや
+ * 相対位置が数 ms〜数百 ms の間に微変動する。`boundingBox()` の単発計測値は
+ * その変動の任意の瞬間を切り取るので、計測 → mouse.down() の間に layout が
+ * 動くと grip 要素が clientX/Y からずれ、pointerdown が空振りする (= test 2
+ * 「action_log が出ない」flake) / 隣 row に落ちる (= test 1 「from/to が
+ * 違う」flake) を生む。
+ */
+async function stableBoundingBox(
+  locator: Locator,
+  opts: { tolerancePx?: number; maxIterations?: number; intervalMs?: number } = {},
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const tolerance = opts.tolerancePx ?? 1;
+  const maxIterations = opts.maxIterations ?? 30;
+  const intervalMs = opts.intervalMs ?? 50;
+  let prev = await locator.boundingBox();
+  if (!prev) throw new Error("[e2e] stableBoundingBox: locator not measurable");
+  for (let i = 0; i < maxIterations; i++) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    const next = await locator.boundingBox();
+    if (!next) throw new Error("[e2e] stableBoundingBox: locator not measurable");
+    if (
+      Math.abs(prev.x - next.x) <= tolerance &&
+      Math.abs(prev.y - next.y) <= tolerance &&
+      Math.abs(prev.width - next.width) <= tolerance &&
+      Math.abs(prev.height - next.height) <= tolerance
+    ) {
+      return next;
+    }
+    prev = next;
+  }
+  // best-effort で最後の計測値を返す。安定しなくても test を進めて、
+  // 落ちたら別の根本原因として表面化させる方が flake を masking しない。
+  return prev;
 }
 
 async function readStackOrderByTitle(
