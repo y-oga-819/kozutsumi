@@ -54,8 +54,6 @@ export type DecomposedChild = {
   taskSize: TaskSizeValue | null;
 };
 
-const MIN_CHILDREN = 2;
-const MAX_CHILDREN = 7;
 const MAX_TITLE_LEN = 80;
 // 子 body は markdown で 200 文字程度を目標に prompt で誘導する。AI が暴走しても
 // task body 全体が肥大化しないよう 600 文字で hard cap する (truncate)。
@@ -67,7 +65,9 @@ const ALLOWED_ESTIMATE_BUCKETS = [5, 10, 15, 20, 30, 45, 60, 90, 120] as const;
 /**
  * Gemini に渡す prompt 文字列を構築する。
  *
- * - 出力数の上下限 (2〜7) を明示する。1 件しか出ないなら「分解不要」として空配列を返させる
+ * - 件数は AI の判断に委ねる (ADR 0049: 静的な上下限は持たない)。
+ *   章立て / 手順タスク / 旅程など自然な粒度が数十件規模になるケースを許容する。
+ *   1 件しか出ないなら「分解不要」として空配列を返させる
  *   (parser 側で 1 件は `skipped` 扱いに倒すフェイルセーフもあるが、prompt でも縛る)
  * - 子タイトルは親文脈なしで読めること、本文に親タスク情報を埋め込んで誘導する
  * - 出力は JSON 配列のみ。markdown fence や説明文が混じっても parser 側で剥がす前提
@@ -94,7 +94,7 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
     "あなたは個人特化のタスク管理アシスタント。次の親タスクを、実行可能な粒度の子タスクに分解する。",
     "",
     "# 分解の方針",
-    `- 子タスクは ${MIN_CHILDREN}〜${MAX_CHILDREN} 件。`,
+    "- 子タスクは「自然な単位」で分解する。件数の上限は無く、内容に応じて自分で判断する (章立てがある本なら章単位、複数手順タスクなら手順単位など)。",
     "- 親タスクが既に十分小さく分解の必要がないと判断したら、空配列 [] を返す。",
     "- 各子タスクの title は、親タスクの文脈なしで読んで意味が取れる短い独立した文言にする。",
     "  例 (悪): 「志望動機を書く」 / 例 (良): 「Dirbato 最終面接 志望動機 (パターン A) を書く」",
@@ -144,15 +144,15 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
  * - markdown fence (```json ... ```) を剥がす
  * - JSON 配列以外 / 解釈不能 → `null` (呼び出し側で「失敗」として親を `none` のまま残す)
  * - 空配列 → `[]` (呼び出し側で「分解不要」として親を `skipped` に倒す)
- * - 1 件のみ → `[]` 扱い (実質的な分解になっていないため)
- * - 件数オーバー (>7) → 先頭 7 件で切る (AI が暴走した時の安全弁)
+ * - 1 件のみ → `[]` 扱い (実質的な分解になっていないため。ADR 0049 で件数上限は撤廃したが、
+ *   この「1 件 → skipped」品質ガードは件数 cap ではないので残す)
  * - title が空 / 80 文字超過 → entry を捨てる (それ以外を採用)
  * - estimated_minutes が許容バケット外 → null に倒す (整数 / null 以外も null)
  *
  * 戻り値:
  *   `null`            : パース不能 (= AI 失敗扱い、`none` のまま残す)
  *   `[]`              : 分解不要 (= `skipped`)
- *   `DecomposedChild[]` (1+ 件): 採用する子配列
+ *   `DecomposedChild[]` (2+ 件): 採用する子配列
  */
 export function parseDecomposeResponse(text: string): DecomposedChild[] | null {
   const stripped = stripMarkdownFence(text).trim();
@@ -171,13 +171,14 @@ export function parseDecomposeResponse(text: string): DecomposedChild[] | null {
   for (const entry of parsed) {
     const child = normalizeChild(entry);
     if (child) children.push(child);
-    if (children.length >= MAX_CHILDREN) break;
   }
 
   // 1 件しか取れなかった = 実質「分解されていない」ので skipped 扱いに倒す。
   // ADR 0017 Decision 4 / vision「気づいたら細かくなってる」と整合させる
   // (1 → 1 の置き換えはユーザーから見て分解が起きたように見えない)。
-  if (children.length < MIN_CHILDREN) return [];
+  // ADR 0049 で「件数の上限」は撤廃したが、この「1 件 → []」は件数 cap ではなく
+  // 「実質分解されたか」の品質ガードなので残す。
+  if (children.length < 2) return [];
 
   return children;
 }
