@@ -25,9 +25,15 @@ type ParallelogramProgressProps = {
   size?: Size;
 };
 
-const SEGMENT: Record<Size, { w: number; h: number }> = {
-  md: { w: 12, h: 8 },
-  sm: { w: 8, h: 5 },
+const GAP_PX = 3;
+
+/**
+ * size ごとに segment の幅・高さ・「1 行に並べる最大件数」を持つ。
+ * maxPerRow を超えると `flex-wrap` で次の行へ折り返す (ADR 0051)。
+ */
+const SEGMENT: Record<Size, { w: number; h: number; maxPerRow: number }> = {
+  md: { w: 12, h: 8, maxPerRow: 15 },
+  sm: { w: 8, h: 5, maxPerRow: 10 },
 };
 
 export function ParallelogramProgress({
@@ -37,7 +43,8 @@ export function ParallelogramProgress({
   color,
   size = "md",
 }: ParallelogramProgressProps) {
-  const { w: segWidth, h: segHeight } = SEGMENT[size];
+  const { w: segWidth, h: segHeight, maxPerRow } = SEGMENT[size];
+  const maxWidth = maxPerRow * segWidth + (maxPerRow - 1) * GAP_PX;
   return (
     <div
       role="progressbar"
@@ -50,6 +57,7 @@ export function ParallelogramProgress({
           : `進捗 ${doneCount}/${total}`
       }
       className="flex min-w-0 flex-wrap items-center gap-[3px]"
+      style={{ maxWidth }}
     >
       {Array.from({ length: total }).map((_, i) => {
         const idx = i + 1;
