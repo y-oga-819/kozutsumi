@@ -28,21 +28,31 @@ function extractTaskId(actionType: ActionType, metadata: Record<string, unknown>
   return typeof v === "string" ? v : null;
 }
 
+/**
+ * 戻り値は inserted log id か null (失敗時)。ADR 0051 D3 で `task_child_resplit` の
+ * `source_decomposition_log_id` 解決に使う。既存呼び出しは戻り値を捨てれば互換。
+ */
 export async function logServerSide<T extends ActionType>(
   supabase: SupabaseClient<Database>,
   userId: string,
   actionType: T,
   metadata: ActionMetadataMap[T],
   actorType: ActorType = "user",
-): Promise<void> {
-  const { error } = await supabase.from("action_logs").insert({
-    user_id: userId,
-    action_type: actionType,
-    task_id: extractTaskId(actionType, metadata as unknown as Record<string, unknown>),
-    metadata: metadata as unknown as Json,
-    actor_type: actorType,
-  });
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("action_logs")
+    .insert({
+      user_id: userId,
+      action_type: actionType,
+      task_id: extractTaskId(actionType, metadata as unknown as Record<string, unknown>),
+      metadata: metadata as unknown as Json,
+      actor_type: actorType,
+    })
+    .select("id")
+    .single();
   if (error) {
     console.error("[action-log/server] insert failed", error);
+    return null;
   }
+  return data?.id ?? null;
 }

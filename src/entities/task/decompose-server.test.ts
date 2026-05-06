@@ -43,9 +43,20 @@ function makeSupabase(plan: Plan): {
   const from = vi.fn((table: string) => {
     if (table === "action_logs") {
       return {
+        // ADR 0051 D3: logServerSide が `.insert(...).select("id").single()` を呼ぶように
+        // なったので mock chain にもそれを反映する。戻り値の id は test 側で使わないので
+        // 固定値で十分。
         insert: (payload: unknown) => {
           calls.actionLogs.push(payload);
-          return Promise.resolve({ error: plan.insertActionLogs.error });
+          return {
+            select: () => ({
+              single: () =>
+                Promise.resolve({
+                  data: plan.insertActionLogs.error ? null : { id: "log-id-mock" },
+                  error: plan.insertActionLogs.error,
+                }),
+            }),
+          };
         },
       };
     }
