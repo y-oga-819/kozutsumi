@@ -78,8 +78,43 @@ describe("buildDecomposePrompt", () => {
     expect(prompt).toContain("large");
     // 出力例に task_size フィールドが含まれる
     expect(prompt).toContain('"task_size"');
-    // estimated_minutes と独立した軸であることが prompt に明示されている
-    expect(prompt).toContain("estimated_minutes と独立");
+    // estimated_minutes と task_size は別軸であることが prompt に明示されている (ADR 0053)
+    expect(prompt).toContain("別軸");
+  });
+
+  test("ADR 0053: 親 task_size より大きい子 size を許容する文言が prompt に含まれる", () => {
+    const prompt = buildDecomposePrompt({
+      title: "x",
+      body: "",
+      estimatedMinutes: null,
+      taskSize: "large",
+    });
+
+    // 「親より大きい値も付けてよい」を明示している
+    expect(prompt).toContain("親より大きい値も付けてよい");
+    // 旧 cap 文言が消えている
+    expect(prompt).not.toContain("親の task_size より大きい値を子に付けない");
+    // task_size は必ず埋めるが estimated_minutes は ≤2h 専用、の非対称が示されている
+    expect(prompt).toContain("task_size は必ず埋める");
+  });
+
+  test("ADR 0053: estimated_minutes は ≤ 2h 専用で、>2h は null を返すよう prompt が指示する", () => {
+    const prompt = buildDecomposePrompt({
+      title: "x",
+      body: "",
+      estimatedMinutes: null,
+      taskSize: "large",
+    });
+
+    // size gate の核心: 2h を超えるタスクでは null を返す
+    expect(prompt).toContain("2 時間以下に収まるタスクの分単位見積もり専用");
+    expect(prompt).toContain("4h / 1d / large");
+    expect(prompt).toContain("必ず null");
+    // 最大バケットへのクリップを明示的に禁止する
+    expect(prompt).toContain("最大バケット 120 にクリップせず");
+    // 旧文言「自信が無ければ null」だけ (確信度ゲート単独) は使っていない
+    // size gate と確信度ゲートの両方を併記しているはず
+    expect(prompt).toContain("確信が持てない場合は null");
   });
 
   test("親 task_size を渡すと「親タスク」セクションに反映される (ADR 0038 / #169)", () => {

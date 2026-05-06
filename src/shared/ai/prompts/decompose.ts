@@ -5,11 +5,14 @@
  * 応答 JSON の解釈をユニットテストで踏める形にしている (`/api/ai/decompose` 本体は
  * これをデータパイプとしてつなぐだけ)。
  *
- * 出力契約 (ADR 0016 §1, 0017 Decision 3-5, 0018 Decision, 0022 Decision 2):
+ * 出力契約 (ADR 0016 §1, 0017 Decision 3-5, 0018 Decision, 0022 Decision 2, 0052):
  * - 「これ以上分解する必要なし」と判定された場合は空配列 → 親は `decompose_status='skipped'` に倒す
  * - 子タイトルは親文脈なしで意味が読める独立した文言 (ADR 0016 Notes 「子タイトルの自立性」)
- * - 子の estimated_minutes は AI が自信を持てない場合 null。親見積もりの機械的等分はしない
- *   (補正後見積もりの責務は P3-9 / architecture.md §1.5)
+ * - 子の estimated_minutes は ≤ 2h タスク専用 (ADR 0053)。task_size が 4h/1d/large
+ *   になる子では null を返す (最大バケット 120 にクリップしない)。確信度ゲートとしても null。
+ *   親見積もりの機械的等分はしない (補正後見積もりの責務は P3-9 / architecture.md §1.5)
+ * - 子の task_size は親より大きい値も許容する (ADR 0053)。親見積もりが楽観的だった
+ *   シグナル / 親自身を再分解する余地のシグナルとして扱う。
  * - 子の task_category も同じ AI 呼び出しで推論する (ADR 0022)。値域外・欠損は null に倒し、
  *   `other` で握り潰さない (ADR 0013 augmentation only)。category だけの parse 失敗で
  *   子の生成自体は止めない (title / estimated_minutes が取れていれば子を作る)。
@@ -27,8 +30,9 @@ export type DecomposeInput = {
   body: string;
   estimatedMinutes: number | null;
   /**
-   * ADR 0038 / Issue #169: 親タスクの主観サイズ (ユーザーが感じた粗い粒度感)。
-   * AI 分解時に「親はこのサイズだから子は更に細かく」と推論させる文脈情報。
+   * ADR 0038 / Issue #169 / ADR 0053: 親タスクの主観サイズ (ユーザーが感じた粗い粒度感)。
+   * AI 分解時に親の粒度感を伝える文脈情報。子の task_size はこの値で cap しない
+   * (ADR 0053: 子が親より大きいケースは「親見積もりが楽観だった」シグナルとして許容する)。
    * 親が未設定 (既存タスク・後方互換経路) なら null / undefined。
    */
   taskSize?: TaskSizeValue | null;
@@ -75,7 +79,8 @@ const ALLOWED_ESTIMATE_BUCKETS = [5, 10, 15, 20, 30, 45, 60, 90, 120] as const;
 export function buildDecomposePrompt(parent: DecomposeInput): string {
   const bodyText = parent.body.trim().length > 0 ? parent.body.trim() : "(本文なし)";
   const estimateText = parent.estimatedMinutes !== null ? `${parent.estimatedMinutes}分` : "未設定";
-  // ADR 0038 / Issue #169: 親 task_size を prompt に渡し「親はこの粒度だから子はもっと細かく」を誘導する。
+  // ADR 0038 / Issue #169: 親 task_size を prompt に渡し、親の粒度感を AI に伝える。
+  // ADR 0053: 子は親より大きい値を付けてよい (cap しない)。
   // 既存タスク・新規分解で親が未設定なら "未設定" として従来 prompt と同等の挙動に倒す。
   const taskSizeText = parent.taskSize ?? "未設定";
 
@@ -99,7 +104,11 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
     "- 各子タスクの title は、親タスクの文脈なしで読んで意味が取れる短い独立した文言にする。",
     "  例 (悪): 「志望動機を書く」 / 例 (良): 「Dirbato 最終面接 志望動機 (パターン A) を書く」",
     `- title は ${MAX_TITLE_LEN} 文字以内。装飾的なプレフィックス (Step 1: 等) は付けない。`,
-    `- estimated_minutes は ${ALLOWED_ESTIMATE_BUCKETS.join("/")} のいずれかの整数か、自信が無ければ null。`,
+    `- estimated_minutes は 2 時間以下に収まるタスクの分単位見積もり専用 (ADR 0053)。`,
+    `  値は ${ALLOWED_ESTIMATE_BUCKETS.join("/")} のいずれかの整数。`,
+    `  task_size が 4h / 1d / large になるタスク (= 2 時間で終わらない) では必ず null を返す。`,
+    `  最大バケット 120 にクリップせず、task_size 側で大きさを表現する。`,
+    `  ≤ 2h のタスクでも判断に確信が持てない場合は null を返す。`,
     `- body は markdown で ${TARGET_BODY_LEN} 文字程度の実行メモ。実行手順 / 注意点 / 参照リンクなど、`,
     "  着手時に「何を / どうやって」を思い出さなくて済むようにする。",
     "  親 body の内容をそのまま貼らず、その子タスク固有の文脈に絞る。",
@@ -121,8 +130,11 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
     "- 4h    : 半日 (4 時間) 規模の作業",
     "- 1d    : 1 日 (8 時間) 規模の作業",
     "- large : 1 日では収まらない / さらに分解したほうがよい大物",
-    "親の task_size より大きい値を子に付けない。判断に確信が持てない場合は null を返す。",
-    "estimated_minutes と独立した軸であり、両方を埋めること。",
+    "task_size は分解後の実態に素直に付ける。親より大きい値も付けてよい (ADR 0053)。",
+    "(= 親の見積もりが楽観的だったシグナル / 親自身を再分解する余地のシグナル)",
+    "判断に確信が持てない場合は null を返す。",
+    "estimated_minutes (≤ 2h 専用) と task_size (全 size 帯) は別軸。",
+    "task_size は必ず埋める。estimated_minutes が null でも task_size は埋める。",
     "",
     "# 親タスク",
     `title: ${parent.title}`,
