@@ -13,9 +13,9 @@ export type CalendarSyncState = {
 };
 
 /**
- * 複合キー (ADR 0031/0033)。calendar 単位で sync_token / lastSyncedAt を独立に管理する。
- * Phase 2 までは primary 固定で動いていたため事実上 (google_calendar, primary, 'primary') のみだが、
- * Issue #144 / #146 で複数 calendar / 複数 account に拡張される。
+ * 複合キー (ADR 0031/0033/0049)。calendar 単位で sync_token / lastSyncedAt を独立に管理する。
+ * `externalCalendarId` は Google `calendarList.list` 由来の実 id (primary なら user の email)。
+ * リテラル `'primary'` を識別子に使わない (ADR 0049)。
  */
 export type CalendarSyncStateKey = {
   source: EventSource;

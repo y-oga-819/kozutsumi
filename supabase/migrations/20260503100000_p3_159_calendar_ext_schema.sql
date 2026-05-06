@@ -23,8 +23,12 @@
 -- * 命名は source-agnostic (ADR 0033)。Google 限定の名前は使わない。
 -- * `external_accounts` の Google OAuth 用列 (refresh_token 等) は本 migration に含めない
 --   (Issue #146 の auth model 再設計 ADR で確定後に追加)。
--- * 既存ユーザーの primary calendar を `external_accounts` + `user_calendar_subscriptions`
---   に seed して、既存挙動 (primary 固定の取り込み + 自動予定化) を維持する。
+-- * primary calendar の `external_calendar_id` は Google `calendarList.list` で resolve した
+--   実 id (= メールアドレス) を使う (ADR 0049)。マジック文字列 `'primary'` は保存しない。
+-- * 既存ユーザーへの seed (`external_accounts` / `user_calendar_subscriptions`) は本 migration では
+--   行わない。Google API resolve が必要なため、code 側 (`syncGoogleCalendar` の lazy seed) で
+--   subscribe 済 0 件の user に対して 1 行 upsert する。dogfood 単独運用 + migration 適用直後の
+--   DB リセット前提で、過去 ADR 0034 の seed 戦略 (`'primary'` リテラル) は本 migration から撤去した。
 -- * sync 経路で新しい external_account_id が必要になるケースは、code 側で lazy upsert
 --   する (Issue #159 §8 の最小コード変更スコープ)。
 
@@ -87,39 +91,17 @@ comment on table public.user_calendar_subscriptions is
   'ADR 0031: calendar 単位の subscription (Layer 1) と auto-promote 設定 (Layer 2)。';
 
 -- =====================================================================
--- 3. 既存ユーザーの primary を seed (ADR 0034 既存挙動互換)
+-- 3. (ADR 0049) primary 自動 seed は migration では行わない
 -- =====================================================================
 --
--- Phase 2 で primary 固定 sync を使っていた既存ユーザーが migration 直後も
--- そのまま動き続けるよう、(google_calendar, primary) の external_account +
--- subscription を seed する。
+-- primary calendar の `external_calendar_id` は Google `calendarList.list` で resolve した実 id
+-- (= メールアドレス) を使う (ADR 0049)。SQL migration からは Google API を叩けないため、本セクション
+-- では何も seed しない。code 側 (`syncGoogleCalendar` 経由の lazy seed) が subscription 0 件の user に
+-- 対して、初回 sync 時に primary calendar を 1 行 upsert する (実 id 解決を内包)。
 --
--- 対象は「過去に GCal sync をしたことがある or 現在 sync_state 行を持っている」ユーザー全員。
--- email が null の auth identity (theoretical edge case) は id::text を fallback 値にする。
-
-insert into public.external_accounts (user_id, source, external_account_id, display_name)
-select
-  u.id,
-  'google_calendar'::public.event_source,
-  coalesce(u.email, u.id::text),
-  '(primary)'
-  from auth.users u
- where u.id in (select distinct user_id from public.events where source = 'google_calendar')
-    or u.id in (select user_id from public.user_calendar_sync_state)
-on conflict do nothing;
-
-insert into public.user_calendar_subscriptions
-  (user_id, external_account_id, source, external_calendar_id, auto_promote_to_timeline, display_name)
-select
-  ea.user_id,
-  ea.id,
-  'google_calendar'::public.event_source,
-  'primary',
-  true,
-  '(primary)'
-  from public.external_accounts ea
- where ea.source = 'google_calendar'
-on conflict do nothing;
+-- 過去 ADR 0034 の seed 戦略 (リテラル `'primary'` を `external_calendar_id` に格納) は ADR 0049 で
+-- 廃止した。dogfood 単独運用 + migration 適用直後の DB リセット前提のため、本 migration から
+-- 既存ユーザー seed のロジックを撤去している。
 
 -- =====================================================================
 -- 4. events.visibility_override (ADR 0032)
@@ -149,16 +131,14 @@ comment on column public.events.visibility_override is
 --   - PR migration diff (compare.mjs) の「NOT NULL + default なし」アサーション回避
 --   - 実際の sync / create コードは常に external_calendar_id を明示的に渡す
 --     (google: subscription の calendar id、manual: 'manual')
--- google_calendar 既存行は 'primary' に明示的に backfill する (default 'manual' のままだと triple 衝突の余地)。
+-- google_calendar 既存行の backfill は本 migration では行わない (ADR 0049: primary calendar の実 id は
+-- Google API resolve でしか得られず、SQL からは backfill 不能)。dogfood 単独運用 + DB リセット前提で、
+-- 既存 google_calendar 行が残っているケースは想定しない (リセット後は code 経由で実 id を埋める)。
 -- manual 行の external_id は NULL のまま残るが、Postgres の UNIQUE は NULL 同士を等価としない
 -- ので、複数の manual event が共存できる挙動は変わらない (initial_schema と同じ)。
 
 alter table public.events
   add column external_calendar_id text not null default 'manual';
-
-update public.events
-   set external_calendar_id = 'primary'
- where source = 'google_calendar';
 
 alter table public.events drop constraint events_external_id_unique;
 
@@ -167,13 +147,13 @@ alter table public.events
   unique (source, external_calendar_id, external_id);
 
 comment on column public.events.external_calendar_id is
-  'ADR 0033: triple uniqueness の中間軸。manual は ''manual'' / google_calendar は subscription の external_calendar_id。';
+  'ADR 0033 / 0049: triple uniqueness の中間軸。manual は ''manual'' / google_calendar は Google API resolve した実 calendar id (primary なら user の email)。';
 
 create index events_user_calendar_start_idx
   on public.events (user_id, source, external_calendar_id, start_time);
 
 -- =====================================================================
--- 6. user_calendar_sync_state を複合キー化 (ADR 0031/0033)
+-- 6. user_calendar_sync_state を複合キー化 (ADR 0031/0033/0049)
 -- =====================================================================
 --
 -- 旧 PK: (user_id) / 新 PK: (user_id, source, external_account_id, external_calendar_id)
@@ -183,18 +163,20 @@ create index events_user_calendar_start_idx
 --
 -- default の方針 (compare.mjs 「NOT NULL + default なし」アサーション対策):
 --   - source: 'google_calendar' (現状 sync 経路は GCal のみ。Apple 等は将来別 ADR)
---   - external_calendar_id: 'primary' (Phase 2 既存挙動と一致)
---   - external_account_id: default 不能 (uuid FK)。代わりに column comment に
---     `@migration-safe-not-null` marker を付けて compare.mjs で opt-out。
---     同 migration 内で seed (section 3) 直後に NOT NULL 化するので既存行は壊れない。
+--   - external_account_id / external_calendar_id: default 不能 (前者は uuid FK、後者は ADR 0049 で
+--     マジック文字列 `'primary'` を禁止したため)。column comment に `@migration-safe-not-null`
+--     marker を付けて compare.mjs で opt-out。本 migration 内で section 3 seed を撤去した結果、
+--     既存行は backfill で external_account_id IS NULL になり下段 DELETE で全消えする (DB リセット相当)。
+--     よって NOT NULL 化は安全。
 --
--- 既存行の external_account_id は backfill で primary external_accounts.id を入れる。
--- seed が section 3 で走っているので JOIN は必ず成立する。
+-- ADR 0049: section 3 で external_accounts を seed しないため、本 migration を既存 DB に当てた場合
+-- 既存 user_calendar_sync_state 行は backfill で external_account_id = NULL → 一括削除される。
+-- dogfood 単独運用 + DB リセット前提なのでこの破壊は意図的。
 
 alter table public.user_calendar_sync_state
   add column source public.event_source not null default 'google_calendar',
   add column external_account_id uuid references public.external_accounts (id) on delete cascade,
-  add column external_calendar_id text not null default 'primary';
+  add column external_calendar_id text;
 
 update public.user_calendar_sync_state ucs
    set external_account_id = (
@@ -205,15 +187,17 @@ update public.user_calendar_sync_state ucs
           limit 1
        );
 
--- 万一 backfill 後に external_account_id が NULL の行が残った場合は明示的に削除する。
--- (seed 漏れの防御線。通常は 0 行)
 delete from public.user_calendar_sync_state where external_account_id is null;
 
 alter table public.user_calendar_sync_state
-  alter column external_account_id set not null;
+  alter column external_account_id set not null,
+  alter column external_calendar_id set not null;
 
 comment on column public.user_calendar_sync_state.external_account_id is
-  'ADR 0031/0033: subscription の calendar 識別子。同 migration の section 3 seed + section 6 backfill で埋まるため NOT NULL 安全。 @migration-safe-not-null';
+  'ADR 0031/0033: 外部アカウント (Google / Apple 等) の uuid FK。section 6 直後に NOT NULL 化、新規行は code 経路で常に明示値を渡すため NOT NULL 安全。 @migration-safe-not-null';
+
+comment on column public.user_calendar_sync_state.external_calendar_id is
+  'ADR 0033/0049: source 内 calendar 識別子 (primary は Google API resolve した email)。section 6 で既存行を全削除し、新規行は code 経路 (saveSyncState) が常に明示値を渡すため NOT NULL 安全。 @migration-safe-not-null';
 
 -- 旧 PK (user_id) を drop して複合 PK に置き換える。
 -- 旧 PK は initial_schema で `user_id uuid primary key references ...` の inline で

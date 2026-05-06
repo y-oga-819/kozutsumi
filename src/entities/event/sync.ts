@@ -10,7 +10,9 @@ import {
   GoogleApiUnauthorizedError,
   type GoogleCalendarEvent,
   type GoogleCalendarEventsListResponse,
+  type GoogleCalendarListResponse,
   type ListEventsParams,
+  listCalendars as defaultListCalendars,
   listEvents as defaultListEvents,
 } from "@/shared/google/calendar";
 import {
@@ -25,7 +27,7 @@ import type { DeletedEventSnapshot, EventGateway, UpsertGoogleCalendarEventInput
 import { SupabaseEventGateway } from "./supabase-gateway";
 
 /**
- * Google Calendar → events テーブル 同期本体 (ADR 0005 / 0006 / 0008 / 0010 / 0031 / 0033 / 0034)。
+ * Google Calendar → events テーブル 同期本体 (ADR 0005 / 0006 / 0010 / 0031 / 0033 / 0034 / 0049)。
  *
  * - 対象は user の subscription にある全 calendar (Issue #144)。primary 固定 (旧 ADR 0008) は廃止。
  * - 同期方式 (ADR 0006、calendar 単位):
@@ -38,13 +40,13 @@ import { SupabaseEventGateway } from "./supabase-gateway";
  *   `task_event_dependency_lost` (system actor) を action_log に書く (ADR 0034 L5)
  * - 401 を受けたら `refreshAccessToken` → 1 回だけ retry (ADR 0009)
  *
- * primary 固定の lazy upsert は subscription seed (#159) で済んでいるが、subscription が
- * 1 件もない user (新規 OAuth ユーザー) には primary を 1 行だけ作って続行する。
+ * subscription が 1 件もない user (新規 OAuth ユーザー) は、Google `calendarList.list` を叩いて
+ * `primary: true` な calendar の **実 id** (= ユーザーのメールアドレス) を解決し、その id で
+ * subscription を 1 行 seed する (ADR 0049)。リテラル `'primary'` を保存しない。
  */
 
 const SYNC_WINDOW_PAST_DAYS = 7;
 const SYNC_WINDOW_FUTURE_DAYS = 30;
-const PRIMARY_CALENDAR_ID = "primary";
 // 終日イベントを kozutsumi 時刻に落とし込む際のタイムゾーン (JST 固定)。
 // マルチタイムゾーン対応は将来スコープ。
 const ALL_DAY_TZ_OFFSET_MIN = 9 * 60;
@@ -90,11 +92,20 @@ export type SyncGoogleCalendarDeps = {
   gateway: EventGateway;
   syncStateGateway: CalendarSyncStateGateway;
   listEvents: (params: ListEventsParams) => Promise<GoogleCalendarEventsListResponse>;
+  /**
+   * Google `calendarList.list` の薄ラッパー。新規 OAuth ユーザーの primary calendar 実 id 解決に使う
+   * (ADR 0049)。test では mock を注入する。
+   */
+  listCalendars: (params: {
+    accessToken: string;
+    pageToken?: string;
+    minAccessRole?: "freeBusyReader" | "reader" | "writer" | "owner";
+  }) => Promise<GoogleCalendarListResponse>;
   getValidAccessToken: (supabase: SupabaseClient<Database>) => Promise<GoogleProviderAccess>;
   refreshAccessToken: (supabase: SupabaseClient<Database>) => Promise<GoogleProviderAccess>;
   /**
-   * 認証済 user の sync 対象 subscription を解決する。本 hook が空配列を返す user
-   * (subscription 行が無い新規 user) には primary 1 行を seed して返す default 実装が走る。
+   * 認証済 user の sync 対象 subscription を解決する。本 hook が空配列を返した場合、syncGoogleCalendar 本体が
+   * Google API で primary calendar の実 id を解決して subscription を 1 行 seed する (ADR 0049)。
    */
   resolveSubscriptionTargets: (supabase: SupabaseClient<Database>) => Promise<SubscriptionTarget[]>;
   /**
@@ -116,6 +127,7 @@ export async function syncGoogleCalendar(
     gateway: overrides.gateway ?? new SupabaseEventGateway(supabase),
     syncStateGateway: overrides.syncStateGateway ?? new SupabaseCalendarSyncStateGateway(supabase),
     listEvents: overrides.listEvents ?? defaultListEvents,
+    listCalendars: overrides.listCalendars ?? defaultListCalendars,
     getValidAccessToken: overrides.getValidAccessToken ?? defaultGetValidAccessToken,
     refreshAccessToken: overrides.refreshAccessToken ?? defaultRefreshAccessToken,
     resolveSubscriptionTargets:
@@ -125,11 +137,16 @@ export async function syncGoogleCalendar(
     now: overrides.now ?? (() => new Date()),
   };
 
-  const targets = await deps.resolveSubscriptionTargets(supabase);
-
   // 1 sync 全体で provider token は共有 (ADR 0009 / refresh は最大 1 回 / sync まとめて)。
   // 401 retry は calendar 単位のループで完結させる (各 calendar が独立して最大 1 回 refresh する余地を持つ)。
   const initial = await deps.getValidAccessToken(supabase);
+
+  let targets = await deps.resolveSubscriptionTargets(supabase);
+  if (targets.length === 0) {
+    // ADR 0049: 新規 OAuth ユーザー / subscription 未保有ユーザーには primary calendar の
+    // 実 id (= メールアドレス) で subscription を 1 行 seed する。リテラル 'primary' は保存しない。
+    targets = await seedPrimarySubscriptionFromApi(supabase, initial.accessToken, deps);
+  }
 
   let totalSynced = 0;
   let totalDeleted = 0;
@@ -301,11 +318,10 @@ async function syncOneCalendar(
 }
 
 /**
- * 認証済 user の subscription 一覧 (google_calendar) を解決する。
+ * 認証済 user の既存 subscription 一覧 (google_calendar) を読み取って返す。
  *
- * 既存ユーザーは migration の seed で行が存在する。新規ユーザー (migration 後に Google ログインしたが
- * #159 の seed 対象外) には primary 1 行を seed する。`external_account_id` (text) は
- * auth.users.email を優先、fallback で user.id を使う (migration の seed と同じ規約)。
+ * subscription が 1 件もない (新規 OAuth ユーザー / 全部 unsubscribe したユーザー) は空配列を返す。
+ * 呼び出し側 (`syncGoogleCalendar`) が必要に応じて Google API resolve 経由の lazy seed を行う (ADR 0049)。
  */
 export async function defaultResolveSubscriptionTargets(
   supabase: SupabaseClient<Database>,
@@ -326,17 +342,36 @@ export async function defaultResolveSubscriptionTargets(
     .eq("source", EVENT_SOURCE.GOOGLE_CALENDAR);
   if (subErr) throw subErr;
 
-  if ((subscriptions ?? []).length > 0) {
-    return (subscriptions ?? []).map((row) => ({
-      externalAccountUuid: row.external_account_id,
-      externalAccountIdentifier:
-        (row.external_accounts as unknown as { external_account_id: string } | null)
-          ?.external_account_id ?? "",
-      externalCalendarId: row.external_calendar_id,
-    }));
-  }
+  return (subscriptions ?? []).map((row) => ({
+    externalAccountUuid: row.external_account_id,
+    externalAccountIdentifier:
+      (row.external_accounts as unknown as { external_account_id: string } | null)
+        ?.external_account_id ?? "",
+    externalCalendarId: row.external_calendar_id,
+  }));
+}
 
-  // subscription が無い user (新規 OAuth ユーザー or seed 漏れ) は primary 1 行を作る。
+/**
+ * subscription が 1 件もない user の primary calendar を Google API resolve して seed する (ADR 0049)。
+ *
+ * - Google `calendarList.list` を叩いて `primary: true` な entry の `id` (= メールアドレス) を取得
+ * - `external_accounts` を upsert (既存なら再利用)
+ * - `user_calendar_subscriptions` を実 id で upsert (UNIQUE 違反は no-op)
+ *
+ * 401 を受けたら `refreshAccessToken` で 1 回だけ retry する (ADR 0009 と同じ流儀)。
+ */
+async function seedPrimarySubscriptionFromApi(
+  supabase: SupabaseClient<Database>,
+  initialAccessToken: string,
+  deps: SyncGoogleCalendarDeps,
+): Promise<SubscriptionTarget[]> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("not authenticated");
+
+  const primaryCalendarId = await resolvePrimaryCalendarId(supabase, initialAccessToken, deps);
+
   const externalAccountIdValue = user.email ?? user.id;
   const { data: existingAccount, error: selectAccErr } = await supabase
     .from("external_accounts")
@@ -368,13 +403,12 @@ export async function defaultResolveSubscriptionTargets(
     accountIdentifier = insertedAccount.external_account_id;
   }
 
-  // primary 1 行を upsert (subscription 行)。同じ user/account/calendar が存在すれば no-op。
   await supabase.from("user_calendar_subscriptions").upsert(
     {
       user_id: user.id,
       external_account_id: accountUuid,
       source: EVENT_SOURCE.GOOGLE_CALENDAR,
-      external_calendar_id: PRIMARY_CALENDAR_ID,
+      external_calendar_id: primaryCalendarId,
       auto_promote_to_timeline: true,
       display_name: "(primary)",
     },
@@ -385,9 +419,40 @@ export async function defaultResolveSubscriptionTargets(
     {
       externalAccountUuid: accountUuid,
       externalAccountIdentifier: accountIdentifier,
-      externalCalendarId: PRIMARY_CALENDAR_ID,
+      externalCalendarId: primaryCalendarId,
     },
   ];
+}
+
+async function resolvePrimaryCalendarId(
+  supabase: SupabaseClient<Database>,
+  initialAccessToken: string,
+  deps: SyncGoogleCalendarDeps,
+): Promise<string> {
+  let accessToken = initialAccessToken;
+  let hasRetriedAuth = false;
+  let pageToken: string | undefined;
+
+  while (true) {
+    let page: GoogleCalendarListResponse;
+    try {
+      page = await deps.listCalendars({ accessToken, pageToken, minAccessRole: "reader" });
+    } catch (err) {
+      if (err instanceof GoogleApiUnauthorizedError && !hasRetriedAuth) {
+        hasRetriedAuth = true;
+        const refreshed = await deps.refreshAccessToken(supabase);
+        accessToken = refreshed.accessToken;
+        continue;
+      }
+      throw err;
+    }
+    const primary = (page.items ?? []).find((c) => c.primary);
+    if (primary) return primary.id;
+    pageToken = page.nextPageToken;
+    if (!pageToken) {
+      throw new Error("primary calendar not found in Google calendarList");
+    }
+  }
 }
 
 async function defaultFindTasksDependingOnEvents(
