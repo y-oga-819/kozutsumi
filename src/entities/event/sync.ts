@@ -548,19 +548,24 @@ export function mapGoogleEventToUpsertInput(
 export function resolveEventTimes(
   event: GoogleCalendarEvent,
 ): { start: string; end: string } | null {
+  let times: { start: string; end: string } | null = null;
   if (event.start?.dateTime && event.end?.dateTime) {
-    return {
+    times = {
       start: new Date(event.start.dateTime).toISOString(),
       end: new Date(event.end.dateTime).toISOString(),
     };
-  }
-  if (event.start?.date && event.end?.date) {
-    return {
+  } else if (event.start?.date && event.end?.date) {
+    times = {
       start: allDayDateToJstUtc(event.start.date),
       end: allDayDateToJstUtc(event.end.date),
     };
   }
-  return null;
+  if (!times) return null;
+  // events_time_order check (end_time > start_time) を満たさない event は丸ごとスキップする。
+  // 1 件でも違反があると Supabase の batch upsert が calendar 単位で全件ロールバックされ、
+  // その calendar の取り込みが完全に失われるため (Issue #219)。
+  if (Date.parse(times.end) <= Date.parse(times.start)) return null;
+  return times;
 }
 
 export function extractMeetUrl(event: GoogleCalendarEvent): string | null {

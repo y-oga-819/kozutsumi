@@ -56,6 +56,36 @@ describe("resolveEventTimes", () => {
   test("start/end が欠けている不正イベントは null を返す", () => {
     expect(resolveEventTimes({ id: "e3", start: {}, end: {} })).toBeNull();
   });
+
+  test("end === start のゼロ長イベントは null を返す (events_time_order 違反回避 / Issue #219)", () => {
+    expect(
+      resolveEventTimes({
+        id: "zero-length",
+        start: { dateTime: "2026-04-23T10:00:00+09:00" },
+        end: { dateTime: "2026-04-23T10:00:00+09:00" },
+      }),
+    ).toBeNull();
+  });
+
+  test("end < start の逆順イベントは null を返す (events_time_order 違反回避 / Issue #219)", () => {
+    expect(
+      resolveEventTimes({
+        id: "reversed",
+        start: { dateTime: "2026-04-23T11:00:00+09:00" },
+        end: { dateTime: "2026-04-23T10:00:00+09:00" },
+      }),
+    ).toBeNull();
+  });
+
+  test("終日イベントで start.date === end.date のゼロ長は null を返す", () => {
+    expect(
+      resolveEventTimes({
+        id: "all-day-zero",
+        start: { date: "2026-04-23" },
+        end: { date: "2026-04-23" },
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("extractMeetUrl", () => {
