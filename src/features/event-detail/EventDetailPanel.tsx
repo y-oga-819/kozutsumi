@@ -7,7 +7,10 @@ import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
 import {
   fmtDuration,
+  formatAllDayRange,
   formatClock,
+  isAllDayEvent,
+  isDeadlineEvent,
   minutesOfDay,
   toDateTimeLocalInput,
 } from "../../shared/lib/time";
@@ -64,6 +67,9 @@ export function EventDetailPanel({
   const evStart = minutesOfDay(event.startTime);
   const evEnd = minutesOfDay(event.endTime);
   const duration = evEnd - evStart;
+  // ADR-0050: 終日 / ゼロ長 (締切系) は時刻 + duration の代わりに専用ラベルを出す。
+  const isAllDay = isAllDayEvent(event);
+  const isDeadline = !isAllDay && isDeadlineEvent(event);
   const isZoom = !!event.meetUrl?.includes("zoom");
   const meetLabel = event.meetUrl?.includes("zoom")
     ? "Zoom"
@@ -208,10 +214,29 @@ export function EventDetailPanel({
               <div className="mb-2 flex items-center gap-2">
                 {proj && <div className="h-2 w-2 rounded-full" style={{ background: evColor }} />}
                 {proj && <span className="font-jp text-[10px] text-fg-subtle">{proj.name}</span>}
-                <span className="text-[10px] tabular-nums text-fg-weak">
-                  {formatClock(event.startTime)}–{formatClock(event.endTime)} (
-                  {fmtDuration(duration)})
-                </span>
+                {isAllDay ? (
+                  <span className="text-[10px] tabular-nums text-fg-weak">
+                    <span
+                      aria-label="終日"
+                      className="mr-1.5 rounded-[3px] border border-bg-divider px-1.5 py-px font-jp text-[10px] text-fg-subtle"
+                    >
+                      終日
+                    </span>
+                    {formatAllDayRange(event)}
+                  </span>
+                ) : isDeadline ? (
+                  <span
+                    aria-label={`${formatClock(event.startTime)} 締切`}
+                    className="text-[10px] tabular-nums text-fg-weak"
+                  >
+                    ⏰ {formatClock(event.startTime)}
+                  </span>
+                ) : (
+                  <span className="text-[10px] tabular-nums text-fg-weak">
+                    {formatClock(event.startTime)}–{formatClock(event.endTime)} (
+                    {fmtDuration(duration)})
+                  </span>
+                )}
                 {isGoogleCalendar && <GoogleCalendarBadge size="md" />}
                 <div className="flex-1" />
                 {canDelete ? (

@@ -1,7 +1,15 @@
 import { EVENT_SOURCE, type Event } from "../../entities/event/types";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
-import { fmtDuration, formatClock, minutesOfDay } from "../../shared/lib/time";
+import {
+  allDayDayCount,
+  fmtDuration,
+  formatAllDayRange,
+  formatClock,
+  isAllDayEvent,
+  isDeadlineEvent,
+  minutesOfDay,
+} from "../../shared/lib/time";
 import { GoogleCalendarBadge } from "../../entities/event/GoogleCalendarBadge";
 
 type EventCardProps = {
@@ -13,11 +21,15 @@ type EventCardProps = {
 
 export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCardProps) {
   const { projectsById } = useProjects();
+  // ADR-0050: 終日 / ゼロ長 event は時刻判定 (past / now / next) を持たない。
+  // 終日は「今日中ずっと有効」、ゼロ長 (締切系) は時点で完結し past/now で揺れさせない。
+  const isAllDay = isAllDayEvent(event);
+  const isDeadline = !isAllDay && isDeadlineEvent(event);
   const evStart = minutesOfDay(event.startTime);
   const evEnd = minutesOfDay(event.endTime);
-  const isPast = evEnd <= nowMin;
-  const isNow = evStart <= nowMin && evEnd > nowMin;
-  const isNext = isNextCandidate && !isNow;
+  const isPast = !isAllDay && !isDeadline && evEnd <= nowMin;
+  const isNow = !isAllDay && !isDeadline && evStart <= nowMin && evEnd > nowMin;
+  const isNext = !isAllDay && !isDeadline && isNextCandidate && !isNow;
   const evColor = event.projectId ? getProject(projectsById, event.projectId).color : "#52525b";
   const hasAttachments = event.hasAttachments;
   const hasMeet = !!event.meetUrl;
@@ -36,10 +48,35 @@ export function EventCard({ event, nowMin, isNextCandidate, onClick }: EventCard
       }}
     >
       <div className="flex items-center gap-2">
-        <span className="shrink-0 text-[10px] tabular-nums text-fg-weak">
-          {formatClock(event.startTime)}–{formatClock(event.endTime)}
-        </span>
-        <span className="shrink-0 text-[9px] text-fg-faint">({fmtDuration(evEnd - evStart)})</span>
+        {isAllDay ? (
+          <span
+            aria-label="終日"
+            className="shrink-0 rounded-[3px] border border-bg-divider px-1.5 py-px font-jp text-[9px] text-fg-subtle"
+          >
+            終日
+          </span>
+        ) : isDeadline ? (
+          <span
+            aria-label={`${formatClock(event.startTime)} 締切`}
+            className="shrink-0 text-[10px] tabular-nums text-fg-weak"
+          >
+            ⏰ {formatClock(event.startTime)}
+          </span>
+        ) : (
+          <>
+            <span className="shrink-0 text-[10px] tabular-nums text-fg-weak">
+              {formatClock(event.startTime)}–{formatClock(event.endTime)}
+            </span>
+            <span className="shrink-0 text-[9px] text-fg-faint">
+              ({fmtDuration(evEnd - evStart)})
+            </span>
+          </>
+        )}
+        {isAllDay && allDayDayCount(event) > 1 ? (
+          <span className="shrink-0 text-[9px] tabular-nums text-fg-faint">
+            ({formatAllDayRange(event)})
+          </span>
+        ) : null}
         <span
           className={`flex-1 truncate font-jp text-[11px] ${
             isNow ? "font-medium text-fg-emphasized" : "font-normal text-fg-muted"

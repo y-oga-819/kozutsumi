@@ -559,7 +559,10 @@ export function partitionEvents(
 /**
  * `mapGoogleEventToUpsertInput` が `null` を返した event の理由を分類する。
  * - 時刻情報が片側欠損 / 両側欠損 → `missing_time`
- * - 時刻はあるが end <= start → `invalid_time_range` (events_time_order 違反 / Issue #219)
+ * - 時刻はあるが end < start (逆順) → `invalid_time_range` (events_time_order 違反 / Issue #219)
+ *
+ * ゼロ長 (`end === start`) は ADR-0050 / Issue #222 により締切系として取り込むので
+ * skip 対象から外している。
  */
 function classifySkipReason(event: GoogleCalendarEvent): SkippedEvent["reason"] {
   const hasDateTimePair = Boolean(event.start?.dateTime && event.end?.dateTime);
@@ -603,10 +606,11 @@ export function resolveEventTimes(
     };
   }
   if (!times) return null;
-  // events_time_order check (end_time > start_time) を満たさない event は丸ごとスキップする。
+  // events_time_order check (end_time >= start_time) を満たさない event は丸ごとスキップする。
   // 1 件でも違反があると Supabase の batch upsert が calendar 単位で全件ロールバックされ、
   // その calendar の取り込みが完全に失われるため (Issue #219)。
-  if (Date.parse(times.end) <= Date.parse(times.start)) return null;
+  // ゼロ長 (end === start) は ADR-0050 / Issue #222 により締切系として取り込む。
+  if (Date.parse(times.end) < Date.parse(times.start)) return null;
   return times;
 }
 

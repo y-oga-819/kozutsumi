@@ -4,7 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { CalendarSubscription } from "@/entities/calendar-subscription/types";
 import { EVENT_SOURCE, type Event, type EventVisibilityOverride } from "@/entities/event/types";
-import { formatClock, localDateOf } from "@/shared/lib/time";
+import {
+  formatAllDayRange,
+  formatClock,
+  isAllDayEvent,
+  isDeadlineEvent,
+  localDateOf,
+} from "@/shared/lib/time";
 
 import { useCalendarSubscriptions, type CalendarListItem } from "./useCalendarSubscriptions";
 
@@ -271,8 +277,29 @@ function OverridesSection({
                   {event.title}
                 </div>
                 <div className="mt-0.5 text-[10px] tabular-nums text-fg-weak">
-                  {localDateOf(event.startTime)} {formatClock(event.startTime)}–
-                  {formatClock(event.endTime)}
+                  {isAllDayEvent(event) ? (
+                    <>
+                      <span
+                        aria-label="終日"
+                        className="mr-1.5 rounded-[3px] border border-bg-divider px-1 py-px font-jp text-[9px] text-fg-subtle"
+                      >
+                        終日
+                      </span>
+                      {formatAllDayRange(event)}
+                    </>
+                  ) : isDeadlineEvent(event) ? (
+                    <>
+                      {localDateOf(event.startTime)}{" "}
+                      <span aria-label={`${formatClock(event.startTime)} 締切`}>
+                        ⏰ {formatClock(event.startTime)}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      {localDateOf(event.startTime)} {formatClock(event.startTime)}–
+                      {formatClock(event.endTime)}
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex shrink-0 items-center">
