@@ -15,12 +15,7 @@ const cases: Bar[] = [
   { total: 38, doneCount: 12, currentIndex: 13 },
 ];
 
-function AutoFitBar({
-  total,
-  doneCount,
-  currentIndex,
-  height,
-}: Bar & { height: number }) {
+function AutoFitBar({ total, doneCount, currentIndex, height }: Bar & { height: number }) {
   return (
     <div className="flex min-w-0 flex-1 items-center gap-[3px]">
       {Array.from({ length: total }).map((_, i) => {
@@ -50,18 +45,9 @@ function AutoFitBar({
   );
 }
 
-function Frame({
-  width,
-  children,
-}: {
-  width: number;
-  children: React.ReactNode;
-}) {
+function Frame({ width, children }: { width: number; children: React.ReactNode }) {
   return (
-    <div
-      className="flex items-center gap-2 rounded bg-[#fafafa] px-2 py-1.5"
-      style={{ width }}
-    >
+    <div className="flex items-center gap-2 rounded bg-[#fafafa] px-2 py-1.5" style={{ width }}>
       {children}
     </div>
   );
@@ -76,15 +62,11 @@ function Section({
 }) {
   return (
     <section className="mb-7">
-      <h2 className="mb-3 border-b border-[#e5e5e5] pb-1 text-[14px] font-semibold">
-        {title}
-      </h2>
+      <h2 className="mb-3 border-b border-[#e5e5e5] pb-1 text-[14px] font-semibold">{title}</h2>
       <div className="space-y-2">
         {cases.map((c) => (
           <div key={`md-${c.total}`} className="flex items-center gap-3 text-[11px]">
-            <span className="w-[110px] text-[#666] tabular-nums">
-              N={c.total} (md, 360px)
-            </span>
+            <span className="w-[110px] tabular-nums text-[#666]">N={c.total} (md, 360px)</span>
             {render(c, 360, 9)}
           </div>
         ))}
@@ -92,9 +74,7 @@ function Section({
           .filter((c) => c.total >= 8)
           .map((c) => (
             <div key={`sm-${c.total}`} className="flex items-center gap-3 text-[11px]">
-              <span className="w-[110px] text-[#666] tabular-nums">
-                N={c.total} (sm, 200px)
-              </span>
+              <span className="w-[110px] tabular-nums text-[#666]">N={c.total} (sm, 200px)</span>
               {render(c, 200, 6)}
             </div>
           ))}
@@ -106,14 +86,14 @@ function Section({
 export default function ParallelogramPreviewPage() {
   return (
     <main className="mx-auto max-w-[460px] px-4 py-6 text-[#1a1a1a]">
-      <h1 className="mb-2 text-[16px] font-bold">
-        ParallelogramProgress 比較プレビュー (#166)
-      </h1>
+      <h1 className="mb-2 text-[16px] font-bold">ParallelogramProgress 比較プレビュー (#166)</h1>
       <p className="mb-3 text-[11px] leading-relaxed text-[#666]">
-        現状 = 既存 component (固定 segment 幅 / N≤9 までしか考慮されていない)。<br />
-        案 X = 全件 segment auto-fit + 常に数字併記。<br />
-        案 Y = 全件 segment auto-fit のみ (数字なし)。<br />
-        枠 = container 幅。md=360px (TopTaskCard 想定) / sm=200px (TaskRow / モバイル想定)。
+        現状 = 既存 component (固定 segment 幅 / N≤9 までしか考慮されていない)。
+        <br />
+        案 X = 全件 segment auto-fit + 常に数字併記。
+        <br />
+        案 Y = 全件 segment auto-fit のみ (数字なし)。
+        <br />枠 = container 幅。md=360px (TopTaskCard 想定) / sm=200px (TaskRow / モバイル想定)。
       </p>
 
       <div className="mb-5 flex flex-wrap items-center gap-3 text-[11px] text-[#555]">
@@ -188,7 +168,7 @@ export default function ParallelogramPreviewPage() {
               currentIndex={c.currentIndex}
               height={h}
             />
-            <span className="shrink-0 tabular-nums text-[11px] text-[#444]">
+            <span className="shrink-0 text-[11px] tabular-nums text-[#444]">
               {c.doneCount} / {c.total}
             </span>
           </Frame>
@@ -210,8 +190,8 @@ export default function ParallelogramPreviewPage() {
       />
 
       <p className="mt-6 text-[11px] leading-relaxed text-[#888]">
-        メモ: 「現状」セクションでは N=18 / N=38 などで segment が枠から溢れる
-        (現状実装は N≤9 を想定した固定幅のため)。これが #166 で解決したい破綻ポイント。
+        メモ: 「現状」セクションでは N=18 / N=38 などで segment が枠から溢れる (現状実装は N≤9
+        を想定した固定幅のため)。これが #166 で解決したい破綻ポイント。
       </p>
     </main>
   );
