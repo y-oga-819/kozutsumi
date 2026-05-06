@@ -67,65 +67,81 @@ function makeAutoFitBar(withNumber: boolean): BarComponent {
   };
 }
 
-// V4: 10件チャンク — 10 個ごとに 1 つの大きい平行四辺形 + 内部 fill + 数字
+// V4: 10件チャンク (展開モード) — 完了 / 未完了の chunk は大きい平行四辺形 1 個に集約、
+// 現在いる chunk だけ 10 個の小さい平行四辺形に展開して per-item 状態を見せる。
+// 残り (capacity < 10 の last partial chunk) は常に smalls。
 const ChunkBar: BarComponent = ({ total, doneCount, currentIndex, color, size }) => {
   const chunkSize = 10;
-  const chunkCount = Math.ceil(total / chunkSize);
-  const height = size === "md" ? 14 : 9;
+  const bigHeight = size === "md" ? 14 : 9;
+  const smallHeight = size === "md" ? 9 : 6;
+  const currentChunkIdx = currentIndex > 0 ? Math.floor((currentIndex - 1) / chunkSize) : -1;
+
+  type Seg =
+    | { kind: "big"; key: string; capacity: number; allDone: boolean }
+    | { kind: "small"; key: string; isDone: boolean; isCurrent: boolean };
+  const segs: Seg[] = [];
+
+  let i = 0;
+  let chunkIdx = 0;
+  while (i < total) {
+    const startIdx = i + 1;
+    const endIdx = Math.min(i + chunkSize, total);
+    const capacity = endIdx - startIdx + 1;
+    const isCurrentChunk = chunkIdx === currentChunkIdx;
+    const isPartialChunk = capacity < chunkSize;
+
+    if (isCurrentChunk || isPartialChunk) {
+      for (let k = startIdx; k <= endIdx; k++) {
+        const isDone = k <= doneCount;
+        const isCurrent = k === currentIndex && !isDone;
+        segs.push({ kind: "small", key: `s-${k}`, isDone, isCurrent });
+      }
+    } else {
+      const allDone = endIdx <= doneCount;
+      segs.push({ kind: "big", key: `b-${chunkIdx}`, capacity, allDone });
+    }
+
+    i = endIdx;
+    chunkIdx++;
+  }
+
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-[3px]">
-        {Array.from({ length: chunkCount }).map((_, ci) => {
-          const startIdx = ci * chunkSize + 1;
-          const endIdx = Math.min((ci + 1) * chunkSize, total);
-          const capacity = endIdx - startIdx + 1;
-          const doneInChunk = Math.max(0, Math.min(capacity, doneCount - (startIdx - 1)));
-          const containsCurrent =
-            currentIndex >= startIdx && currentIndex <= endIdx && currentIndex > doneCount;
-          const fillPct = (doneInChunk / capacity) * 100;
-          const currentPosPct = containsCurrent
-            ? ((currentIndex - startIdx + 1) / capacity) * 100
-            : null;
-          const borderColor = containsCurrent ? color : `${color}55`;
-          const borderWidth = containsCurrent ? 1.5 : 1;
-          return (
-            <div
-              key={ci}
-              aria-hidden="true"
-              style={{
-                flex: `${capacity} 1 0`,
-                minWidth: 0,
-                height,
-                position: "relative",
-                transform: "skewX(-20deg)",
-                border: `${borderWidth}px solid ${borderColor}`,
-                borderRadius: 1,
-                overflow: "hidden",
-              }}
-            >
-              <div
+        {segs.map((s) => {
+          if (s.kind === "big") {
+            return (
+              <span
+                key={s.key}
+                aria-hidden="true"
                 style={{
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: `${fillPct}%`,
-                  background: color,
+                  flex: `${s.capacity} 1 0`,
+                  minWidth: 0,
+                  height: bigHeight,
+                  transform: "skewX(-20deg)",
+                  background: s.allDone ? color : "transparent",
+                  border: `1px solid ${color}55`,
+                  borderRadius: 1,
                 }}
               />
-              {currentPosPct !== null && (
-                <div
-                  style={{
-                    position: "absolute",
-                    left: `calc(${currentPosPct}% - 1px)`,
-                    top: 0,
-                    bottom: 0,
-                    width: 2,
-                    background: color,
-                  }}
-                />
-              )}
-            </div>
+            );
+          }
+          const borderColor = s.isCurrent ? color : `${color}55`;
+          const borderWidth = s.isCurrent ? 1.5 : 1;
+          return (
+            <span
+              key={s.key}
+              aria-hidden="true"
+              style={{
+                flex: "1 1 0",
+                minWidth: 0,
+                height: smallHeight,
+                transform: "skewX(-20deg)",
+                background: s.isDone ? color : "transparent",
+                border: `${borderWidth}px solid ${borderColor}`,
+                borderRadius: 1,
+              }}
+            />
           );
         })}
       </div>
@@ -192,9 +208,9 @@ const variants: { id: string; label: string; bar: BarComponent; note: string }[]
   },
   {
     id: "chunk",
-    label: "V4: 案 Z — 10件チャンク + 数字併記",
+    label: "V4: 案 Z — 10件チャンク (現在 chunk のみ展開) + 数字併記",
     bar: ChunkBar,
-    note: "10 個ごとに 1 つの「大きい平行四辺形」、内部 fill で chunk 内の進捗を表示。現在 chunk は枠太め + 縦線で正確位置。1 segment が大きく保たれる。",
+    note: "完了 / 未完了の chunk は「大きい平行四辺形 1 個」に集約。現在いる chunk だけ 10 個の小さい平行四辺形に展開して per-item 状態を表示。残り (10 未満の余り) は常に小さい平行四辺形。例: N=32 / current=18 → [大1=完了] [小10=現在 chunk] [大1=未完了] [小2=余り]。",
   },
   {
     id: "wrap",
@@ -300,6 +316,7 @@ function DoneListMock({ bar }: { bar: React.ReactNode }) {
 const samplesProgress: Bar[] = [
   { total: 8, doneCount: 3, currentIndex: 4 },
   { total: 18, doneCount: 8, currentIndex: 9 },
+  { total: 32, doneCount: 17, currentIndex: 18 },
   { total: 38, doneCount: 12, currentIndex: 13 },
 ];
 
