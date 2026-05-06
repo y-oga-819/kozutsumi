@@ -159,6 +159,7 @@ Done セクション内の進捗バーは current 強調なし (`currentIndex=0`
 
 ## Notes
 
+- §5 の **「セグメント幅は子数に応じて 3 段階で自動縮小 (~5 / ~9 / 10+)、10 子でも 480px に収まる」** の段は [ADR 0051](./0051-parallelogram-progress-wrap-for-large-n.md) で **partial supersede** された。N>10 の挙動は固定幅 + `flex-wrap` に変わる。それ以外の §5 (セグメント数 = 親の全子数、完了・現在・未完了の塗り分け、a11y 仕様) は本 ADR が引き続き有効。
 - プロトタイプ (`src/features/stack-view/__experiments__/` + `/experiments/adr-0016` ルート + `src/shared/supabase/middleware.ts` の `/experiments` PUBLIC_PATHS 追加) は **Phase 3 の本実装が落ち着いたタイミング**で削除する。
 - 平行四辺形プログレスや 3 行行カードの実装は `__experiments__/VariantE.tsx` を Phase 3 issue で本物の `src/features/task-stack/` に移植する想定。共通 component (`ParallelogramProgress`, `bodyPreview`, etc.) は移植時に shared レイヤへ昇格する。
 - Top の上ゾーンに将来追加されうる情報 (AI 提案メモ / 補正後見積もり / 依存タスク注意) は本 ADR の対象外。情報量が肥大化したら、上ゾーンの再構造化を別 ADR で検討する。
