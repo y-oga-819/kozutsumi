@@ -46,6 +46,8 @@ export const ACTION_TYPES = Object.freeze({
   EVENT_PROMOTED: "event_promoted",
   EVENT_DEMOTED: "event_demoted",
   EVENT_OVERRIDE_CLEARED: "event_override_cleared",
+  EVENT_VISIBILITY_RULE_ADDED: "event_visibility_rule_added",
+  EVENT_VISIBILITY_RULE_REMOVED: "event_visibility_rule_removed",
   EXTERNAL_ACCOUNT_ADDED: "external_account_added",
   EXTERNAL_ACCOUNT_REMOVED: "external_account_removed",
   EVENT_VISIBILITY_FROZEN_BY_SUBSCRIPTION_TOGGLE: "event_visibility_frozen_by_subscription_toggle",

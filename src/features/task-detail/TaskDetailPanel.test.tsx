@@ -134,6 +134,7 @@ describe("TaskDetailPanel", () => {
         externalId: null,
         externalCalendarId: "manual",
         visibilityOverride: "none",
+        recurringEventId: null,
         createdAt: "2026-04-11T00:00:00",
       },
     ];
@@ -171,6 +172,7 @@ describe("TaskDetailPanel", () => {
         externalId: null,
         externalCalendarId: "manual",
         visibilityOverride: "none",
+        recurringEventId: null,
         createdAt: "2026-04-11T00:00:00",
       },
     ];
@@ -199,6 +201,7 @@ describe("TaskDetailPanel", () => {
         externalId: null,
         externalCalendarId: "manual",
         visibilityOverride: "none",
+        recurringEventId: null,
         createdAt: "2026-04-11T00:00:00",
       },
     ];
@@ -226,6 +229,7 @@ describe("TaskDetailPanel", () => {
       externalId: null,
       externalCalendarId: "manual",
       visibilityOverride: "none",
+      recurringEventId: null,
       createdAt: "2026-04-09T00:00:00",
     };
     const future: Event = {
@@ -241,6 +245,7 @@ describe("TaskDetailPanel", () => {
       externalId: null,
       externalCalendarId: "manual",
       visibilityOverride: "none",
+      recurringEventId: null,
       createdAt: "2026-04-09T00:00:00",
     };
     const { getByText, queryByText } = renderPanel({
@@ -266,6 +271,7 @@ describe("TaskDetailPanel", () => {
       externalId: null,
       externalCalendarId: "manual",
       visibilityOverride: "none",
+      recurringEventId: null,
       createdAt: "2026-04-09T00:00:00",
     };
     const future: Event = {
@@ -281,6 +287,7 @@ describe("TaskDetailPanel", () => {
       externalId: null,
       externalCalendarId: "manual",
       visibilityOverride: "none",
+      recurringEventId: null,
       createdAt: "2026-04-09T00:00:00",
     };
     const { getByText, getAllByRole } = renderPanel({

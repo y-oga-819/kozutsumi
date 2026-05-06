@@ -39,6 +39,7 @@ const eventA: Event = {
   externalId: "ext-A",
   externalCalendarId: "primary",
   visibilityOverride: "none",
+  recurringEventId: null,
   createdAt: "2026-05-04T00:00:00.000Z",
 };
 

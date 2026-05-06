@@ -30,6 +30,7 @@ function fromRow(row: Tables<"events">): Event {
     externalId: row.external_id,
     externalCalendarId: row.external_calendar_id,
     visibilityOverride: row.visibility_override,
+    recurringEventId: row.recurring_event_id,
     createdAt: row.created_at,
   };
 }
@@ -144,9 +145,38 @@ export class SupabaseEventGateway implements EventGateway {
   async upsertFromGoogleCalendar(inputs: UpsertGoogleCalendarEventInput[]): Promise<number> {
     if (inputs.length === 0) return 0;
     const user_id = await getUserId(this.supabase);
-    // project_id / visibility_override を payload に含めないことで、ON CONFLICT DO UPDATE SET ... から
-    // 除外され、既存行の値が保持される (kozutsumi 側の拡張、ADR 0010 / ADR 0034 L4)
-    const payloads: TablesInsert<"events">[] = inputs.map((input) => ({
+
+    // ADR 0056 §2: 新規 instance 取り込み時に該当 rule があれば visibility_override を
+    // rule.override_value で初期化する。既存 instance は visibility_override を触らない
+    // (ADR 0034 L4 / ADR 0056 §5: 単発 override 保護)。
+    //
+    // 「新規 / 既存」を split して 2 段階の upsert を行う:
+    //   - 新規:   visibility_override を payload に含めて INSERT (rule 由来 or 'none')
+    //   - 既存:   visibility_override を payload に含めず ON CONFLICT DO UPDATE で保持
+    //
+    // 1 つの upsert にまとめると、既存行に対して payload の visibility_override で
+    // 上書きしてしまう (ON CONFLICT DO UPDATE SET の挙動)。
+
+    const externalIds = inputs.map((i) => i.externalId);
+    const { data: existingRows, error: selErr } = await this.supabase
+      .from("events")
+      .select("external_calendar_id, external_id")
+      .eq("user_id", user_id)
+      .eq("source", EVENT_SOURCE.GOOGLE_CALENDAR)
+      .in("external_id", externalIds);
+    if (selErr) throw selErr;
+    const existingKeys = new Set(
+      (existingRows ?? []).map((r) => `${r.external_calendar_id}::${r.external_id}`),
+    );
+    const isNew = (input: UpsertGoogleCalendarEventInput) =>
+      !existingKeys.has(`${input.externalCalendarId}::${input.externalId}`);
+
+    const newInputs = inputs.filter(isNew);
+    const existingInputs = inputs.filter((i) => !isNew(i));
+
+    const initialOverrides = await this.resolveInitialOverridesForNewInstances(user_id, newInputs);
+
+    const basePayload = (input: UpsertGoogleCalendarEventInput): TablesInsert<"events"> => ({
       user_id,
       title: input.title,
       start_time: input.startTime,
@@ -157,14 +187,103 @@ export class SupabaseEventGateway implements EventGateway {
       source: EVENT_SOURCE.GOOGLE_CALENDAR,
       external_id: input.externalId,
       external_calendar_id: input.externalCalendarId,
-    }));
-    // ADR 0033: triple uniqueness `(source, external_calendar_id, external_id)`
-    const { error } = await this.supabase
-      .from("events")
-      .upsert(payloads, { onConflict: "source,external_calendar_id,external_id" });
-    if (error) throw error;
-    // upsert は全 input に対して insert または update を実行するため、affected = inputs.length
+      recurring_event_id: input.recurringEventId,
+    });
+
+    if (newInputs.length > 0) {
+      const newPayloads: TablesInsert<"events">[] = newInputs.map((input) => ({
+        ...basePayload(input),
+        visibility_override:
+          initialOverrides.get(`${input.externalCalendarId}::${input.externalId}`) ?? "none",
+      }));
+      // ignoreDuplicates: 並走 sync で他経路から先行 INSERT された場合に既存値を上書きしない安全弁。
+      const { error } = await this.supabase.from("events").upsert(newPayloads, {
+        onConflict: "source,external_calendar_id,external_id",
+        ignoreDuplicates: true,
+      });
+      if (error) throw error;
+    }
+
+    if (existingInputs.length > 0) {
+      const existingPayloads: TablesInsert<"events">[] = existingInputs.map(basePayload);
+      // visibility_override は payload に含めないので ON CONFLICT DO UPDATE SET から除外され、
+      // 既存値が保持される (ADR 0034 L4)。
+      const { error } = await this.supabase
+        .from("events")
+        .upsert(existingPayloads, { onConflict: "source,external_calendar_id,external_id" });
+      if (error) throw error;
+    }
+
     return inputs.length;
+  }
+
+  /**
+   * ADR 0056 §2: 新規 instance に対し、該当する rule があれば visibility_override の初期値を
+   * rule.override_value に解決する。recurring_event_id が無い (= 単発) instance は対象外。
+   *
+   * 戻り値の Map key は `${external_calendar_id}::${external_id}`。値が無い instance は
+   * default の `'none'` で insert する (ADR 0032)。
+   */
+  private async resolveInitialOverridesForNewInstances(
+    userId: string,
+    newInputs: UpsertGoogleCalendarEventInput[],
+  ): Promise<Map<string, EventVisibilityOverride>> {
+    const result = new Map<string, EventVisibilityOverride>();
+    if (newInputs.length === 0) return result;
+
+    // (external_calendar_id, recurring_event_id) のユニーク集合を作って 1 query にまとめる。
+    const calendarToRecurringIds = new Map<string, Set<string>>();
+    for (const input of newInputs) {
+      if (!input.recurringEventId) continue;
+      let set = calendarToRecurringIds.get(input.externalCalendarId);
+      if (!set) {
+        set = new Set();
+        calendarToRecurringIds.set(input.externalCalendarId, set);
+      }
+      set.add(input.recurringEventId);
+    }
+    if (calendarToRecurringIds.size === 0) return result;
+
+    // calendar 単位で rules を batch fetch (PostgREST の `.in()` を使う)。
+    type RuleRow = {
+      external_calendar_id: string;
+      recurring_event_id: string;
+      scope: "this_and_following" | "all";
+      override_value: "shown" | "hidden";
+      from_start_time: string | null;
+    };
+    const rulesByKey = new Map<string, RuleRow>();
+    for (const [calendarId, recurringIds] of calendarToRecurringIds) {
+      const { data, error } = await this.supabase
+        .from("event_visibility_override_rules")
+        .select("external_calendar_id, recurring_event_id, scope, override_value, from_start_time")
+        .eq("user_id", userId)
+        .eq("source", EVENT_SOURCE.GOOGLE_CALENDAR)
+        .eq("external_calendar_id", calendarId)
+        .in("recurring_event_id", Array.from(recurringIds));
+      if (error) throw error;
+      for (const r of (data as RuleRow[] | null) ?? []) {
+        rulesByKey.set(`${r.external_calendar_id}::${r.recurring_event_id}`, r);
+      }
+    }
+    if (rulesByKey.size === 0) return result;
+
+    for (const input of newInputs) {
+      if (!input.recurringEventId) continue;
+      const rule = rulesByKey.get(`${input.externalCalendarId}::${input.recurringEventId}`);
+      if (!rule) continue;
+      // scope='all' は全 instance に適用、'this_and_following' は from_start_time 以降のみ適用
+      // (ADR 0056 §4: 操作対象 instance の start_time 起点)。
+      const applies =
+        rule.scope === "all" ||
+        (rule.scope === "this_and_following" &&
+          rule.from_start_time !== null &&
+          Date.parse(input.startTime) >= Date.parse(rule.from_start_time));
+      if (applies) {
+        result.set(`${input.externalCalendarId}::${input.externalId}`, rule.override_value);
+      }
+    }
+    return result;
   }
 
   async deleteByGoogleExternalIds(

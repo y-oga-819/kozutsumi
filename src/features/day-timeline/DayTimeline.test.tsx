@@ -17,6 +17,7 @@ const ev = (id: string, title: string, startTime: string, endTime: string): Even
   externalId: null,
   externalCalendarId: "manual",
   visibilityOverride: "none",
+  recurringEventId: null,
   createdAt: "2026-04-11T00:00:00",
 });
 

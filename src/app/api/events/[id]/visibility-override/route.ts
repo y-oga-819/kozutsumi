@@ -64,7 +64,9 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   // 現状の event を読む。RLS 違反 / 見つからない場合は 404 で早期 return。
   const { data: row, error: readErr } = await supabase
     .from("events")
-    .select("id, source, external_id, external_calendar_id, visibility_override, user_id")
+    .select(
+      "id, source, external_id, external_calendar_id, visibility_override, recurring_event_id, user_id",
+    )
     .eq("id", id)
     .maybeSingle();
   if (readErr) {
@@ -110,6 +112,10 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     external_id: row.external_id ?? "",
   };
 
+  // ADR 0056 §8: 単発操作でも recurring instance なら recurring_event_id を log に残す。
+  // scope='single' を明示することで Phase 4 が「単発 / 系列」を一目で区別できる。
+  const recurringEventId = row.recurring_event_id ?? null;
+
   if (next === "shown") {
     // to='shown' かつ default が auto_promote=true (= 表示) なら is_override_of_default=false。
     // to='shown' かつ default が auto_promote=false (= 非表示) なら是 default 逸脱。
@@ -124,6 +130,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
         to: "shown",
         subscription_auto_promote: subscriptionAutoPromote,
         is_override_of_default: isOverrideOfDefault,
+        scope: "single",
+        recurring_event_id: recurringEventId,
       },
       "user",
     );
@@ -139,6 +147,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
         to: "hidden",
         subscription_auto_promote: subscriptionAutoPromote,
         is_override_of_default: isOverrideOfDefault,
+        scope: "single",
+        recurring_event_id: recurringEventId,
       },
       "user",
     );

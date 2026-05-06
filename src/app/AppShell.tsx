@@ -129,6 +129,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
     updateEvent,
     deleteEvent,
     setEventVisibilityOverride,
+    setRecurringEventVisibilityOverride,
     createProject,
     updateProject,
     deleteProject,
@@ -299,6 +300,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
                   onUpdate={updateEvent}
                   onDelete={deleteEvent}
                   onSetVisibilityOverride={setEventVisibilityOverride}
+                  onSetRecurringVisibilityOverride={setRecurringEventVisibilityOverride}
                   subscriptionAutoPromote={subscriptionAutoPromote}
                 />
               );
