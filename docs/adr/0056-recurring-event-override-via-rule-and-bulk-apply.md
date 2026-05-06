@@ -1,4 +1,4 @@
-# ADR 0054: recurring event の系列 override は「rule + bulk apply」併用で表現する
+# ADR 0056: recurring event の系列 override は「rule + bulk apply」併用で表現する
 
 - **Status**: Accepted
 - **Date**: 2026-05-06
