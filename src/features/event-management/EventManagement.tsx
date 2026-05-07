@@ -368,7 +368,18 @@ function EventRow({
           )}
         </div>
       </div>
-      <div className="flex shrink-0 items-center">
+      <div className="flex shrink-0 items-center gap-1.5">
+        {overrideActive ? (
+          <button
+            type="button"
+            onClick={() => onToggle("none")}
+            disabled={busy}
+            className="rounded-[4px] border border-bg-divider bg-transparent px-2.5 py-[3px] font-jp text-[10px] text-fg-weak disabled:opacity-60"
+            title="個別指定を解除して、カレンダーの自動予定化設定に従う動作に戻す"
+          >
+            リセット
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => onToggle(next)}

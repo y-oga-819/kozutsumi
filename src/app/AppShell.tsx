@@ -342,7 +342,6 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
             onClose={() => setSettingsOpen(false)}
             primaryExternalAccountId={calendarSubscriptions[0]?.externalAccountId ?? null}
             events={events}
-            onSetVisibilityOverride={setEventVisibilityOverride}
           />
         </div>
       </CorrectionFactorsProvider>
