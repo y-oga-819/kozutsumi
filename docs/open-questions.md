@@ -29,3 +29,30 @@ AI がタスク分解時に判断材料が足りないと感じた場合、Agent
 現時点の方針: Phase 4 以降の将来構想として寝かせる。今は ADR 化しない（実装判断の段階に達していない）。[ADR-0036](./adr/0036-simplify-task-registration-workflow.md) / [ADR-0037](./adr/0037-task-form-single-entry-with-body.md) で確定した「TaskForm 統合 + body 欄」と互換であることだけ意識する（body が対話起点の入力に流用できる）。
 
 決着したら個別 ADR 化してこの節を削除する。
+
+## AI 分解 軸 1（ドメイン知識）補強の手段選択（Web 検索 vs Skills）
+
+AI タスク分解の精度向上のうち軸 1（ドメイン知識）を補う手段として、Web 検索による grounding (#209) と Skills 等の参照源 (#210) の 2 案がある。両者は「動的（外部世界）」vs「静的（作法）」で性質が異なるが、採用判断と棲み分け方針が確定していない。軸 2（個人化）側の信号取得基盤は #213 / #214 で揃った（[ADR-0051](./adr/0051-capture-user-editorial-signals-on-decomposition.md) / [ADR-0054](./adr/0054-behavioral-evaluation-signals-derive-from-existing-action-log.md)）ので、次に軸 1 を詰める段階。
+
+### 詰めるべき論点
+
+- **採用順序**: 並行検証 / どちらか先行 / 一方のみ
+- **棲み分け**: 「公開情報の動的取得」と「作法の参照源」をどう振り分けるか / 重複領域はあるか（例: 「○○の本を読む」の章立ては Web 検索、「執筆タスクは構成 → ドラフト → 推敲」は Skills、など）
+- **コスト構造**: API 呼び出しコスト × 月間分解回数（grounding 側） vs Skill 増殖時の選別コスト（Skills 側）
+- **起動条件**: AI 判断で必要時のみ呼ぶ / 全分解で読む — 両者で揃えるか別々か
+- **失敗時 fallback**: 検索失敗 / Skill 不存在のとき汎用 prompt にフォールバックする条件
+- **評価指標**: 採用/不採用を判定する指標 — 軸 2 で揃えた信号（先送り率 / 再分割率 / 編集差分量）を分解前後で比較できるか
+- **self-reinforcing 回避との整合**: 両者とも学習源が外部 = vision の差別化軸（行動データに基づく個人化）と矛盾しないことの再確認
+
+### 現時点の方針
+
+ADR 化しない。両者は独立に supersede されうる（片方だけ廃止が論理的に成立する）ため、採用判断が固まる前に 1 本に集約すると粒度が粗くなる。要求定義レベルで詰めて決着したら、採用する手段ごとに 1 ADR ずつ起票し、棲み分け方針が独立判断として残るなら別 ADR を起こす。
+
+### 関連
+
+- 親 roadmap: #208 AI タスク分解精度改善
+- 子 issue: #209 Web 検索 grounding / #210 Skills 活用 / #211 静的テンプレ（保管庫） / #212 自動再分解ループ
+- 関連 ADR: [ADR-0017](./adr/0017-ai-task-decomposition-async.md)（分解 async） / [ADR-0051](./adr/0051-capture-user-editorial-signals-on-decomposition.md)（編集差分捕捉） / [ADR-0054](./adr/0054-behavioral-evaluation-signals-derive-from-existing-action-log.md)（行動評価信号）
+- vision: 「行動パターン分析の深さ」差別化軸との整合（self-reinforcing 回避）
+
+決着したら個別 ADR 化してこの節を削除する。
