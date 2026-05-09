@@ -48,11 +48,63 @@ AI タスク分解の精度向上のうち軸 1（ドメイン知識）を補う
 
 ADR 化しない。両者は独立に supersede されうる（片方だけ廃止が論理的に成立する）ため、採用判断が固まる前に 1 本に集約すると粒度が粗くなる。要求定義レベルで詰めて決着したら、採用する手段ごとに 1 ADR ずつ起票し、棲み分け方針が独立判断として残るなら別 ADR を起こす。
 
+**さらに、本論点は次節「ユーザの好みを prompt に反映する仕組み」の方向性が見えるまで保留する。** その仕組みが無いと「軸 2 を優先」が抽象論に終わり、軸 1 由来の外部知識が user 個人の好みを上書きするリスクを断てない。
+
 ### 関連
 
 - 親 roadmap: #208 AI タスク分解精度改善
 - 子 issue: #209 Web 検索 grounding / #210 Skills 活用 / #211 静的テンプレ（保管庫） / #212 自動再分解ループ
 - 関連 ADR: [ADR-0017](./adr/0017-ai-task-decomposition-async.md)（分解 async） / [ADR-0051](./adr/0051-capture-user-editorial-signals-on-decomposition.md)（編集差分捕捉） / [ADR-0054](./adr/0054-behavioral-evaluation-signals-derive-from-existing-action-log.md)（行動評価信号）
 - vision: 「行動パターン分析の深さ」差別化軸との整合（self-reinforcing 回避）
+- 依存論点: 次節「ユーザの好みを prompt に反映する仕組み」
 
 決着したら個別 ADR 化してこの節を削除する。
+
+## ユーザの好みを prompt に反映する仕組み（軸 2 の prompt 注入経路）
+
+軸 2（個人化）の **信号取得基盤** は #213 / #214 で揃った（[ADR-0051](./adr/0051-capture-user-editorial-signals-on-decomposition.md) 編集差分捕捉、[ADR-0054](./adr/0054-behavioral-evaluation-signals-derive-from-existing-action-log.md) 行動評価信号 = action_log 導出）。しかし **取得した信号を prompt に流し込む仕組みは未整備**。この仕組みが整うまで「軸 2 を優先する」は抽象論にとどまり、軸 1（外部知識）を入れた際に user 個人の好みを上書きするリスクが残る。
+
+本仕組みは軸 1 を採用しなくても独立に欲しい（軸 1 抜きの汎用 prompt + user 個人化 fragment だけで精度向上できる）。vision「行動パターン分析の深さ」の差別化軸はここで初めて prompt レイヤに現れる。
+
+### 詰めるべき論点
+
+設計を以下の 3 軸で議論する:
+
+#### 軸 A: 何を「user の好み」として扱うか
+
+- **(A-1) 明示宣言**: user が「執筆は粒度大きめ」「朝は集中作業を入れない」等を能動的に書く
+  - 利点: シンプル、debug しやすい
+  - 欠点: user に書く負担を強いる / 属性ベースに寄るリスク（vision との緊張）
+- **(A-2) 行動データからの推論**: action_log / 編集差分から「user の好み」を自動抽出
+  - 利点: vision「行動ベース」と最も整合
+  - 欠点: 推論層の実装コスト / 精度検証が難しい
+- **(A-3) 過去事例の retrieval**: 類似タスクの過去編集差分を直接 prompt に例示
+  - 利点: 行動ベースかつ実装が比較的シンプル（retrieval + few-shot）
+  - 欠点: prompt が長くなる / retrieval 設計次第で精度がブレる
+
+併用も検討（例: (A-2)/(A-3) をメイン、(A-1) を補助）。
+
+#### 軸 B: どの粒度で prompt に注入するか
+
+- **(B-1) system instruction**: 恒常的な指示として prompt 冒頭に注入
+- **(B-2) 中間 fragment**: タスク種類 / 文脈に応じて動的に合成（軸 A の出力を fragment 化）
+- **(B-3) few-shot 例**: 具体例として「過去こう編集された」を埋める
+
+#### 軸 C: 取得元
+
+- 既存の action_log + ADR-0051 編集差分（追加スキーマ無しで始められる）
+- 新規 `user_preferences` テーブル（明示宣言用、(A-1) を採るなら必要）
+- 両方併用
+
+### 現時点の方針
+
+ADR 化しない。設計軸の決着前に ADR を切ると粒度が粗い。本節で論点を詰めて方向性が固まったら、採用する仕組みごとに 1 ADR 起票する。
+
+### 関連
+
+- 軸 2 信号取得: [ADR-0051](./adr/0051-capture-user-editorial-signals-on-decomposition.md)（編集差分捕捉） / [ADR-0054](./adr/0054-behavioral-evaluation-signals-derive-from-existing-action-log.md)（行動評価信号 = action_log 導出）
+- 既存個人化要素: ADR-0024〜0026（カテゴリ中央値ベースの見積もり補正）— ただし「補正倍率」であり prompt 内容そのものを変えるものではない
+- vision: 「行動パターン分析の深さ」差別化軸の核心（軸 2 の prompt 注入経路がないと差別化が prompt レイヤに表れない）
+- 関連 issue: #208 親 / #209 / #210（軸 1 議論は本仕組みに依存して保留）
+
+決着したら採用する仕組みごとに ADR 起票してこの節を削除する。
