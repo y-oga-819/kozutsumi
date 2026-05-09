@@ -1,0 +1,2498 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>kozutsumi 設計リサーチ — 想定ユーザーの行動特性を踏まえたタスク管理の方向性検討</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #faf9f6;
+        --bg-card: #ffffff;
+        --bg-callout: #f4f3ee;
+        --text: #18181b;
+        --text-muted: #52525b;
+        --text-subtle: #71717a;
+        --border: #e4e4e7;
+        --border-strong: #d4d4d8;
+
+        --accent-synthesis: #18181b;
+        --accent-academic: #4f46e5;
+        --accent-books: #c2410c;
+        --accent-gamification: #0d9488;
+        --accent-crossdomain: #15803d;
+
+        --tint-academic: rgba(79, 70, 229, 0.08);
+        --tint-books: rgba(194, 65, 12, 0.08);
+        --tint-gamification: rgba(13, 148, 136, 0.08);
+        --tint-crossdomain: rgba(21, 128, 61, 0.08);
+
+        --warn: #b91c1c;
+        --warn-bg: rgba(185, 28, 28, 0.06);
+        --good: #15803d;
+        --good-bg: rgba(21, 128, 61, 0.06);
+
+        --font-sans:
+          "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        --font-serif: "Noto Serif JP", Georgia, "Times New Roman", serif;
+        --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+        --max-width: 720px;
+        --radius: 8px;
+        --radius-sm: 4px;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f0f10;
+          --bg-card: #18181b;
+          --bg-callout: #1f1f23;
+          --text: #fafafa;
+          --text-muted: #a1a1aa;
+          --text-subtle: #71717a;
+          --border: #27272a;
+          --border-strong: #3f3f46;
+
+          --accent-synthesis: #fafafa;
+          --accent-academic: #a5b4fc;
+          --accent-books: #fdba74;
+          --accent-gamification: #5eead4;
+          --accent-crossdomain: #86efac;
+
+          --tint-academic: rgba(165, 180, 252, 0.08);
+          --tint-books: rgba(253, 186, 116, 0.08);
+          --tint-gamification: rgba(94, 234, 212, 0.08);
+          --tint-crossdomain: rgba(134, 239, 172, 0.08);
+
+          --warn: #fca5a5;
+          --warn-bg: rgba(252, 165, 165, 0.08);
+          --good: #86efac;
+          --good-bg: rgba(134, 239, 172, 0.08);
+        }
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+        -webkit-text-size-adjust: 100%;
+      }
+      body {
+        margin: 0;
+        font-family: var(--font-sans);
+        font-size: 16px;
+        line-height: 1.85;
+        color: var(--text);
+        background: var(--bg);
+        font-feature-settings: "palt";
+      }
+
+      a {
+        color: inherit;
+        text-decoration: underline;
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+        text-decoration-color: var(--border-strong);
+        transition: text-decoration-color 0.15s;
+      }
+      a:hover {
+        text-decoration-color: currentColor;
+      }
+
+      .container {
+        max-width: var(--max-width);
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+
+      /* Progress bar */
+      .progress {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: transparent;
+        z-index: 100;
+        pointer-events: none;
+      }
+      .progress__bar {
+        height: 100%;
+        width: 0;
+        background: var(--text);
+        transition: width 0.05s linear;
+      }
+
+      /* Hero */
+      .hero {
+        padding: 64px 0 48px;
+        border-bottom: 1px solid var(--border);
+      }
+      .hero__eyebrow {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text-subtle);
+        margin: 0 0 16px;
+      }
+      .hero__title {
+        font-family: var(--font-serif);
+        font-weight: 700;
+        font-size: clamp(28px, 5vw, 40px);
+        line-height: 1.35;
+        margin: 0 0 20px;
+        letter-spacing: -0.01em;
+      }
+      .hero__lead {
+        font-size: 16px;
+        color: var(--text-muted);
+        margin: 0 0 24px;
+        line-height: 1.85;
+      }
+      .hero__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 24px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-family: var(--font-mono);
+        border: 1px solid var(--border-strong);
+        border-radius: 999px;
+        color: var(--text-muted);
+        background: var(--bg-card);
+      }
+
+      /* Nav */
+      .nav {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: color-mix(in srgb, var(--bg) 90%, transparent);
+        backdrop-filter: saturate(180%) blur(12px);
+        -webkit-backdrop-filter: saturate(180%) blur(12px);
+        border-bottom: 1px solid var(--border);
+      }
+      .nav__inner {
+        display: flex;
+        gap: 4px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        padding: 12px 20px;
+        max-width: var(--max-width);
+        margin: 0 auto;
+      }
+      .nav__inner::-webkit-scrollbar {
+        display: none;
+      }
+      .nav__link {
+        flex-shrink: 0;
+        padding: 6px 12px;
+        font-size: 13px;
+        color: var(--text-muted);
+        text-decoration: none;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        white-space: nowrap;
+        transition:
+          color 0.15s,
+          border-color 0.15s,
+          background 0.15s;
+      }
+      .nav__link:hover {
+        color: var(--text);
+      }
+      .nav__link.is-active {
+        color: var(--text);
+        border-color: var(--border-strong);
+        background: var(--bg-card);
+      }
+
+      /* Section */
+      .section {
+        padding: 64px 0 32px;
+        border-bottom: 1px solid var(--border);
+      }
+      .section:last-of-type {
+        border-bottom: none;
+      }
+      .section__head {
+        margin-bottom: 32px;
+        padding-left: 16px;
+        border-left: 3px solid var(--accent);
+      }
+      .section__eyebrow {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin: 0 0 8px;
+      }
+      .section__title {
+        font-family: var(--font-serif);
+        font-size: clamp(22px, 4vw, 28px);
+        font-weight: 700;
+        line-height: 1.4;
+        margin: 0 0 12px;
+      }
+      .section__lead {
+        font-size: 15px;
+        color: var(--text-muted);
+        margin: 0;
+        line-height: 1.85;
+      }
+
+      .section--synthesis {
+        --accent: var(--accent-synthesis);
+      }
+      .section--academic {
+        --accent: var(--accent-academic);
+        --tint: var(--tint-academic);
+      }
+      .section--books {
+        --accent: var(--accent-books);
+        --tint: var(--tint-books);
+      }
+      .section--gamification {
+        --accent: var(--accent-gamification);
+        --tint: var(--tint-gamification);
+      }
+      .section--crossdomain {
+        --accent: var(--accent-crossdomain);
+        --tint: var(--tint-crossdomain);
+      }
+
+      /* Cards */
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 24px;
+        margin: 24px 0;
+      }
+      .card--accent {
+        border-left: 3px solid var(--accent);
+      }
+
+      .card__title {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0 0 4px;
+        line-height: 1.4;
+      }
+      .card__sub {
+        font-size: 12px;
+        color: var(--text-subtle);
+        font-family: var(--font-mono);
+        margin: 0 0 16px;
+      }
+      .card__body {
+        font-size: 15px;
+        line-height: 1.85;
+      }
+      .card__body p {
+        margin: 12px 0;
+      }
+      .card__body ul,
+      .card__body ol {
+        padding-left: 20px;
+        margin: 12px 0;
+      }
+      .card__body li {
+        margin: 6px 0;
+      }
+      .card__body strong {
+        font-weight: 700;
+      }
+
+      /* Pull quote */
+      .quote {
+        margin: 16px 0;
+        padding: 16px 20px;
+        background: var(--tint, var(--bg-callout));
+        border-left: 3px solid var(--accent);
+        border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        font-family: var(--font-serif);
+        font-size: 15px;
+        font-style: italic;
+        line-height: 1.75;
+        color: var(--text);
+      }
+      .quote cite {
+        display: block;
+        margin-top: 8px;
+        font-family: var(--font-sans);
+        font-style: normal;
+        font-size: 12px;
+        color: var(--text-subtle);
+      }
+
+      /* Number callout */
+      .stat {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 16px;
+        background: var(--bg-callout);
+        border-radius: var(--radius-sm);
+        margin: 12px 0;
+      }
+      .stat__num {
+        font-family: var(--font-serif);
+        font-size: 32px;
+        font-weight: 700;
+        color: var(--accent);
+        line-height: 1;
+      }
+      .stat__label {
+        font-size: 14px;
+        color: var(--text-muted);
+      }
+
+      /* Tables */
+      .table-wrap {
+        overflow-x: auto;
+        margin: 20px 0;
+        -webkit-overflow-scrolling: touch;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      th,
+      td {
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      th {
+        font-weight: 700;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        background: var(--bg-callout);
+        border-bottom: 1px solid var(--border-strong);
+      }
+      tr:last-child td {
+        border-bottom: none;
+      }
+
+      /* Two-column lists */
+      .grid-two {
+        display: grid;
+        gap: 16px;
+        margin: 20px 0;
+      }
+      @media (min-width: 640px) {
+        .grid-two {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      .panel {
+        padding: 20px;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--bg-card);
+      }
+      .panel--good {
+        background: var(--good-bg);
+        border-color: color-mix(in srgb, var(--good) 30%, var(--border));
+      }
+      .panel--warn {
+        background: var(--warn-bg);
+        border-color: color-mix(in srgb, var(--warn) 30%, var(--border));
+      }
+      .panel__title {
+        font-size: 13px;
+        font-family: var(--font-mono);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin: 0 0 12px;
+      }
+      .panel--good .panel__title {
+        color: var(--good);
+      }
+      .panel--warn .panel__title {
+        color: var(--warn);
+      }
+      .panel ul {
+        padding-left: 18px;
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.75;
+      }
+      .panel li {
+        margin: 6px 0;
+      }
+
+      /* Ranked list */
+      .ranked {
+        counter-reset: rank;
+        padding: 0;
+        list-style: none;
+        margin: 16px 0;
+      }
+      .ranked li {
+        counter-increment: rank;
+        position: relative;
+        padding: 16px 16px 16px 56px;
+        margin: 8px 0;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        line-height: 1.75;
+      }
+      .ranked li::before {
+        content: counter(rank);
+        position: absolute;
+        left: 16px;
+        top: 16px;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-serif);
+        font-weight: 700;
+        font-size: 16px;
+        color: var(--accent);
+        background: var(--tint, var(--bg-callout));
+        border-radius: 50%;
+      }
+      .ranked li strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 15px;
+      }
+
+      /* Sources */
+      .sources {
+        margin-top: 24px;
+        padding-top: 16px;
+        border-top: 1px dashed var(--border-strong);
+      }
+      .sources__title {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-subtle);
+        margin: 0 0 8px;
+      }
+      .sources ul {
+        padding-left: 18px;
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.75;
+        color: var(--text-muted);
+      }
+      .sources a {
+        color: var(--text-muted);
+      }
+
+      /* Footer */
+      footer {
+        padding: 48px 0 64px;
+        border-top: 1px solid var(--border);
+        text-align: center;
+        color: var(--text-subtle);
+        font-size: 13px;
+      }
+      footer a {
+        color: var(--text-muted);
+      }
+      .footer__links {
+        display: flex;
+        justify-content: center;
+        gap: 24px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+
+      /* Misc */
+      .small-caps {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--text-subtle);
+      }
+      hr.divider {
+        border: 0;
+        border-top: 1px dashed var(--border);
+        margin: 32px 0;
+      }
+
+      /* Tag list */
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 8px 0 16px;
+      }
+      .tag {
+        display: inline-block;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-family: var(--font-mono);
+        color: var(--accent);
+        background: var(--tint, var(--bg-callout));
+        border-radius: 999px;
+      }
+
+      /* Convergence highlight */
+      .convergence td:first-child {
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      /* Adopt levels */
+      .level {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-family: var(--font-mono);
+        border-radius: 999px;
+        letter-spacing: 0.04em;
+      }
+      .level--hard {
+        color: var(--good);
+        background: var(--good-bg);
+      }
+      .level--soft {
+        color: #b45309;
+        background: rgba(180, 83, 9, 0.08);
+      }
+      .level--avoid {
+        color: var(--warn);
+        background: var(--warn-bg);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="progress" aria-hidden="true">
+      <div class="progress__bar" id="progressBar"></div>
+    </div>
+
+    <header class="hero">
+      <div class="container">
+        <p class="hero__eyebrow">Research · 2026-05</p>
+        <h1 class="hero__title">想定ユーザーの行動特性を踏まえた<br />タスク管理の方向性検討</h1>
+        <p class="hero__lead">
+          kozutsumi の現 vision にある「per-task 予実計測」「AI 自動分解」「タイマー駆動」が、過集中
+          / 興味依存 /
+          強制中断耐性の低さといった行動傾向に対して逆効果になる可能性が浮上した。方向性転換
+          (ポモドーロ寄り体感 / ゲーミフィケーション / ドリルダウン型ゴール体験) を検討するため、4
+          領域で深掘り調査を実施し、その横断的シンセシスをこのページに整理する。
+        </p>
+        <div class="hero__meta">
+          <span class="chip">学術・臨床</span>
+          <span class="chip">書籍・記事</span>
+          <span class="chip">ゲーミフィケーション UI</span>
+          <span class="chip">異分野報酬設計</span>
+        </div>
+      </div>
+    </header>
+
+    <nav class="nav" aria-label="セクションナビ">
+      <div class="nav__inner">
+        <a class="nav__link" href="#synthesis">統合考察</a>
+        <a class="nav__link" href="#academic">学術・臨床</a>
+        <a class="nav__link" href="#books">書籍・記事</a>
+        <a class="nav__link" href="#gamification">ゲーミフィケーション</a>
+        <a class="nav__link" href="#crossdomain">異分野報酬</a>
+        <a class="nav__link" href="#decisions">設計判断</a>
+      </div>
+    </nav>
+
+    <main>
+      <!-- ============ 統合考察 ============ -->
+      <section class="section section--synthesis" id="synthesis">
+        <div class="container">
+          <header class="section__head">
+            <p class="section__eyebrow">Synthesis · 横断的シンセシス</p>
+            <h2 class="section__title">4 領域が偶然 (実は必然) 同じことを言っている</h2>
+            <p class="section__lead">
+              独立した分野が同じ結論に収斂するとき、それは設計原則として強い。理論的支柱は Russell
+              Barkley の「ADHD = 自己制御の発達遅延」モデル。Solanto の臨床 CBT、Mahan の Wall of
+              Awful
+              がその上に積まれ、書籍・ゲーミフィケーション・異分野設計まで全てが同じ方向を指す。
+            </p>
+          </header>
+
+          <div class="card card--accent">
+            <p class="card__sub">理論的支柱</p>
+            <h3 class="card__title">Barkley の motivational prosthesis 理論</h3>
+            <div class="card__body">
+              <p>
+                ADHD 当事者の executive function は同年代より
+                <strong>約 30% 遅れる</strong>。意志ではなく構造の問題。行動制御は「temporal
+                now」に押し戻され、過去・未来から切断される (time blindness)。
+              </p>
+              <div class="quote">
+                Artificial reward programs become for the person with executive function deficits
+                what prosthetic devices such as mechanical limbs are to the physically disabled.
+                <cite>— Russell Barkley</cite>
+              </div>
+              <p>
+                <strong>kozutsumi への含意</strong>: 「学習する AI
+                秘書」は装飾ではなく、臨床的に正当な義肢 (motivational prosthesis)
+                として位置づけられる。これは vision のモートに対する強い後ろ盾。
+              </p>
+            </div>
+          </div>
+
+          <h3 style="margin: 32px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            収斂表: 独立分野が同じことを指す
+          </h3>
+          <p style="font-size: 14px; color: var(--text-muted); margin: 0 0 16px">
+            主要テーマごとに、4
+            領域それぞれで何が言われているかを並べる。空欄は「その分野では強くは出てこない」の意味。
+          </p>
+          <div class="table-wrap">
+            <table class="convergence">
+              <thead>
+                <tr>
+                  <th>テーマ</th>
+                  <th>学術</th>
+                  <th>書籍</th>
+                  <th>ゲーミフィケーション</th>
+                  <th>異分野</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>外在化</td>
+                  <td>Barkley Rule 4</td>
+                  <td>借金玉 / Bullet Journal</td>
+                  <td>—</td>
+                  <td>Notion グラフ</td>
+                </tr>
+                <tr>
+                  <td>次の物理アクション</td>
+                  <td>Solanto "first step too big"</td>
+                  <td>GTD / 小鳥遊 / Davis</td>
+                  <td>Quest log 階層</td>
+                  <td>Khan Academy 知識ツリー</td>
+                </tr>
+                <tr>
+                  <td>見積もり vs 実績学習</td>
+                  <td>—</td>
+                  <td>タスクシュート / McCabe</td>
+                  <td>—</td>
+                  <td>Whoop Recovery / YNAB</td>
+                </tr>
+                <tr>
+                  <td>連続 streak は破綻</td>
+                  <td>—</td>
+                  <td>Atomic Habits ADHD 批判</td>
+                  <td>Klarity / Cohorty / Habitica</td>
+                  <td>Snapchat ストリーク毒性</td>
+                </tr>
+                <tr>
+                  <td>罪悪感の除去</td>
+                  <td>—</td>
+                  <td>Davis "morally neutral"</td>
+                  <td>Finch (罰なし)</td>
+                  <td>Whoop の説教回避</td>
+                </tr>
+                <tr>
+                  <td>過集中の尊重</td>
+                  <td>hyperfocus harvesting</td>
+                  <td>Hallowell / 半熟ポモドーロ</td>
+                  <td>—</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td>ナラティブ振り返り</td>
+                  <td>—</td>
+                  <td>Bullet Journal Migration</td>
+                  <td>アチーブメント希少度</td>
+                  <td><strong>Spotify Wrapped</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 style="margin: 40px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            日本の系譜上の先行者: タスクシュート
+          </h3>
+          <div class="card">
+            <div class="card__body">
+              <p>
+                大橋悦夫の<strong>タスクシュート</strong> (2006〜) は kozutsumi の vision
+                L53「見積もりは信用できない」「行動データから補正」をほぼそのまま実装してきた日本の系譜。
+              </p>
+              <ul>
+                <li>タスクシュート: ユーザーが手動で時刻記録、計算式で補正</li>
+                <li>kozutsumi: AI が摩擦ゼロで passive 観測 + 個人特化学習</li>
+              </ul>
+              <p>
+                この延長線で語れることは戦略的に有利。新発明ではなく「<strong
+                  >日本の系譜の AI 進化版</strong
+                >」と位置づけられる。
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 設計判断 ============ -->
+      <section class="section section--synthesis" id="decisions">
+        <div class="container">
+          <header class="section__head">
+            <p class="section__eyebrow">Decisions · 設計上の重大な意思決定ポイント</p>
+            <h2 class="section__title">採用 / 慎重 / 不採用</h2>
+            <p class="section__lead">4 領域の収斂から、kozutsumi の設計判断を 3 段階で整理する。</p>
+          </header>
+
+          <h3 style="margin: 24px 0 16px; font-family: var(--font-serif); font-size: 20px">
+            <span class="level level--hard">A · ハード採用</span>
+            <span style="margin-left: 8px">収斂が強く、迷いなく取るべき</span>
+          </h3>
+
+          <div class="card card--accent">
+            <p class="card__sub">A1</p>
+            <h4 class="card__title">ゴールツリーで next physical action まで降ろす</h4>
+            <div class="card__body">
+              <p>
+                GTD + 小鳥遊 + Barkley + Davis + Quest log + Khan Academy の収斂。<strong
+                  >leaf は Tasty Task 制約</strong
+                >: 1h 以下、迷わない、完了条件が言語化。leaf 完了で上位ノードの progress
+                が伸びる。これが「ゴールが見える」を成立させる唯一の構造。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <p class="card__sub">A2</p>
+            <h4 class="card__title">摩擦ゼロ計測 (click-start / end の廃止)</h4>
+            <div class="card__body">
+              <p>
+                Solanto + 半熟ポモドーロ + Hallowell hyperfocus harvesting + Whoop passive
+                計測の収斂。per-task 予実は捨て、<strong
+                  >「自然な切り上げ」をセッション境界として post-hoc に推定</strong
+                >する。Recovery Score 型の朝の 1 スコア提示。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <p class="card__sub">A3</p>
+            <h4 class="card__title">罰しない / 失わせない</h4>
+            <div class="card__body">
+              <p>
+                Habitica HP / Duolingo Streak / Battle Pass / Snapchat
+                の失敗事例から完全に避けるべきリストが確定。Finch がなぜ ADHD 層から愛されるか =
+                罰がない。<strong>連続 streak ではなく累積カウント</strong
+                >。「戻ってきた」を肯定する文言。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <p class="card__sub">A4</p>
+            <h4 class="card__title">感情状態の遷移を経由するエントリポイント</h4>
+            <div class="card__body">
+              <p>
+                Mahan の Wall of Awful「ドア戦略」+ Davis の On-ramping + Hallowell connection。AI
+                が「<strong>今このタスクの感情障壁が高そう</strong>」を検出したら、強制開始ではなく状態遷移を提案する介入
+                (散歩 / 音楽 / easier subtask 先出し)。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <p class="card__sub">A5</p>
+            <h4 class="card__title">四半期 / 年次 Wrapped (Spotify 型ナラティブ)</h4>
+            <div class="card__body">
+              <p>
+                異分野リサーチの最大の発見。AI 生成ナラティブで「あなたの 2026 年:
+                火曜午前が最も集中した、最もエネルギーを注いだのは X、3 月にようやく完了したのは
+                Y」を体験化。<strong>他のタスクアプリは絶対に真似できない</strong>。Bullet Journal
+                の Migration の AI 強化版とも見える。
+              </p>
+            </div>
+          </div>
+
+          <h3 style="margin: 40px 0 16px; font-family: var(--font-serif); font-size: 20px">
+            <span class="level level--soft">B · 慎重</span>
+            <span style="margin-left: 8px">取り入れるが条件付き</span>
+          </h3>
+
+          <div class="card">
+            <h4 class="card__title">B1. AI 自動分解 (ユーザーの直感は正しい)</h4>
+            <div class="card__body">
+              <p>
+                Solanto の臨床的根拠はあるが、SDT の Autonomy を侵食する。<strong>妥協案</strong>:
+                ユーザーが立ち往生したシグナル (時間滞留 / タブ切替 / 先送り 3 回)
+                を検出した時だけ提案。ユーザー主導ドリルダウンが基本、AI は「first step too big
+                かも？」とサジェストするだけ。
+              </p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h4 class="card__title">B2. ゲーミフィケーション = Quiet default + opt-in juicy</h4>
+            <div class="card__body">
+              <p>
+                秘書らしさを保つため、デフォルトは Things 3
+                寄りの静寂。明示的に「今日は派手にしたい」モードを選んだ時だけ Vlambeer の
+                screenshake / particle / 数字 popup が出る。<strong>段階的強度</strong>。
+              </p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h4 class="card__title">B3. Body doubling は AI で代替しない</h4>
+            <div class="card__body">
+              <p>
+                Polyvagal 仮説が正なら AI には体がないので co-regulation
+                は無理。代わりに「<strong>過去の自分との連続性</strong>」で relatedness を補完
+                (Spotify Wrapped 型)。「3 週間前のあなたもこの時間にこのタスクをやっていた」。
+              </p>
+            </div>
+          </div>
+
+          <h3 style="margin: 40px 0 16px; font-family: var(--font-serif); font-size: 20px">
+            <span class="level level--avoid">C · 不採用</span>
+            <span style="margin-left: 8px">vision に明示で書くべき反面教師</span>
+          </h3>
+
+          <div class="panel panel--warn">
+            <p class="panel__title">取り入れない</p>
+            <ul>
+              <li>連続 streak / Snapchat 型圧力</li>
+              <li>Pomodoro 強制 25 分</li>
+              <li>GTD 週次レビュー (maintenance 過多)</li>
+              <li>優先度付けをユーザーに強制 (Eisenhower / 単一 Elo)</li>
+              <li>League / leaderboard (個人特化と矛盾)</li>
+              <li>罪悪感 push (Duolingo Owl 型)</li>
+              <li>Variable Reward を完了通知に使うこと (タスク刻み歪みが出る)</li>
+              <li>全行動ロギング強制 (サンプリングで十分: ESM)</li>
+              <li>Battle Pass 期限切れで失う (FOMO)</li>
+            </ul>
+          </div>
+
+          <hr class="divider" />
+
+          <h3 style="margin: 32px 0 16px; font-family: var(--font-serif); font-size: 20px">
+            提案する方針シフト
+          </h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>現 vision の暗黙の前提</th>
+                  <th>リサーチを経た新しい立場</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>個別タスクの予実を取る</td>
+                  <td>
+                    per-task 予実は捨て、<strong
+                      >セッション × 時間帯 × タスク種類 × 感情状態の throughput</strong
+                    >
+                    を取る
+                  </td>
+                </tr>
+                <tr>
+                  <td>AI が分解する</td>
+                  <td><strong>ユーザー主導ドリルダウン</strong>、AI は立ち往生検出時のみ介入</td>
+                </tr>
+                <tr>
+                  <td>click-start / click-end で計測</td>
+                  <td><strong>passive 観測</strong>、自然な切り上げを境界推定</td>
+                </tr>
+                <tr>
+                  <td>ポモドーロ的時間管理</td>
+                  <td><strong>過集中 harvesting + ドア戦略</strong>。タイマー制限なし</td>
+                </tr>
+                <tr>
+                  <td>完了報酬で動かす</td>
+                  <td>
+                    <strong>Recovery Score (朝) + Wrapped (定期)</strong>
+                    で気づきを返す。完了報酬は控えめ
+                  </td>
+                </tr>
+                <tr>
+                  <td>(未明示)</td>
+                  <td>
+                    <strong>「学習する AI 秘書」= motivational prosthesis</strong>
+                    を明示的に位置づける
+                  </td>
+                </tr>
+                <tr>
+                  <td>(未明示)</td>
+                  <td>
+                    <strong>タスクシュート系譜の AI 進化</strong>として日本での歴史的位置づけを明示
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 学術・臨床 ============ -->
+      <section class="section section--academic" id="academic">
+        <div class="container">
+          <header class="section__head">
+            <p class="section__eyebrow">Domain 1 · Academic & Clinical</p>
+            <h2 class="section__title">学術・臨床研究</h2>
+            <p class="section__lead">
+              Russell Barkley の自己制御理論を起点に、臨床 CBT (Solanto / Safren)、感情障壁の Wall
+              of Awful、body doubling のメカニズム、標準的生産性システムの ADHD 適合性まで。
+            </p>
+          </header>
+
+          <div class="card card--accent">
+            <p class="card__sub">1.1</p>
+            <h3 class="card__title">Russell Barkley · executive function モデル</h3>
+            <div class="tags">
+              <span class="tag">self-regulation</span><span class="tag">time blindness</span
+              ><span class="tag">externalization</span>
+            </div>
+            <div class="card__body">
+              <p>
+                ADHD は「注意」の障害ではなく「<strong>自己制御 (self-regulation) の発達遅延</strong
+                >」と再定義される。
+              </p>
+              <div class="stat">
+                <span class="stat__num">30%</span>
+                <span class="stat__label"
+                  >同年代と比べた executive function の遅延 (Barkley)。10 歳の子は EF 的に 7
+                  歳相当。意志ではなく構造の問題。</span
+                >
+              </div>
+              <p>
+                <strong>Cross-Temporal Organization of Behavior</strong>: ADHD
+                は行動制御を「時間的な今」に押し戻す。健常脳は内的表象 (記憶・計画)
+                で行動をコントロールできるが、ADHD 脳は環境の immediate context
+                に支配される。Barkley はこれを「temporal myopia」と呼び、後により平易な「<strong
+                  >time blindness</strong
+                >」に置き換えた。
+              </p>
+              <p><strong>具体的タスク管理推奨</strong>:</p>
+              <ol>
+                <li>
+                  <strong>Externalize information / make the invisible visible</strong> —
+                  記憶に頼らず、時間と情報を物理世界に出す
+                </li>
+                <li>
+                  <strong>Artificial reward programs as motivational prosthetics</strong> —
+                  外的報酬システムが ADHD には「やる気の義肢」として必須
+                </li>
+                <li>
+                  <strong>Backward planning</strong> — 期日から逆算 (forward planning は機能しない)
+                </li>
+                <li>
+                  <strong>Point of performance での介入</strong> —
+                  行動を起こすべき瞬間・場所に手がかりを置く
+                </li>
+              </ol>
+              <div class="quote">
+                Artificial reward programs become for the person with executive function deficits
+                what prosthetic devices such as mechanical limbs are to the physically disabled.
+              </div>
+            </div>
+            <div class="sources">
+              <p class="sources__title">Sources</p>
+              <ul>
+                <li>
+                  <a
+                    href="https://www.vapsych.org/assets/docs/Theory%20of%20Executive%20Function%20%20Self%20Regulation%20-%20Barkley.pdf"
+                    >Theory of Executive Function & Self-Regulation</a
+                  >
+                </li>
+                <li>
+                  <a href="https://www.russellbarkley.org/factsheets/ADHD_EF_and_SR.pdf"
+                    >Important Role of EF and Self-Regulation in ADHD</a
+                  >
+                </li>
+                <li>
+                  <a href="https://pubmed.ncbi.nlm.nih.gov/9276836/"
+                    >ADHD, self-regulation, and time (PubMed)</a
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <p class="card__sub">1.2</p>
+            <h3 class="card__title">"Not Just Me and My To-Do List" + 関連 CHI 系論文</h3>
+            <div class="tags">
+              <span class="tag">co-regulation</span><span class="tag">nonlinear time</span>
+            </div>
+            <div class="card__body">
+              <p>
+                Chen et al. 2026。ADHD 当事者 22 名へのインタビュー + 20 名 speed dating で 13 の AI
+                コンセプトを評価。
+              </p>
+              <div class="quote">
+                Task management among adults with ADHD is relationally and affectively
+                co-constructed, rather than an isolated individual act.
+              </div>
+              <p>
+                既存ツールは「一貫した自己制御」と「線形時間」を前提に設計されていて、ADHD と
+                <strong>emotional and relational misalignments</strong> を起こす。著者は AI
+                システムが満たすべき 2 軸を提示:
+              </p>
+              <ul>
+                <li>
+                  <strong>Co-regulation のサポート</strong> — 単独の self-regulation を要求しない
+                </li>
+                <li>
+                  <strong>Nonlinear attention rhythms への適応</strong> — 一定ペースを前提にしない
+                </li>
+              </ul>
+              <p>
+                関連: arXiv 2507.06864 (2025) は on-device ML で tab usage / focus / inactivity
+                をセンシングし、attention state 別に「nudges, reflective prompts, body
+                doubling」を出し分けるフレームワークを提案。
+              </p>
+              <p>
+                <strong>kozutsumi への含意</strong>: 「線形時間を仮定しない」「co-regulation 型
+                UI」が差別化軸として正当化される。Sunsama / Motion はどちらも線形時間前提。
+              </p>
+            </div>
+            <div class="sources">
+              <p class="sources__title">Sources</p>
+              <ul>
+                <li>
+                  <a href="https://arxiv.org/abs/2603.17258"
+                    >"Not Just Me and My To-Do List" (arXiv)</a
+                  >
+                </li>
+                <li>
+                  <a href="https://arxiv.org/abs/2507.06864"
+                    >Toward Neurodivergent-Aware Productivity (arXiv)</a
+                  >
+                </li>
+                <li>
+                  <a href="https://robinbrewer.com/papers/productivity.pdf"
+                    >Rethinking Productivity with GenAI (Brewer)</a
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <p class="card__sub">1.3</p>
+            <h3 class="card__title">Solanto / Safren · CBT for Adult ADHD</h3>
+            <div class="tags">
+              <span class="tag">skills training</span><span class="tag">first step too big</span>
+            </div>
+            <div class="card__body">
+              <p>
+                両者ともエビデンスベースの CBT マニュアルを出版。共通点は「<strong
+                  >認知の歪みの修正よりスキル獲得 (skills training) を中心に据える</strong
+                >」点。これが neurotypical CBT と決定的に違う。
+              </p>
+              <p><strong>Solanto の核となる self-instructive cognitions</strong>:</p>
+              <div class="quote">
+                If it's not in the planner, it doesn't exist.<br />
+                If you're having trouble getting started, then the first step is too big.
+              </div>
+              <p>具体的介入:</p>
+              <ul>
+                <li>プランナー記入を既存習慣にアンカー (歯磨き、昼食 etc.)</li>
+                <li>1 時間タスクを <strong>15 分 chunks</strong> に分割</li>
+                <li>「to-do リストから 1 週間スケジュール生成」のセッション内エクササイズ</li>
+              </ul>
+              <p>
+                <strong>Safren の distractibility module</strong>:
+                邪魔な思考が浮かんだら<strong>紙に書き出して、対応はしない</strong>。コーピングフレーズ
+                "I will worry about it later" / "This is not an A-priority"。
+              </p>
+              <p>
+                <strong>kozutsumi への含意</strong>: Solanto の "first step is too big" は AI
+                が動的にタスクを分解する強い臨床的根拠。Safren の「distraction
+                を書き出すが対応しない」は割り込み思考の
+                <strong>capture だけする UI</strong> の根拠。
+              </p>
+            </div>
+            <div class="sources">
+              <p class="sources__title">Sources</p>
+              <ul>
+                <li>
+                  <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3874265/"
+                    >Description of CBT for ADHD in Adults (PMC)</a
+                  >
+                </li>
+                <li>
+                  <a href="https://adaa.org/sites/default/files/Solanto_MC_001.pdf"
+                    >CBT for Adult ADHD - Solanto (ADAA)</a
+                  >
+                </li>
+                <li>
+                  <a
+                    href="https://global.oup.com/academic/product/mastering-your-adult-adhd-9780190235567"
+                    >Mastering Your Adult ADHD (Oxford)</a
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <p class="card__sub">1.4</p>
+            <h3 class="card__title">Body doubling のメカニズム研究</h3>
+            <div class="tags">
+              <span class="tag">co-regulation</span><span class="tag">polyvagal</span>
+            </div>
+            <div class="card__body">
+              <p>
+                RCT レベルの実証研究は乏しいが、最近の進展あり。Focusmate 社内調査 (n=212 ADHD
+                ユーザー) で生産性 +152%、ただし peer-reviewed ではない。
+              </p>
+              <p><strong>提案されているメカニズム</strong>:</p>
+              <ol>
+                <li>
+                  <strong>Polyvagal theory による co-regulation</strong> — 安全な他者で ventral
+                  vagal parasympathetic state に入る
+                </li>
+                <li>Social facilitation / co-action effect</li>
+                <li>External executive function</li>
+                <li>
+                  <strong>ドーパミン補完</strong> —
+                  社会的刺激による外的覚醒で前頭前野ドーパミン低下を補う
+                </li>
+                <li>Mirror neurons + Hawthorne effect</li>
+              </ol>
+              <p>
+                <strong>重要な区別</strong>: body doubling
+                は「<strong>今この瞬間の着手</strong>」を助け、accountability は「<strong
+                  >長期的な follow-through</strong
+                >」を助ける。メカニズムが違う。
+              </p>
+              <p>
+                <strong>kozutsumi への含意</strong>: AI 秘書が body double 的存在になり得るか —
+                人間の存在感が必須なら AI は代替不可 (polyvagal 仮説が正なら体がないため)。<strong
+                  >accountability 側面 (締切リマインダ、進捗報告先) は再現可能</strong
+                >。設計判断: co-regulation は捨て、「行動パターン理解 +
+                適切なタイミングでの外部記憶補完」で勝負。
+              </p>
+            </div>
+            <div class="sources">
+              <p class="sources__title">Sources</p>
+              <ul>
+                <li>
+                  <a href="https://www.focusmate.com/science/">The Science Behind Focusmate</a>
+                </li>
+                <li>
+                  <a href="https://arxiv.org/html/2509.12153v1"
+                    >You Are Not Alone: Designing Body Doubling for ADHD in VR</a
+                  >
+                </li>
+                <li>
+                  <a href="https://chadd.org/attention-article/focusmate-virtual-coworking/"
+                    >CHADD: Focusmate Virtual Coworking</a
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <p class="card__sub">1.5</p>
+            <h3 class="card__title">標準的生産性システムが ADHD で失敗する理由</h3>
+            <div class="tags">
+              <span class="tag">GTD</span><span class="tag">Bullet Journal</span
+              ><span class="tag">Eisenhower</span>
+            </div>
+            <div class="card__body">
+              <p><strong>GTD (David Allen)</strong>:</p>
+              <ul>
+                <li>Weekly review に約 2 時間 — EF 負荷で維持不能。失敗すると一気に信頼性ゼロ化</li>
+                <li>5 ステップを各タスクに適用 → 同じタスクを何度も再判断 (決定疲労)</li>
+                <li>
+                  Cal Newport の批判: "Getting Unremarkable Things Done" (shallow work しか扱えない)
+                </li>
+                <li>「すべて書き出す」前提が崩壊すると all-or-nothing で全壊</li>
+              </ul>
+              <p>
+                <strong>Bullet Journal</strong>: 毎日・毎月の
+                <strong>migration (書き写し)</strong> が ADHD の hyperfocus
+                に逆行。ただし元メソッド自体は design-thinking ベースで有用。Pinterest 的な「美しい
+                bujo」とは別物。
+              </p>
+              <p>
+                <strong>Eisenhower / Eat the frog</strong>: Urgency / Importance 判断自体が EF
+                を要求 → ADHD で破綻。"Eat the frog" は Wall of Awful 理論と真っ向から衝突 (朝一で
+                wall に当たると 1 日壊れる)。
+              </p>
+              <p><strong>kozutsumi への含意 (=反面教師リスト)</strong>:</p>
+              <ul>
+                <li>ユーザーに優先度をつけさせない</li>
+                <li>migration を要求しない</li>
+                <li>all-or-nothing にしない</li>
+                <li>failure からの recovery がデフォルト動作になる</li>
+              </ul>
+            </div>
+            <div class="sources">
+              <p class="sources__title">Sources</p>
+              <ul>
+                <li>
+                  <a
+                    href="https://calnewport.com/getting-unremarkable-things-done-the-problem-with-david-allens-universalism/"
+                    >Cal Newport: Getting (Unremarkable) Things Done</a
+                  >
+                </li>
+                <li>
+                  <a href="https://workbrighter.co/gtd-adhd/">Is the GTD System ADHD-Friendly?</a>
+                </li>
+                <li>
+                  <a href="https://marlacummins.com/adhd-and-gtd/"
+                    >ADHD and David Allen's GTD - Marla Cummins</a
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <p class="card__sub">1.6</p>
+            <h3 class="card__title">Wall of Awful (Brendan Mahan) と task initiation 神経科学</h3>
+            <div class="tags">
+              <span class="tag">emotional barrier</span><span class="tag">door strategy</span
+              ><span class="tag">dopamine</span>
+            </div>
+            <div class="card__body">
+              <p>
+                失敗・失望・拒絶・恥が「failure bricks」として積み重なってできる感情の壁。ADHD
+                は失敗が多いため壁が大きく、4 年生 (10 歳前後)
+                から形成される。タスク自体ではなく、<strong>そのタスクに紐づく感情の重さ</strong>が着手を妨げる。
+              </p>
+              <p>
+                <strong>着手不能時の自動反応</strong>: fight (怒り) / flight (存在しないふり) /
+                freeze (反芻)
+              </p>
+              <p><strong>Mahan の 5 戦略</strong>:</p>
+              <ol>
+                <li>Climb the wall</li>
+                <li>
+                  <strong>Put a door in the wall</strong> — 感情状態を変えてバイパス
+                  (散歩、音楽、笑える動画)
+                </li>
+                <li>Go around the wall — 順序を変える / 別 subtask から</li>
+                <li>Tear down the wall — セラピー</li>
+                <li>Get help — body double</li>
+              </ol>
+              <p>
+                特に重要なのは <strong>#2 のドア戦略</strong>:
+                タスクに直接挑むのではなく、先に感情状態を変える。neurotypical
+                向けの「ただ始めろ」と正反対。
+              </p>
+              <p>
+                <strong>神経科学的裏付け</strong>: ADHD 脳は左 ventral striatum / 中脳 / 視床下部で
+                D2/D3 受容体とドーパミントランスポータが低い (PET
+                研究)。平凡なタスクは報酬として登録されない。emotional dysregulation は ADHD
+                の中核症状 (Barkley 派の見解)。
+              </p>
+              <p>
+                <strong>kozutsumi への含意</strong>: タスク着手 UI
+                は「タスクの提示」ではなく「<strong>感情状態の遷移</strong>」を経由すべき。<strong>着手障壁が高いタスクを検出</strong>したら
+                AI がドア戦略 (散歩提案 / 音楽 / easier subtask 先出し)
+                を介入。これは行動パターン分析が直接活きるユースケース
+                (過去どの介入で着手できたかを学習)。
+              </p>
+            </div>
+            <div class="sources">
+              <p class="sources__title">Sources</p>
+              <ul>
+                <li>
+                  <a href="https://www.adhdessentials.com/essentials/the-wall-of-awful/"
+                    >The Wall of Awful - ADHD Essentials</a
+                  >
+                </li>
+                <li>
+                  <a href="https://www.adhdrewired.com/brendan-mahan-climbing-wall-awful/"
+                    >Climbing the Wall of Awful (Podcast)</a
+                  >
+                </li>
+                <li>
+                  <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC2958516/"
+                    >Evaluating Dopamine Reward Pathway in ADHD (PMC)</a
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 書籍・記事 ============ -->
+      <section class="section section--books" id="books">
+        <div class="container">
+          <header class="section__head">
+            <p class="section__eyebrow">Domain 2 · Books & Articles</p>
+            <h2 class="section__title">書籍・記事 (英語圏 + 日本国内)</h2>
+            <p class="section__lead">
+              海外の方法論 (Hallowell, Barkley, McCabe, Carroll, Davis ほか)
+              と日本独自の実践書・実用書 (借金玉 / 小鳥遊 / タスクシュート / 司馬理英子)
+              を、具体テクニック中心に整理。
+            </p>
+          </header>
+
+          <h3 style="margin: 24px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            海外 (英語圏)
+          </h3>
+
+          <div class="card card--accent">
+            <h4 class="card__title">Hallowell & Ratey · ADHD 2.0</h4>
+            <p class="card__sub">VAST (Variable Attention Stimulus Trait) として再定義</p>
+            <div class="card__body">
+              <p>
+                ADHD = 注意の<strong>変動性</strong>。症状 vs
+                才能ではなく「変動の山と谷をどう設計するか」。
+              </p>
+              <ul>
+                <li>
+                  <strong>"the right kind of difficult"</strong>:
+                  没入できる難易度に意図的に時間を寄せる
+                </li>
+                <li>
+                  <strong>環境再設計</strong>: 物理空間・人間関係・スケジュールを ADHD
+                  向きに作り変える (本人を変えない)
+                </li>
+                <li>
+                  <strong>"Connection as Vitamin C"</strong>: 孤立は ADHD
+                  を増悪させる。雑談・共在を意図的に処方
+                </li>
+                <li>小脳ワークアウト: バランス系の身体運動で実行機能を底上げ</li>
+              </ul>
+              <p>神経多様性肯定モデルの代表格。pathologizing から strength-based へ視点転換。</p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <h4 class="card__title">Dawson & Guare · Smart but Scattered シリーズ</h4>
+            <p class="card__sub">11 の executive function スキル × 環境代替</p>
+            <div class="card__body">
+              <p>
+                「だらしなさ」は性格ではなく
+                <strong>11 の実行機能スキル</strong>の濃淡。スキルを上げるか、環境で代替する。
+              </p>
+              <ul>
+                <li>
+                  11 スキル:
+                  反応抑制、ワーキングメモリ、感情制御、認知の柔軟性、持続的注意、課題開始、計画と優先順位付け、整理整頓、時間管理、目標指向の持続性、メタ認知
+                </li>
+                <li>
+                  <strong>"A is for Antecedent"</strong>:
+                  問題行動の<strong>直前環境</strong>を変える (教えるより先に物理配置を変える)
+                </li>
+                <li>強み 3 つ・弱み 3 つを自己診断 → 弱みは環境側で補う</li>
+              </ul>
+              <p>
+                「直す」より「迂回する」を明示的に薦める数少ない枠組み。kozutsumi
+                の「行動データから個別最適」と相性が良い。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <h4 class="card__title">Russell Barkley · Taking Charge of Adult ADHD</h4>
+            <p class="card__sub">8 つのルール</p>
+            <div class="card__body">
+              <ol>
+                <li>Stop the Action — 衝動の前に一拍</li>
+                <li>See/Say the Past, then Future — 言語化で未来をシミュレート</li>
+                <li>Externalize Key Information — 脳ではなく紙・アプリに置く</li>
+                <li>Feel the Future — 未来の結末を情緒的に体感する仕掛け</li>
+                <li>Break It Down and Make It Matter — 小分割 + 意味付け</li>
+                <li>Make Problems External, Physical, Manual — 思考をカードに書いて机に並べる</li>
+                <li>Have a Sense of Humor</li>
+              </ol>
+              <p>
+                神経科学ベースで処方が極めて具体的。kozutsumi
+                の「秘書が外側に持っている」発想と完全に整合。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <h4 class="card__title">Jessica McCabe · How to ADHD</h4>
+            <p class="card__sub">「もっと頑張れ」ではなく「違うやり方をしろ」</p>
+            <div class="card__body">
+              <ul>
+                <li>
+                  <strong>"Doing more starts with doing less"</strong>: タスク総量を先に減らせ
+                </li>
+                <li>
+                  <strong>Plan backward</strong>: 締切から逆算 (forward planning は ADHD に厳しい)
+                </li>
+                <li>
+                  <strong>"build time wisdom"</strong>:
+                  「自分が何にどれだけかかったか」を記録して、見積もり感覚を再構築
+                </li>
+                <li>
+                  <strong>distractions with distractions</strong>:
+                  許可された刺激で禁止された刺激を上書き
+                </li>
+                <li>感情にラベルを貼る (実行機能の前に感情調整)</li>
+              </ul>
+              <p>
+                当事者・コミュニティ集合知の集成。本のレイアウト自体が ADHD readability に最適化
+                (章末サマリ・ショートカット)。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <h4 class="card__title">James Clear · Atomic Habits</h4>
+            <p class="card__sub">+ ADHD コミュニティの適応・批判</p>
+            <div class="card__body">
+              <ul>
+                <li>
+                  <strong>Habit Stacking</strong>:
+                  <code
+                    style="
+                      font-family: var(--font-mono);
+                      font-size: 13px;
+                      padding: 1px 4px;
+                      background: var(--bg-callout);
+                      border-radius: 3px;
+                    "
+                    >After [current habit], I will [new habit]</code
+                  >
+                </li>
+                <li><strong>Two-Minute Rule</strong>: どんな習慣も最初は 2 分版に縮める</li>
+                <li>Environment Design: キューを目に入る場所に置く</li>
+                <li>
+                  Implementation Intention:
+                  <code
+                    style="
+                      font-family: var(--font-mono);
+                      font-size: 13px;
+                      padding: 1px 4px;
+                      background: var(--bg-callout);
+                      border-radius: 3px;
+                    "
+                    >I will [behavior] at [time] in [location]</code
+                  >
+                </li>
+              </ul>
+              <p>
+                <strong>ADHD コミュニティの批判</strong>: 「毎日連続記録」は ADHD には逆効果 (1
+                日抜けると all-or-nothing
+                で崩壊)。連続性ではなく<strong>再開しやすさ</strong>に置き換える。Clear
+                の枠組みは「ベース脳」前提で、ADHD には Habit Stacking と 2
+                分ルールだけが特に効く、という整理。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <h4 class="card__title">David Allen · Getting Things Done</h4>
+            <p class="card__sub">ADHD で破綻するポイント / 適応版</p>
+            <div class="card__body">
+              <p>"next physical action" の概念は ADHD でも有効。だが以下が破綻する:</p>
+              <ul>
+                <li>Weekly Review が続かない (メンテ前提)</li>
+                <li>Context lists が多すぎる (@call, @errand … で迷子)</li>
+                <li>完璧主義の餌 (システム整備自体が procrastination 化)</li>
+              </ul>
+              <p>
+                <strong>ADHD 適応版</strong>: リストを 5 本に圧縮 (Inbox / Today / This Week /
+                Waiting / Someday)、Review は週次でなく毎日 10 分に分散、"next physical action"
+                は維持。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <h4 class="card__title">Ryder Carroll · Bullet Journal Method</h4>
+            <p class="card__sub">著者自身が ADHD</p>
+            <div class="card__body">
+              <ul>
+                <li>
+                  <strong>Rapid Logging</strong>: タスク <code>•</code>、イベント
+                  <code>○</code>、ノート <code>–</code> の 3 記号
+                </li>
+                <li>
+                  <strong>Migration</strong>: 月初に前月のタスクを見直し、<code>&gt;</code> で繰越
+                  or <code>&lt;</code> で Future Log へ。<strong
+                    >未着手タスクの存在意義を毎月問い直す</strong
+                  >
+                </li>
+                <li>Daily Log / Monthly Log / Future Log の 3 層</li>
+              </ul>
+              <p>
+                Migration は kozutsumi
+                の「<strong>先送りパターン分析</strong>」と直結する強い参照点。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <h4 class="card__title">KC Davis · How to Keep House While Drowning</h4>
+            <p class="card__sub">"Care tasks are morally neutral"</p>
+            <div class="card__body">
+              <p>家事 = 道徳ではなく未来の自分への親切。"Good enough is perfect."</p>
+              <p><strong>「On-ramping」(始動補助) の道具箱</strong>:</p>
+              <ul>
+                <li>Body doubling / Visual timer / Permission to start</li>
+                <li>First steps / Bundling (嫌タスク × 好刺激)</li>
+                <li>Wait time の活用 / Positive music association</li>
+              </ul>
+              <p>
+                <strong>罪悪感の除去</strong>がスループットを上げるという仮説。AI
+                のトーンを「micromanagey でない」にすべき設計上の根拠。
+              </p>
+            </div>
+          </div>
+
+          <hr class="divider" />
+
+          <h3 style="margin: 24px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            日本国内
+          </h3>
+
+          <div class="card card--accent">
+            <h4 class="card__title">借金玉『発達障害の僕が「食える人」に変わった すごい仕事術』</h4>
+            <p class="card__sub">「自分を変えるな、道具に頼れ」</p>
+            <div class="card__body">
+              <ul>
+                <li><strong>メモは 1 冊</strong> — きれいさは捨てる、書き溜めることが目的</li>
+                <li><strong>バインダーもりもり作戦</strong>: 1 案件 = 1 バインダー</li>
+                <li>
+                  長期タスクは <strong>"後戻りできない状態"</strong> を最初に作る —
+                  序盤を進めて全体像が見えたら、引き返せないコミットメントが意志の代わりに
+                </li>
+                <li>Google カレンダーを壁掛け (モニターでなく物理視界に)</li>
+                <li>エブリディボックス: 毎日同じ場所に同じ物を入れて意思決定を殺す</li>
+              </ul>
+              <p>当事者発・実用書のベンチマーク。kozutsumi の「秘書 = 道具」観と最も近い。</p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <h4 class="card__title">小鳥遊『発達障害の僕らが生き抜くための「紙 1 枚」仕事術』</h4>
+            <p class="card__sub">紙 1 枚で「タスク → 手順 → 締切」を強制分解</p>
+            <div class="card__body">
+              <ul>
+                <li>
+                  <strong>手順分解ルール</strong>: タスク名だけで止めず、必ず 2
+                  手目以降の動詞を書き出す<br />例: 「資料作る」ではなく<br />「① テンプレ開く ②
+                  目次決める ③ 本文書く」
+                </li>
+                <li>テンプレ化された Excel ベース (後にタスクシュートとも接続)</li>
+                <li>
+                  弱み (ヌケモレ・先延ばし・自責・段取り下手・集中困難) → 紙 1
+                  枚のどの欄が補うかを明示的に対応付け
+                </li>
+              </ul>
+              <p>
+                「タスク」と「手順」を別カラムに分ける発想は、kozutsumi の "達成すべきこと →
+                必要なこと" のドリルダウンと同型。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent" style="border-left-width: 4px">
+            <h4 class="card__title">大橋悦夫 · タスクシュート (TaskChute)</h4>
+            <p class="card__sub">日本における「行動ベーススケジューリング」の先行者 (2006〜)</p>
+            <div class="card__body">
+              <ul>
+                <li>
+                  毎朝、今日やる全タスクを順番付き・見積もり時間付きで
+                  <strong>直列 1 本</strong>に並べる
+                </li>
+                <li><strong>実績時間を秒単位で記録</strong> → 翌日以降の見積もり精度を更新</li>
+                <li>ルーチンと単発タスクを同列に扱う (朝食・通勤も同じリスト)</li>
+                <li>見積もりが外れる → 問題は人ではなく「見積もりモデル」</li>
+              </ul>
+              <p>
+                kozutsumi の vision
+                L53「人間の見積もりは信用できない／行動データから学習」と理念上ほぼ同じ。<strong
+                  >kozutsumi はタスクシュート系譜の AI 進化版として位置づけ可能</strong
+                >。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <h4 class="card__title">司馬理英子『「大人の ADHD」のための段取り力』</h4>
+            <p class="card__sub">時間／物／計画／記憶／持続 の 5 領域分解</p>
+            <div class="card__body">
+              <ul>
+                <li>タスクは <strong>30 分でこなせる粒度</strong>に分解</li>
+                <li>毎朝、優先順位 + 所要時間を書き込み、毎日同じ時刻に見直す</li>
+                <li>「やるべきことを目に見える状態にする」を全処方の前提に</li>
+              </ul>
+              <p>精神科医・絵入り解説で日本の臨床現場でよく勧められる入門書。</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h4 class="card__title">当事者の note・ブログ・国産アプリ</h4>
+            <div class="card__body">
+              <ul>
+                <li>
+                  <strong>「半熟ポモドーロ」(DASHI / note)</strong>: 25 分が長すぎて挫折する人向けに
+                  15 分作業。タイマーが鳴ったら<strong>「乗っていても」必ず止める</strong>
+                  (過集中の燃費悪化を防ぐ)。<a href="https://note.com/hekisaya/n/n640527f7750f"
+                    >note</a
+                  >
+                </li>
+                <li>借金玉 note (ライフハック実践集)、小鳥遊 note (タスク分解連載)</li>
+                <li>
+                  <strong>コンダクター</strong>:
+                  発達障害特性を踏まえた「<strong>見通し</strong>」中心の国産アプリ。「次に何が起きるか」が分からない不安を減らす設計思想。<a
+                    href="https://co-coco.jp/news/conductor/"
+                    >こここ</a
+                  >
+                </li>
+                <li>
+                  <strong>ADHD コーチング (OPT LIFE)</strong>: 「<strong>環境 × 行動</strong
+                  >」メソッド = 環境を変え、行動を変え、自分は変えない
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <hr class="divider" />
+
+          <h3 style="margin: 24px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            転用しうる共通パターン
+          </h3>
+          <div class="card">
+            <div class="card__body">
+              <ol>
+                <li>
+                  <strong>見積もり vs 実績の差分学習</strong> = タスクシュート / McCabe / Vision
+                  の見積もり問題が一致
+                </li>
+                <li>
+                  <strong>次の物理アクションへのドリルダウン</strong> = GTD / 小鳥遊 / Barkley /
+                  Davis
+                </li>
+                <li>
+                  <strong>外在化 (Externalization)</strong> = Barkley / 借金玉 / Bullet Journal
+                </li>
+                <li>
+                  <strong>Migration / 先送りパターンの可視化</strong> = Bullet Journal Migration の
+                  AI 強化版として実装可能
+                </li>
+                <li><strong>連続記録ではなく再開可能性</strong> = Atomic Habits の ADHD 批判</li>
+                <li>
+                  <strong>罪悪感の除去 = スループット向上</strong> = Davis / Hallowell
+                  strength-based
+                </li>
+                <li>
+                  <strong>過集中を尊重する時間粒度</strong> = 半熟ポモドーロ / Hallowell。25
+                  分固定は害
+                </li>
+                <li>
+                  <strong>環境を変える > 人を変える</strong> = Smart but Scattered / 借金玉 /
+                  コーチング全般
+                </li>
+                <li>
+                  <strong>5 本リストへの圧縮</strong>: Inbox / Today / This Week / Waiting / Someday
+                </li>
+                <li><strong>見通しの提供</strong>: コンダクター / McCabe "plan backward"</li>
+              </ol>
+              <p style="margin-top: 16px">
+                <strong>三角の系譜上の先行者</strong>: タスクシュート (国内) + Bullet Journal (国外)
+                + Barkley (理論基盤)。kozutsumi の "行動ベーススケジューリング"
+                の正統な系譜上に立てる。
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ゲーミフィケーション ============ -->
+      <section class="section section--gamification" id="gamification">
+        <div class="container">
+          <header class="section__head">
+            <p class="section__eyebrow">Domain 3 · Gamification UI/UX</p>
+            <h2 class="section__title">ゲーミフィケーション事例とアンチパターン</h2>
+            <p class="section__lead">
+              Habitica / Forest / Finch / Duolingo / Strava / Apple Activity から RPG パターンと
+              "Juice" まで。何を盗み、何を絶対に避けるか。
+            </p>
+          </header>
+
+          <h3 style="margin: 24px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            生産性 / 習慣系アプリ
+          </h3>
+
+          <div class="grid-two">
+            <div class="card">
+              <h4 class="card__title">Habitica</h4>
+              <p class="card__sub">RPG ライフ管理 — <strong>ADHD には明確に有害</strong></p>
+              <div class="card__body">
+                <p>
+                  Daily 失敗で HP 削減 → 罪悪感スパイラル。Party の HP 共有で社会的圧力。Daily 1
+                  日逃すと離脱の連鎖。コミュニティ運営も 2022〜2023 年で崩壊。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">Forest</h4>
+              <p class="card__sub">フォーカス = 木が育つ</p>
+              <div class="card__body">
+                <p>
+                  Loss aversion を「自分が植えた感情投資」にすり替え。樹種のバリアブル報酬 / 累積森
+                  / 実植林という外部意義 / Sunk Cost を重ねた Planted Commitment
+                  Loop。短時間セッション向き、複雑なタスク管理は無理。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">Finch</h4>
+              <p class="card__sub">セルフケアペット — <strong>罰なし</strong></p>
+              <div class="card__body">
+                <p>
+                  タスク完了でペットが成長。罰がない。「育てる対象がいる」プロキシ動機。<strong
+                    >ADHD 女性層から圧倒的支持</strong
+                  >、Habitica からの移住先として頻出。kozutsumi
+                  が罰なし設計を取りたい場合の最強の参照点。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">Beeminder</h4>
+              <p class="card__sub">金銭コミットメント契約</p>
+              <div class="card__body">
+                <p>
+                  「黄色いブリックロード」を割ると実際に課金。Akrasia Horizon = 1
+                  週間先までしか目標を緩和できない (緩める方向は遅延)。情緒的に重く、ADHD
+                  には向き不向きが極端。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card card--accent" style="background: var(--tint)">
+            <h4 class="card__title">Streak が ADHD を破壊するメカニズム</h4>
+            <div class="card__body">
+              <ul>
+                <li>
+                  <strong>Perfectionism trap</strong>: 「完璧でなければゼロ」の二値思考。1
+                  日逃した瞬間に全放棄
+                </li>
+                <li>
+                  <strong>Oppositional response</strong>:
+                  連続が伸びるほど「外圧に従わされている」感が強まり、心理的反発で能動的に切る
+                </li>
+                <li>
+                  慢性疾患 / ニューロダイバージェンス層では「自分のせいではない事象」で切れる →
+                  無力感を学習
+                </li>
+              </ul>
+              <p>
+                <strong>対案</strong>: (a) 連続 (consecutive) ではなく<strong
+                  >累積 (cumulative) カウント</strong
+                >、(b) 「戻ってきた」を肯定、(c) Streak 表示自体を opt-in、(d) 1
+                日取りこぼしで全損しない recovery mechanic
+              </p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h4 class="card__title">Duolingo · 最も模倣され、最も非倫理的とされる</h4>
+            <p class="card__sub">XP / League / Streak / Heart / Owl</p>
+            <div class="card__body">
+              <p>
+                <strong>数字</strong>: Streak engagement +60%、7 日続けば長期維持確率 3.6 倍、Streak
+                Freeze で離脱 21% 削減、XP リーグでエンゲージ +40%、MAU 100M+。
+              </p>
+              <div class="grid-two" style="margin: 16px 0">
+                <div class="panel panel--good">
+                  <p class="panel__title">取るもの</p>
+                  <ul>
+                    <li>XP の集積感</li>
+                    <li>累積記録 (Personal Records / Awards の二系統分離)</li>
+                  </ul>
+                </div>
+                <div class="panel panel--warn">
+                  <p class="panel__title">取らないもの</p>
+                  <ul>
+                    <li>Streak Loss 演出</li>
+                    <li>League の社交プレッシャー</li>
+                    <li>罪悪感プッシュ通知</li>
+                    <li>ハート的な強制中断</li>
+                    <li>Streak 復活課金 ($4.99)</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-two">
+            <div class="card">
+              <h4 class="card__title">Strava</h4>
+              <p class="card__sub">Kudos / Segment / Personal Record</p>
+              <div class="card__body">
+                <p>
+                  Kudos = 1 タップ acknowledgment (摩擦最小)。<strong
+                    >Personal Record を leaderboard と分離して内的競争を独立させた</strong
+                  >設計が学び。kozutsumi はソロ作業中心なので Kudos モデルは合わないが、PR
+                  の独立は転用可。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">Apple Activity Rings</h4>
+              <p class="card__sub">Gestalt の閉合則を直接利用</p>
+              <div class="card__body">
+                <p>
+                  Move / Exercise / Stand の 3 リング閉じる。1 日完結 (前日の取り残しなし)、3
+                  軸あることで partial win 成立。<strong>kozutsumi 転用</strong>: 日次の閉じる対象を
+                  3 種類に分解 (例: Deep Work / Errand / Rest)。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">Ring Fit Adventure</h4>
+              <p class="card__sub">メカニクス自体が運動</p>
+              <div class="card__body">
+                <p>
+                  ゲーム進行 = 身体進歩が
+                  <strong>1:1 連動</strong
+                  >。表面的なテーマ付けではなく、メカニクス自体が運動。「<strong
+                    >作業の質 (集中の深さ / 中断回数) が直接ステータスに反映される</strong
+                  >」設計のヒント。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">Pokémon Sleep / GO</h4>
+              <p class="card__sub">「データを集めるとコレクションが埋まる」</p>
+              <div class="card__body">
+                <p>
+                  「歩く」=「Pokémon に出会う」、「寝る」=「Pokémon が枕元に」。kozutsumi には IP
+                  レバレッジは無いが、データ蓄積→図鑑 のメンタルモデルは転用可能。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <hr class="divider" />
+
+          <h3 style="margin: 24px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            ゲーム由来パターン
+          </h3>
+
+          <div class="grid-two">
+            <div class="card">
+              <h4 class="card__title">Skill Tree</h4>
+              <div class="card__body">
+                <p>
+                  階層化された unlock グラフ。選択した道と選ばなかった道の両方が見えることで
+                  identity 形成。<strong>kozutsumi 転用</strong>:
+                  行動パターン分析が積み上がると「あなたの得意系統」が tree 上で開花する可視化。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">Quest Log</h4>
+              <div class="card__body">
+                <p>
+                  Main / Side / Daily / Weekly の階層。WoW で quest 個数の上限 (25 → 35)
+                  で意図的にスコープを絞る設計が学び。「今日のメイン 1 + サブ 3 + 日課 3」型に直結。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">Achievement (Steam / Xbox)</h4>
+              <div class="card__body">
+                <p>
+                  取得率 % で<strong>希少性 = 物語性</strong>。kozutsumi
+                  では「全ユーザー中の取得率」は出せないが「<strong>あなたの過去の自分の中での希少性</strong>」を出せる
+                  (行動パターン分析の見せ場)。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">Battle Pass</h4>
+              <div class="card__body">
+                <p>
+                  シーズン制・期限切れで失う設計。<strong>ADHD 層は最も傷つく</strong>。kozutsumi
+                  では避ける。期限なしの累積 + 後から戻ってこられる設計を選ぶ。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card card--accent" style="background: var(--tint)">
+            <h4 class="card__title">Variable Ratio Reinforcement (Skinner Box)</h4>
+            <div class="card__body">
+              <p>
+                Unpredictable な報酬で最大ドーパミン。倫理的に使う条件: (a) 金銭が絡まない、(b)
+                結果がプレイヤーに不利益をもたらさない、(c) 確率を完全に開示、(d)
+                <strong>目標達成の「演出」レイヤーにのみ使い、達成自体を確率にしない</strong>。
+              </p>
+              <p>
+                <strong>kozutsumi 転用案</strong>:
+                完了時の褒め言葉のバリエーション、月次振り返りの強調視点。「実利益は決定的、見せ方だけ可変」。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <h4 class="card__title">"Juice" — Vlambeer / The Art of Screenshake</h4>
+            <p class="card__sub">2013 年 INDIGO Classes 講演</p>
+            <div class="card__body">
+              <p>
+                同じゲームに段階的に追加される micro-feedback
+                だけで「面白さ」が劇的に変わるデモ。技法: screen shake (2-4px)、hit pause (30-60ms
+                フリーズ)、白フラッシュ (1 frame)、低音強め SE、弾サイズ誇張、煙 particle、<strong
+                  >number popup</strong
+                >
+                (elastic にバウンドして上昇 + フェード)。
+              </p>
+              <p><strong>kozutsumi 転用</strong> (タスクチェック時):</p>
+              <ul>
+                <li>チェックボックスが scale 1.0→1.2→1.0 (200ms ease-out-back overshoot)</li>
+                <li>+XP 数値が +10px float-up + opacity 1→0 (400ms)</li>
+                <li>30ms の subtle haptic</li>
+                <li>チェック音は 1 種類だが pitch を +0/+3/+7 半音と段階で変化 (combo 感)</li>
+              </ul>
+            </div>
+          </div>
+
+          <hr class="divider" />
+
+          <h3 style="margin: 24px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            具体 UI パターンとタイミング
+          </h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>パターン</th>
+                  <th>仕様</th>
+                  <th>kozutsumi での使い所</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Progress bar pulse</td>
+                  <td>
+                    増加直後に 1.0→1.05→1.0 scale, 200–300ms ease-out, 色 saturation +10% を 400ms
+                    で戻す
+                  </td>
+                  <td>日次進捗</td>
+                </tr>
+                <tr>
+                  <td>Number popup (elastic)</td>
+                  <td>
+                    "+10 XP" が y -16px float, scale 0.8→1.2→1.0 ease-out-back 250ms, opacity 1→0 を
+                    600ms
+                  </td>
+                  <td>タスクチェック直後</td>
+                </tr>
+                <tr>
+                  <td>Confetti</td>
+                  <td>
+                    particleCount 50, spread 45°, startVelocity 45, decay 0.9。<strong
+                      >マイルストーンのみ</strong
+                    >
+                  </td>
+                  <td>日次 / 月次目標達成</td>
+                </tr>
+                <tr>
+                  <td>Combo counter (decay)</td>
+                  <td>連続完了で x2/x3 表示、最後の完了から 90 秒で fadeout</td>
+                  <td>連続消化、まとめタスク</td>
+                </tr>
+                <tr>
+                  <td>Vessel filling</td>
+                  <td>
+                    SVG mask の y 座標を spring (stiffness 100, damping
+                    12)。粒子が「注ぎ込まれる」演出
+                  </td>
+                  <td>日次キャパシティ可視化</td>
+                </tr>
+                <tr>
+                  <td>Sound cue (ADHD-friendly)</td>
+                  <td>
+                    60–80ms、attack 柔らかめ、600–1000Hz の単音、連続入力で +3 半音ずつ上げる、5
+                    連続で ceiling
+                  </td>
+                  <td>完了 SE。Duolingo 的な大声を避ける</td>
+                </tr>
+                <tr>
+                  <td>Year-in-review heatmap</td>
+                  <td>GitHub contribution graph 形式 (cell 11px, gap 3px, 5 段階 luminosity)</td>
+                  <td>行動パターン分析の見せ場</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 style="margin: 32px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            この領域の含意 (4 つ)
+          </h3>
+          <ol class="ranked">
+            <li>
+              <strong>罰しない / 失わせない</strong>。Habitica HP / Duolingo Streak / Battle Pass
+              の期限切れは全て避ける。Finch が ADHD 層から愛される理由はここ。
+            </li>
+            <li>
+              <strong>Streak は累積に置き換える</strong>。"37 日連続" ではなく "今月 21 タスク /
+              過去最高 28"。「戻ってきた」を肯定する文言。
+            </li>
+            <li>
+              <strong>Juice はオプションで強度可変</strong>。デフォルトは Things 3
+              寄りの静寂、明示的に opt-in したときだけ Vlambeer 寄り。秘書らしさと触覚感の両立。
+            </li>
+            <li>
+              <strong>行動データ収集 = ゲーミフィケーション演出のソース</strong>
+              という双対設計。「どこで集中が深かったか」「どの種類のタスクで詰まるか」が可視化されたものが、そのまま
+              collection / heatmap / skill tree になる。これが Duolingo
+              的な「点数化された娯楽」と差別化される独自路線。
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ============ 異分野 ============ -->
+      <section class="section section--crossdomain" id="crossdomain">
+        <div class="container">
+          <header class="section__head">
+            <p class="section__eyebrow">Domain 4 · Cross-Domain Reward Design</p>
+            <h2 class="section__title">異分野の報酬設計</h2>
+            <p class="section__lead">
+              行動経済学から Whoop / Anki / Spotify Wrapped / GitHub graph / YNAB
+              まで、タスク管理外の領域から借りてくるべき設計を整理。最後に Top 10 ランキング。
+            </p>
+          </header>
+
+          <h3 style="margin: 24px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            行動経済学・行動科学の基盤
+          </h3>
+
+          <div class="card card--accent">
+            <h4 class="card__title">Skinner · 変動強化スケジュール</h4>
+            <div class="card__body">
+              <p>VR (変動比率) は消去抵抗が最強。スロットマシンが VR、メールチェックが VI。</p>
+              <p>
+                <strong>翻案</strong>: 完了報酬を VR にすると中毒化する
+                (タスク刻み歪み)。むしろ「<strong>インサイトの提示</strong>」を VR
+                にする。「今週のあなたは火曜午前が一番集中していた」のような気づきは、出るタイミングが予測できないからこそ価値が出る。Whoop
+                の Strain Coach がこの構造。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <h4 class="card__title">BJ Fogg · Behavior Model (B = MAP)</h4>
+            <div class="card__body">
+              <p>
+                行動 = 動機 × 能力 × プロンプト。3
+                要素が同時に閾値を超えた瞬間だけ行動が起きる。Tiny Habits 法:
+                <strong>Ability を最大化 (タスクを極小化) してプロンプトを既存習慣にアンカー</strong
+                >。
+              </p>
+              <p>
+                <strong>kozutsumi 翻案</strong>: ユーザーがいつ Slack を開くかを観測 →
+                そのタイミングに「今日の意図」入力をプロンプト。1 日 1〜2 個まで。
+              </p>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <h4 class="card__title">Self-Determination Theory (Deci & Ryan)</h4>
+            <div class="card__body">
+              <p>
+                内発的動機の 3 要素 =
+                <strong>Autonomy / Competence / Relatedness</strong
+                >。外的報酬が内発的動機をクラウドアウトする (絵を描く実験)。
+              </p>
+              <ul>
+                <li>
+                  <strong>Autonomy</strong>: AI
+                  は「提案」に留め、ユーザーが受け入れる/却下する選択を残す。Motion
+                  の自動スケジューリングは Autonomy を奪う
+                </li>
+                <li><strong>Competence</strong>: 難易度を行動データから動的調整</li>
+                <li>
+                  <strong>Relatedness</strong>:
+                  個人特化なので「<strong>過去の自分とのつながり</strong>」で代替 (Spotify Wrapped
+                  型)
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="card card--accent">
+            <h4 class="card__title">Csikszentmihalyi · フロー</h4>
+            <div class="card__body">
+              <p>
+                明確な目標、即時フィードバック、挑戦と能力の均衡。<strong>翻案</strong>:
+                朝のタスク選択時に「これは今のあなたには重すぎる (過去の完了率 15%)」と警告。Whoop
+                の Strain Coach と同型。
+              </p>
+            </div>
+          </div>
+
+          <hr class="divider" />
+
+          <h3 style="margin: 24px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            フィットネス・健康トラッキング
+          </h3>
+
+          <div class="card card--accent" style="border-left-width: 4px">
+            <h4 class="card__title">Whoop / Oura / Apple Watch</h4>
+            <p class="card__sub">受動的データ収集 → 朝に 1 スコア</p>
+            <div class="card__body">
+              <p>
+                Whoop の Recovery (緑/黄/赤) と Strain (0-21) が秀逸。「今日の Recovery は 38%
+                (黄)。Strain は 12 までが推奨」と提示するだけで、押し付けない。
+              </p>
+              <p><strong>説教調を避ける 2 つの工夫</strong>:</p>
+              <ol>
+                <li><strong>数値とゾーンに翻訳</strong>して判断はユーザーに委ねる</li>
+                <li><strong>「あなたの平均」と比較</strong> (絶対基準ではない)</li>
+              </ol>
+              <p>
+                <strong>kozutsumi 翻案 (差別化の核)</strong>: 朝の "Task Recovery
+                Score"。昨日の作業時間・完了率・遅延タスク蓄積から、今日の推奨負荷を提示。「Recovery
+                45%。今日は深い集中タスクを 1
+                つに絞ることを推奨」。低い日のための<strong>代替提案をセット</strong>にする
+                (軽いタスク、休息推奨) のが ADHD 適応版。
+              </p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h4 class="card__title">Couch to 5K · プログラムが判断疲労を消す</h4>
+            <div class="card__body">
+              <p>
+                9 週間プログラム。週 3 回、明確に終わる (25
+                分)。「今日何分走るか」を考えなくていい。
+              </p>
+              <p>
+                <strong>翻案</strong>: オンボーディング 2 週間プログラム。Day 1「タスクを 3
+                つ書く」、Day 3「朝の意図入力」、Day 7「振り返り」と段階導入。ADHD
+                は一度に全機能を覚えられないので<strong>機能の段階開放</strong>が必須。
+              </p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h4 class="card__title">MyFitnessPal · 反面教師</h4>
+            <div class="card__body">
+              <p>
+                カロリーロギングの摩擦で挫折。「ダイエットコーラ
+                +0」を律儀に記録するゲーム化で本質を見失う。
+              </p>
+              <p>
+                <strong>翻案 (反面教師)</strong>:
+                すべての作業を記録させない。<strong>サンプリング記録</strong>にする (Experience
+                Sampling Method)。「火曜 10:00、何してる？」とランダムに 3
+                回/日聞くだけで、フルログより歪みが少なく十分パターンが取れる。
+              </p>
+            </div>
+          </div>
+
+          <hr class="divider" />
+
+          <h3 style="margin: 24px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            言語学習 · 知識
+          </h3>
+
+          <div class="grid-two">
+            <div class="card">
+              <h4 class="card__title">Anki · SRS の "Leech" タグ</h4>
+              <div class="card__body">
+                <p>
+                  何度も間違えるカードを Leech として隔離。<strong>翻案</strong>:
+                  <strong>3 回先送りされたタスク</strong>に自動 Leech タグ。「本当にやるか /
+                  削除するか / サイズを変えるか」を問う。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">WaniKani · 強制ペース制限</h4>
+              <div class="card__body">
+                <p>
+                  レベル間の時間ゲートで詰め込みすぎを防ぐ。「今日はもうやることがない」状態を意図的に作る。<strong>翻案</strong>:
+                  1 日のタスク受付に上限 (3 つ)。「全部入れる」癖への構造的対抗。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">Notion / Obsidian · グラフビュー</h4>
+              <div class="card__body">
+                <p>
+                  自分が作ったコンテンツの量が可視化されることで授かり効果が発火。<strong>翻案</strong>:
+                  「あなたの行動パターンマップ」= タスク × 時間帯 ×
+                  気分のヒートマップ。<strong>他のタスクアプリは見せない</strong>差別化機能。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">GitHub コントリビューショングラフ</h4>
+              <div class="card__body">
+                <p>
+                  53 週 × 7 日の緑グラデーション。<strong>毒性批判</strong>:
+                  「土日も緑じゃないと」過剰働き圧力、「コミット数 =
+                  価値」の誤算、燃え尽き。<strong>翻案</strong>:
+                  完了数ではなく「<strong>深い集中時間</strong>」や「意図と一致した行動」を緑にする。共有機能はつけない。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <hr class="divider" />
+
+          <h3 style="margin: 24px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            パーソナルファイナンス
+          </h3>
+
+          <div class="card card--accent">
+            <h4 class="card__title">YNAB · "Give Every Dollar a Job"</h4>
+            <div class="card__body">
+              <p>
+                手元の金額をすべてカテゴリに割り当てる。<strong>ゼロサム制約</strong>が予算意識を強制。「使えるお金」ではなく「役割を持ったお金」に変換。
+              </p>
+              <p>
+                <strong>翻案</strong>: 「Give Every Hour a Job」。1
+                日の可処分時間を全カテゴリに割り当てる。Sunsama の "Daily Planning"
+                の核でもある。kozutsumi では<strong
+                  >過去データから「あなたの実効稼働時間は 7 時間」と提示</strong
+                >して過大見積もりを防ぐ差別化が可能。
+              </p>
+            </div>
+          </div>
+
+          <hr class="divider" />
+
+          <h3 style="margin: 24px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            音楽 · クリエイティブ
+          </h3>
+
+          <div class="card card--accent" style="border-left-width: 4px; background: var(--tint)">
+            <h4 class="card__title">Spotify Wrapped · 異分野リサーチ最大の発見</h4>
+            <p class="card__sub">年末 1 日のナラティブ提示</p>
+            <div class="card__body">
+              <p>
+                「あなたのトップアーティスト」「総再生時間」をストーリー形式で。共有用画像を自動生成。
+              </p>
+              <p><strong>なぜ効くか</strong>:</p>
+              <ol>
+                <li>1 年に 1 度のイベント化で待ち遠しさを生む</li>
+                <li>ナラティブ (時系列ストーリー) で体験化</li>
+                <li>共有可能性で外的拡散</li>
+              </ol>
+              <p>
+                <strong>kozutsumi 翻案</strong>: 年次 /
+                四半期レビューはこれを真似る価値が最大級。「<strong
+                  >2026
+                  年、あなたは火曜午前に最も集中していました。最もエネルギーを注いだプロジェクトは
+                  X。先送りされ続けたのは Y で、3 月にようやく完了</strong
+                >」のようなナラティブを AI で生成。エクセル集計型の他アプリには真似できない。
+              </p>
+            </div>
+          </div>
+
+          <hr class="divider" />
+
+          <h3 style="margin: 24px 0 12px; font-family: var(--font-serif); font-size: 20px">
+            専門技能
+          </h3>
+
+          <div class="grid-two">
+            <div class="card">
+              <h4 class="card__title">Khan Academy / Brilliant · 知識ツリー</h4>
+              <div class="card__body">
+                <p>
+                  前提知識をクリアしないと次に進めない。ツリー可視化で「次にやるべきこと」が決まる
+                  (決断疲労ゼロ)。<strong>翻案</strong>: kozutsumi
+                  が「このタスクの前提タスク」を自動推論してツリーを生成。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">LeetCode · 難易度別カウント</h4>
+              <div class="card__body">
+                <p>
+                  Easy / Medium / Hard で水増し対抗 (Easy 100 < Medium 50
+                  が一目瞭然)。<strong>翻案</strong>: 完了数だけでなくタスクサイズ別 (Small 50 /
+                  Medium 12 / Large 3)。GitHub グラフの毒性対策にもなる。
+                </p>
+              </div>
+            </div>
+            <div class="card panel--warn">
+              <h4 class="card__title">
+                Chess.com Elo · <span style="color: var(--warn)">避けるべき</span>
+              </h4>
+              <div class="card__body">
+                <p>
+                  レーティングが行動の単一指標。<strong>Goodhart's Law</strong> (測定が目標化)
+                  の典型例。タスク管理に持ち込んではいけない。
+                </p>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="card__title">Goodreads / Kindle · 年次チャレンジ</h4>
+              <div class="card__body">
+                <p>
+                  「2026 年に X 冊」プログレスバー。年スパンが長期目標として最適
+                  (短すぎず長すぎず)。「先行/遅延」表示が損失回避を発火。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <hr class="divider" />
+
+          <h3 style="margin: 32px 0 12px; font-family: var(--font-serif); font-size: 22px">
+            Top 10 · 盗む価値の高いメカニズム
+          </h3>
+          <p style="font-size: 14px; color: var(--text-muted); margin: 0 0 16px">
+            ADHD 適合性 × kozutsumi 差別化への寄与で並べた優先順。
+          </p>
+          <ol class="ranked">
+            <li>
+              <strong>朝の "Task Recovery Score" (Whoop 型)</strong>
+              昨日のデータから今日の推奨負荷を提示。説教せず、選択は委ねる。kozutsumi の差別化の核。
+            </li>
+            <li>
+              <strong>年次 / 四半期 "Wrapped" (Spotify 型)</strong>
+              行動パターンをナラティブで提示。AI
+              生成で他アプリには真似できない深さ。<em>ユーザー定着の単一最強機能</em>。
+            </li>
+            <li>
+              <strong>「Give Every Hour a Job」予算 (YNAB 型)</strong>
+              可処分時間の実効値を過去データから補正。過大見積もりへの直接対抗。
+            </li>
+            <li>
+              <strong>行動パターンヒートマップ (Notion グラフ型)</strong>
+              タスク × 時間 × 気分の 3 軸ビュー。授かり効果でユーザーが離れがたくなる。
+            </li>
+            <li>
+              <strong>タスクの "Leech" 検出 (Anki 型)</strong>
+              3 回先送りされたタスクに自動タグ。「本当にやるか / 削除するか /
+              サイズを変えるか」を問う。
+            </li>
+            <li>
+              <strong>既存習慣アンカープロンプト (Fogg 型)</strong>
+              ユーザーの起動パターンを観測 → そのタイミングに「今日の意図」入力をプロンプト。1 日
+              1〜2 個まで。
+            </li>
+            <li>
+              <strong>インサイト VR スケジュール (Skinner 変奏)</strong>
+              完了報酬は控えめ、気づきの提示を変動的に。「火曜午前のあなたが最も集中している」を予測不能タイミングで。
+            </li>
+            <li>
+              <strong>オンボーディング段階開放 (Couch to 5K 型)</strong>
+              2 週間で機能を順次開放。一度に全機能を学べないことへの対抗。
+            </li>
+            <li>
+              <strong>タスクキャップとゲート (WaniKani 型)</strong>
+              1 日の受付タスク数に上限。「全部入れる」癖への構造的対抗。
+            </li>
+            <li>
+              <strong>タスクサイズ別カウント (LeetCode 型)</strong>
+              完了数の単一指標を避け、Small/Medium/Large 別に集計。Goodhart 法則の毒抜き。
+            </li>
+          </ol>
+
+          <div class="panel panel--warn" style="margin-top: 24px">
+            <p class="panel__title">意図的に避けるべきパターン</p>
+            <ul>
+              <li>Snapchat 型ストリーク圧力</li>
+              <li>Chess.com 型単一 Elo (Goodhart)</li>
+              <li>Duolingo 型他人との比較リーグ (個人特化に反する)</li>
+              <li>Hooked の Variable Reward を完了通知に使うこと (タスク刻み歪み)</li>
+              <li>MyFitnessPal 型の全行動ロギング強制 (サンプリングで十分)</li>
+            </ul>
+          </div>
+
+          <div class="card card--accent" style="margin-top: 24px">
+            <h4 class="card__title">差別化の総括</h4>
+            <div class="card__body">
+              <p>
+                他のタスクアプリが盗めない領域は「<strong>データ蓄積後にしか出せないインサイト</strong>」にある。Whoop
+                / Spotify Wrapped / Notion グラフはすべてこの構造。
+              </p>
+              <p>
+                <strong>1 ヶ月使うと別物になるアプリ</strong>を目指すと、機能比較に巻き込まれない。
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container">
+        <div class="footer__links">
+          <a href="https://github.com/y-oga-819/kozutsumi/issues/234">Issue #234 (調査原文)</a>
+          <a href="https://github.com/y-oga-819/kozutsumi/blob/main/docs/design/vision.md"
+            >vision.md</a
+          >
+          <a href="https://github.com/y-oga-819/kozutsumi/tree/main/docs/adr">docs/adr/</a>
+        </div>
+        <p style="margin: 0">kozutsumi · 2026-05-09 · subagent research synthesis</p>
+      </div>
+    </footer>
+
+    <script>
+      // Progress bar
+      const bar = document.getElementById("progressBar");
+      const updateProgress = () => {
+        const h = document.documentElement;
+        const scrollTop = h.scrollTop || document.body.scrollTop;
+        const scrollHeight = h.scrollHeight - h.clientHeight;
+        const pct = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 0;
+        bar.style.width = pct + "%";
+      };
+      window.addEventListener("scroll", updateProgress, { passive: true });
+      updateProgress();
+
+      // Active nav highlight
+      const links = document.querySelectorAll(".nav__link");
+      const sections = Array.from(links).map((l) => document.querySelector(l.getAttribute("href")));
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              const id = entry.target.id;
+              links.forEach((l) =>
+                l.classList.toggle("is-active", l.getAttribute("href") === "#" + id),
+              );
+            }
+          });
+        },
+        { rootMargin: "-30% 0px -60% 0px" },
+      );
+      sections.forEach((s) => s && observer.observe(s));
+    </script>
+  </body>
+</html>
