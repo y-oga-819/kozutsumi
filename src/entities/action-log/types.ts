@@ -28,6 +28,8 @@ export type ActionType =
   | "event_promoted"
   | "event_demoted"
   | "event_override_cleared"
+  | "event_visibility_rule_added"
+  | "event_visibility_rule_removed"
   | "external_account_added"
   | "external_account_removed"
   // system actor:
@@ -277,6 +279,15 @@ export type ActionMetadataMap = {
     to: "shown";
     subscription_auto_promote: boolean;
     is_override_of_default: boolean;
+    // ADR 0056 §8: 系列 / 単発の区別を Phase 4 が分析できるように残す。
+    // - scope='single' (default、recurring 由来でも単発操作なら 'single')
+    //   recurring 由来なら recurring_event_id も入れる (rule 系操作との突合のため)。
+    //   bulk_operation_id は付けない。
+    // - scope='this_and_following' | 'all' のとき:
+    //   recurring_event_id 必須。bulk_operation_id 必須 (1 操作 = 1 uuid を全 instance log で共有)。
+    scope?: "single" | "this_and_following" | "all";
+    recurring_event_id?: string | null;
+    bulk_operation_id?: string;
   };
   event_demoted: {
     source: string;
@@ -287,6 +298,33 @@ export type ActionMetadataMap = {
     to: "hidden";
     subscription_auto_promote: boolean;
     is_override_of_default: boolean;
+    // ADR 0056 §8: event_promoted と同じ規約。
+    scope?: "single" | "this_and_following" | "all";
+    recurring_event_id?: string | null;
+    bulk_operation_id?: string;
+  };
+  // ADR 0056 §8: rule 永続化操作。event_promoted/event_demoted と
+  // bulk_operation_id で対応する (1 操作 = 1 rule + N 件 event_*ed log)。
+  event_visibility_rule_added: {
+    rule_id: string;
+    source: string;
+    external_calendar_id: string;
+    recurring_event_id: string;
+    scope: "this_and_following" | "all";
+    override_value: "shown" | "hidden";
+    /** scope='this_and_following' のとき必須、'all' のとき null。 */
+    from_start_time: string | null;
+    /** 同操作の event_promoted/event_demoted 群と紐付ける uuid (ADR 0056 §8)。 */
+    bulk_operation_id: string;
+  };
+  event_visibility_rule_removed: {
+    rule_id: string;
+    source: string;
+    external_calendar_id: string;
+    recurring_event_id: string;
+    scope: "this_and_following" | "all";
+    override_value: "shown" | "hidden";
+    from_start_time: string | null;
   };
   event_override_cleared: {
     source: string;

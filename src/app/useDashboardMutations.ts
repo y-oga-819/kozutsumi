@@ -6,7 +6,11 @@ import { useCallback } from "react";
 import { dashboardKeys } from "./useDashboardQueries";
 import { ACTION_TYPES, log } from "@/entities/action-log/logger";
 import type { CreateEventInput, UpdateEventInput } from "@/entities/event/gateway";
-import type { Event, EventVisibilityOverride } from "@/entities/event/types";
+import type {
+  Event,
+  EventVisibilityOverride,
+  EventVisibilityOverrideScope,
+} from "@/entities/event/types";
 import type { CreateProjectInput, UpdateProjectInput } from "@/entities/project/gateway";
 import type { Project } from "@/entities/project/types";
 import type { CreateTaskInput, ProjectCascadeMode } from "@/entities/task/gateway";
@@ -77,6 +81,16 @@ export type DashboardMutations = {
    * の override 一覧 reset 専用導線から呼ぶ (ADR 0032: 日常 UI から none へは戻せない)。
    */
   setEventVisibilityOverride: (id: string, value: EventVisibilityOverride) => Promise<void>;
+  /**
+   * Issue #229 / ADR 0056: recurring event の系列 override (bulk apply + rule 永続化)。
+   * `scope='this_and_following' | 'all'` のみ受け付ける (`single` は既存の
+   * setEventVisibilityOverride 経路を使う)。
+   */
+  setRecurringEventVisibilityOverride: (
+    id: string,
+    value: "shown" | "hidden",
+    scope: Exclude<EventVisibilityOverrideScope, "single">,
+  ) => Promise<void>;
   createProject: (input: CreateProjectInput) => Promise<void>;
   updateProject: (id: string, patch: UpdateProjectInput) => Promise<void>;
   /** schema 上 ON DELETE SET NULL なので tasks/events も invalidate する。 */
@@ -466,6 +480,55 @@ export function useDashboardMutations(): DashboardMutations {
     },
   });
 
+  // Issue #229 / ADR 0056: 系列 override (bulk apply + rule 永続化)。
+  // server 側で affected な instance を返すので、optimistic は target だけ即時書き換え、
+  // 残りは onSettled の invalidate で refetch して反映する (refetch 1 回でも UX は十分)。
+  // rule 一覧 (settings の rules セクション) も invalidate する。
+  const setRecurringEventVisibilityOverrideMutation = useMutation({
+    mutationFn: async ({
+      id,
+      value,
+      scope,
+    }: {
+      id: string;
+      value: "shown" | "hidden";
+      scope: Exclude<EventVisibilityOverrideScope, "single">;
+    }) => {
+      const res = await fetch(`/api/events/${id}/visibility-override/bulk`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ value, scope }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `recurring_visibility_override_failed: ${res.status}`);
+      }
+      return (await res.json()) as {
+        rule_id: string;
+        bulk_operation_id: string;
+        scope: "this_and_following" | "all";
+        value: "shown" | "hidden";
+        affected_event_ids: string[];
+      };
+    },
+    onMutate: async ({ id, value }) => {
+      await queryClient.cancelQueries({ queryKey: dashboardKeys.events });
+      const previous = queryClient.getQueryData<Event[]>(dashboardKeys.events);
+      // optimistic: target instance だけ即時書き換え。系列影響は onSettled の invalidate に任せる。
+      queryClient.setQueryData<Event[]>(dashboardKeys.events, (prev) =>
+        (prev ?? []).map((e) => (e.id === id ? { ...e, visibilityOverride: value } : e)),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(dashboardKeys.events, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.events });
+      queryClient.invalidateQueries({ queryKey: ["calendar", "visibility-override-rules"] });
+    },
+  });
+
   // ADR 0010: manual イベントだけが UI から削除可能。google_calendar は
   // SupabaseEventGateway.delete が source を見て弾く。
   const deleteEventMutation = useMutation({
@@ -751,6 +814,10 @@ export function useDashboardMutations(): DashboardMutations {
     deleteEvent: (id) => deleteEventMutation.mutateAsync(id).then(() => undefined),
     setEventVisibilityOverride: (id, value) =>
       setEventVisibilityOverrideMutation.mutateAsync({ id, value }).then(() => undefined),
+    setRecurringEventVisibilityOverride: (id, value, scope) =>
+      setRecurringEventVisibilityOverrideMutation
+        .mutateAsync({ id, value, scope })
+        .then(() => undefined),
     createProject: (input) => createProjectMutation.mutateAsync(input).then(() => undefined),
     updateProject: (id, patch) =>
       updateProjectMutation.mutateAsync({ id, patch }).then(() => undefined),

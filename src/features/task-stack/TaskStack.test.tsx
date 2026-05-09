@@ -59,6 +59,7 @@ const baseEvent: Event = {
   externalId: null,
   externalCalendarId: "manual",
   visibilityOverride: "none",
+  recurringEventId: null,
   createdAt: "2026-04-11T00:00:00",
 };
 

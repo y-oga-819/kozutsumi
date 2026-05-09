@@ -138,6 +138,7 @@ export type Database = {
           external_id: string | null;
           external_calendar_id: string;
           visibility_override: Database["public"]["Enums"]["event_visibility_override"];
+          recurring_event_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -154,6 +155,7 @@ export type Database = {
           external_id?: string | null;
           external_calendar_id: string;
           visibility_override?: Database["public"]["Enums"]["event_visibility_override"];
+          recurring_event_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -170,6 +172,43 @@ export type Database = {
           external_id?: string | null;
           external_calendar_id?: string;
           visibility_override?: Database["public"]["Enums"]["event_visibility_override"];
+          recurring_event_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      event_visibility_override_rules: {
+        Row: {
+          id: string;
+          user_id: string;
+          source: Database["public"]["Enums"]["event_source"];
+          external_calendar_id: string;
+          recurring_event_id: string;
+          scope: "this_and_following" | "all";
+          override_value: "shown" | "hidden";
+          from_start_time: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          source: Database["public"]["Enums"]["event_source"];
+          external_calendar_id: string;
+          recurring_event_id: string;
+          scope: "this_and_following" | "all";
+          override_value: "shown" | "hidden";
+          from_start_time?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          source?: Database["public"]["Enums"]["event_source"];
+          external_calendar_id?: string;
+          recurring_event_id?: string;
+          scope?: "this_and_following" | "all";
+          override_value?: "shown" | "hidden";
+          from_start_time?: string | null;
           created_at?: string;
         };
         Relationships: [];

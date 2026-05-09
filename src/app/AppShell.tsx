@@ -129,6 +129,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
     updateEvent,
     deleteEvent,
     setEventVisibilityOverride,
+    setRecurringEventVisibilityOverride,
     createProject,
     updateProject,
     deleteProject,
@@ -254,6 +255,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
               events={events}
               subscriptions={calendarSubscriptions}
               onSetVisibilityOverride={setEventVisibilityOverride}
+              onSetRecurringVisibilityOverride={setRecurringEventVisibilityOverride}
               onOpenEvent={setEventDetailId}
             />
           ) : (
@@ -299,6 +301,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
                   onUpdate={updateEvent}
                   onDelete={deleteEvent}
                   onSetVisibilityOverride={setEventVisibilityOverride}
+                  onSetRecurringVisibilityOverride={setRecurringEventVisibilityOverride}
                   subscriptionAutoPromote={subscriptionAutoPromote}
                 />
               );
@@ -339,7 +342,6 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
             onClose={() => setSettingsOpen(false)}
             primaryExternalAccountId={calendarSubscriptions[0]?.externalAccountId ?? null}
             events={events}
-            onSetVisibilityOverride={setEventVisibilityOverride}
           />
         </div>
       </CorrectionFactorsProvider>

@@ -17,6 +17,7 @@ export function buildInitialEvents(): Event[] {
     externalId: null,
     externalCalendarId: "manual",
     visibilityOverride: "none" as const,
+    recurringEventId: null,
     createdAt: now,
   };
 

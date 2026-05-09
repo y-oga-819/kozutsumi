@@ -150,6 +150,7 @@ describe("mapGoogleEventToUpsertInput", () => {
       meetUrl: "https://meet.google.com/xyz",
       hasAttachments: true,
       description: "議題: 進捗",
+      recurringEventId: null,
     });
   });
 
@@ -172,6 +173,32 @@ describe("mapGoogleEventToUpsertInput", () => {
       meetUrl: null,
       hasAttachments: false,
       description: "",
+      recurringEventId: null,
+    });
+  });
+
+  test("recurring instance: recurringEventId を保持する (ADR 0056)", () => {
+    const result = mapGoogleEventToUpsertInput(
+      {
+        id: "evt-instance-3",
+        recurringEventId: "evt-master-1",
+        summary: "毎週 1on1",
+        start: { dateTime: "2026-04-23T10:00:00+09:00" },
+        end: { dateTime: "2026-04-23T11:00:00+09:00" },
+      },
+      "primary",
+    );
+
+    expect(result).toEqual<UpsertGoogleCalendarEventInput>({
+      externalCalendarId: "primary",
+      externalId: "evt-instance-3",
+      title: "毎週 1on1",
+      startTime: "2026-04-23T01:00:00.000Z",
+      endTime: "2026-04-23T02:00:00.000Z",
+      meetUrl: null,
+      hasAttachments: false,
+      description: "",
+      recurringEventId: "evt-master-1",
     });
   });
 

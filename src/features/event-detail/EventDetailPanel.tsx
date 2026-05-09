@@ -1,7 +1,13 @@
 import { useState } from "react";
 
 import type { UpdateEventInput } from "../../entities/event/gateway";
-import { EVENT_SOURCE, type Event, type EventVisibilityOverride } from "../../entities/event/types";
+import { RecurringScopeModal } from "../../entities/event/RecurringScopeModal";
+import {
+  EVENT_SOURCE,
+  type Event,
+  type EventVisibilityOverride,
+  type EventVisibilityOverrideScope,
+} from "../../entities/event/types";
 import { GoogleCalendarBadge } from "../../entities/event/GoogleCalendarBadge";
 import { getProject } from "../../entities/project/projects";
 import { useProjects } from "../../entities/project/ProjectsContext";
@@ -45,6 +51,16 @@ type EventDetailPanelProps = {
    */
   onSetVisibilityOverride?: (id: string, value: EventVisibilityOverride) => Promise<void> | void;
   /**
+   * Issue #229 / ADR 0056: recurring event の系列 override (bulk apply + rule 永続化)。
+   * scope='this_and_following' | 'all' のみ受け付ける ('single' は onSetVisibilityOverride を使う)。
+   * 未指定なら recurring event でも 3 択 modal を出さず、既存挙動 (single 操作のみ) のままにする。
+   */
+  onSetRecurringVisibilityOverride?: (
+    id: string,
+    value: "shown" | "hidden",
+    scope: Exclude<EventVisibilityOverrideScope, "single">,
+  ) => Promise<void> | void;
+  /**
    * 当該 event の calendar subscription の `auto_promote_to_timeline` 値。
    * `visibility_override='none'` のとき、effective visibility 計算に使う。
    * 不明 (subscription なし / manual) のときは true (= 既定で表示) として扱う。
@@ -59,6 +75,7 @@ export function EventDetailPanel({
   onUpdate,
   onDelete,
   onSetVisibilityOverride,
+  onSetRecurringVisibilityOverride,
   subscriptionAutoPromote = true,
 }: EventDetailPanelProps) {
   const { projects, projectsById } = useProjects();
@@ -102,14 +119,46 @@ export function EventDetailPanel({
         ? false
         : subscriptionAutoPromote;
   const overrideActive = event.visibilityOverride !== "none";
+  // ADR 0056: recurring instance かつ系列操作 callback が渡されているときだけ 3 択 modal を出す。
+  // 単発 event (recurringEventId === null) や、callback 未指定 (テスト等) は従来の single 操作のみ。
+  const supportsRecurringScope =
+    !!onSetRecurringVisibilityOverride && event.recurringEventId !== null;
+  const [scopeModalOpen, setScopeModalOpen] = useState(false);
+  // modal 開閉中は target を保持 ('shown' / 'hidden' のどちらに倒す操作だったか)。
+  const [pendingTargetValue, setPendingTargetValue] = useState<"shown" | "hidden">("shown");
 
   const handleToggleVisibility = async () => {
     if (visibilityPending || !onSetVisibilityOverride) return;
     const next: EventVisibilityOverride = effectiveShown ? "hidden" : "shown";
+    if (supportsRecurringScope && (next === "shown" || next === "hidden")) {
+      // ADR 0056 §6: default scope='single' を modal で明示選択させる。modal を開くだけで
+      // この時点では DB を触らない。
+      setPendingTargetValue(next);
+      setScopeModalOpen(true);
+      return;
+    }
     setVisibilityPending(true);
     setError(null);
     try {
       await onSetVisibilityOverride(event.id, next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "予定化の切替に失敗しました");
+    } finally {
+      setVisibilityPending(false);
+    }
+  };
+
+  const handleScopeSelect = async (scope: EventVisibilityOverrideScope) => {
+    if (visibilityPending) return;
+    setVisibilityPending(true);
+    setError(null);
+    try {
+      if (scope === "single") {
+        await onSetVisibilityOverride!(event.id, pendingTargetValue);
+      } else {
+        await onSetRecurringVisibilityOverride!(event.id, pendingTargetValue, scope);
+      }
+      setScopeModalOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "予定化の切替に失敗しました");
     } finally {
@@ -511,6 +560,14 @@ export function EventDetailPanel({
           </form>
         )}
       </div>
+      {scopeModalOpen ? (
+        <RecurringScopeModal
+          targetValue={pendingTargetValue}
+          pending={visibilityPending}
+          onSelect={handleScopeSelect}
+          onClose={() => setScopeModalOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

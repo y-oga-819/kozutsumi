@@ -1,16 +1,11 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
 import type { CalendarSubscription } from "@/entities/calendar-subscription/types";
-import { EVENT_SOURCE, type Event, type EventVisibilityOverride } from "@/entities/event/types";
-import {
-  formatAllDayRange,
-  formatClock,
-  isAllDayEvent,
-  isDeadlineEvent,
-  localDateOf,
-} from "@/shared/lib/time";
+import { type Event, type EventVisibilityOverrideRule } from "@/entities/event/types";
+import { formatClock, localDateOf } from "@/shared/lib/time";
 
 import { useCalendarSubscriptions, type CalendarListItem } from "./useCalendarSubscriptions";
 
@@ -19,13 +14,11 @@ type SettingsPanelProps = {
   onClose: () => void;
   /** UserMenu の Google アカウント (= primary external account) の identifier (text)。 */
   primaryExternalAccountId: string | null;
-  /** Issue #145: override 一覧の元データ。 */
-  events: readonly Event[];
   /**
-   * Issue #145 / ADR 0032: override 一覧から個別 reset (`'none'`) する唯一の導線。
-   * 日常 UI からの reset は禁止 (ADR 0032)、本 panel 専用。
+   * Issue #229 / ADR 0056 §7: rules セクションで「どの繰り返し予定に対する方針か」を表示するために
+   * events 一覧を渡す。`recurring_event_id` でひも付けて instance のタイトルを引く。
    */
-  onSetVisibilityOverride: (id: string, value: EventVisibilityOverride) => Promise<void>;
+  events: readonly Event[];
 };
 
 /**
@@ -45,7 +38,6 @@ export function SettingsPanel({
   onClose,
   primaryExternalAccountId,
   events,
-  onSetVisibilityOverride,
 }: SettingsPanelProps) {
   const { subscriptionsQuery, calendarListQuery, subscribe, unsubscribe, toggleAutoPromote } =
     useCalendarSubscriptions();
@@ -173,150 +165,9 @@ export function SettingsPanel({
           </div>
         </section>
 
-        <OverridesSection
-          events={events}
-          subscriptions={subscriptions}
-          onSetVisibilityOverride={onSetVisibilityOverride}
-        />
+        <RulesSection subscriptions={subscriptions} events={events} />
       </div>
     </div>
-  );
-}
-
-function OverridesSection({
-  events,
-  subscriptions,
-  onSetVisibilityOverride,
-}: {
-  events: readonly Event[];
-  subscriptions: CalendarSubscription[];
-  onSetVisibilityOverride: (id: string, value: EventVisibilityOverride) => Promise<void>;
-}) {
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const subDisplayMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const s of subscriptions) {
-      m.set(`${s.source}::${s.externalCalendarId}`, s.displayName ?? s.externalCalendarId);
-    }
-    return m;
-  }, [subscriptions]);
-
-  // ADR 0032: 設定画面の override 一覧 = `visibility_override !== 'none'` を一覧、reset 専用導線。
-  // start_time 降順 (新しい順) で並べる。
-  const overridden = useMemo(
-    () =>
-      events
-        .filter((e) => e.visibilityOverride !== "none")
-        .map((e) => ({
-          event: e,
-          calendarLabel:
-            e.source === EVENT_SOURCE.MANUAL
-              ? "手動追加"
-              : (subDisplayMap.get(`${e.source}::${e.externalCalendarId}`) ?? e.externalCalendarId),
-        }))
-        .sort((a, b) => (a.event.startTime < b.event.startTime ? 1 : -1)),
-    [events, subDisplayMap],
-  );
-
-  const handleReset = async (id: string) => {
-    setPendingId(id);
-    setError(null);
-    try {
-      await onSetVisibilityOverride(id, "none");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "リセットに失敗しました");
-    } finally {
-      setPendingId(null);
-    }
-  };
-
-  return (
-    <section aria-label="個別予定化の設定" className="mt-6 border-t border-bg-divider pt-4">
-      <h3 className="mb-2 text-[12px] font-semibold text-fg-emphasized">個別予定化の設定</h3>
-      <p className="mb-3 text-[11px] leading-relaxed text-fg-muted">
-        「予定化」「予定化解除」を個別に指定した予定の一覧です。リセットすると、そのカレンダーの自動予定化設定に従う動作に戻ります。
-      </p>
-
-      {error ? (
-        <div
-          role="alert"
-          className="mb-2 rounded bg-[#ef444420] px-2 py-1.5 text-[11px] text-accent-red"
-        >
-          {error}
-        </div>
-      ) : null}
-
-      {overridden.length === 0 ? (
-        <p className="text-[11px] text-fg-muted">個別指定している予定はまだありません。</p>
-      ) : (
-        <ul role="list" className="m-0 list-none space-y-1.5 p-0">
-          {overridden.map(({ event, calendarLabel }) => (
-            <li
-              key={event.id}
-              className="flex items-start gap-3 rounded-md border border-bg-divider bg-bg-primary px-3 py-2"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`rounded-[3px] border px-1 py-[1px] font-jp text-[9px] ${
-                      event.visibilityOverride === "shown"
-                        ? "border-accent-blue/40 text-accent-blue"
-                        : "border-bg-divider text-fg-weak"
-                    }`}
-                  >
-                    {event.visibilityOverride === "shown" ? "予定化中" : "予定化解除中"}
-                  </span>
-                  <span className="truncate text-[10px] text-fg-faint">{calendarLabel}</span>
-                </div>
-                <div
-                  className="mt-1 truncate font-jp text-[12px] font-medium text-fg-emphasized"
-                  title={event.title}
-                >
-                  {event.title}
-                </div>
-                <div className="mt-0.5 text-[10px] tabular-nums text-fg-weak">
-                  {isAllDayEvent(event) ? (
-                    <>
-                      <span
-                        aria-label="終日"
-                        className="mr-1.5 rounded-[3px] border border-bg-divider px-1 py-px font-jp text-[9px] text-fg-subtle"
-                      >
-                        終日
-                      </span>
-                      {formatAllDayRange(event)}
-                    </>
-                  ) : isDeadlineEvent(event) ? (
-                    <>
-                      {localDateOf(event.startTime)}{" "}
-                      <span aria-label={`${formatClock(event.startTime)} 締切`}>
-                        ⏰ {formatClock(event.startTime)}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      {localDateOf(event.startTime)} {formatClock(event.startTime)}–
-                      {formatClock(event.endTime)}
-                    </>
-                  )}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center">
-                <button
-                  type="button"
-                  onClick={() => handleReset(event.id)}
-                  disabled={pendingId === event.id}
-                  className="rounded-[4px] border border-bg-divider bg-transparent px-2.5 py-[3px] font-jp text-[10px] text-fg-subtle disabled:opacity-60"
-                >
-                  リセット
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }
 
@@ -463,5 +314,165 @@ function CandidateRow({
         </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * Issue #229 / ADR 0056 §7: 系列 override の rule 一覧 + 単独削除導線。
+ *
+ * 「個別予定化の設定」が **事実 (instance reset)** を扱うのに対し、本セクションは
+ * **方針 (rule reset)** を扱う。両者は別操作として並べる (ADR 0056 §7)。
+ *
+ * rule を削除しても既存 instance の visibility_override (= 事実) は変わらない。
+ * 削除以降に取り込まれる新規 instance は default 動作 (subscription.auto_promote) に戻る。
+ */
+function RulesSection({
+  subscriptions,
+  events,
+}: {
+  subscriptions: CalendarSubscription[];
+  events: readonly Event[];
+}) {
+  const queryClient = useQueryClient();
+  const rulesQuery = useQuery({
+    queryKey: ["calendar", "visibility-override-rules"],
+    queryFn: async () => {
+      const res = await fetch("/api/events/visibility-override-rules");
+      if (!res.ok) throw new Error(`fetch_rules_failed: ${res.status}`);
+      const body = (await res.json()) as { rules: EventVisibilityOverrideRule[] };
+      return body.rules;
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (ruleId: string) => {
+      const res = await fetch(`/api/events/visibility-override-rules/${ruleId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `delete_rule_failed: ${res.status}`);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar", "visibility-override-rules"] });
+    },
+  });
+
+  const subDisplayMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of subscriptions) {
+      m.set(`${s.source}::${s.externalCalendarId}`, s.displayName ?? s.externalCalendarId);
+    }
+    return m;
+  }, [subscriptions]);
+
+  // ADR 0056: rule は recurring_event_id (= Google master id) を保持するが、タイトルは持たない。
+  // events から (source, external_calendar_id, recurring_event_id) でひも付けて 1 件のタイトルを引く
+  // (recurring 系列の全 instance はタイトル共通なので任意の 1 件で OK)。一致する instance が
+  // ローカルに 1 件もない場合 (= Google 側で master が切れた孤立 rule) は recurring_event_id を
+  // そのまま fallback 表示する。
+  const recurringTitleMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const ev of events) {
+      if (!ev.recurringEventId) continue;
+      const key = `${ev.source}::${ev.externalCalendarId}::${ev.recurringEventId}`;
+      if (!m.has(key)) m.set(key, ev.title);
+    }
+    return m;
+  }, [events]);
+
+  const rules = rulesQuery.data ?? [];
+  const [error, setError] = useState<string | null>(null);
+
+  const handleDelete = async (ruleId: string) => {
+    setError(null);
+    try {
+      await deleteMutation.mutateAsync(ruleId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ルールの削除に失敗しました");
+    }
+  };
+
+  return (
+    <section aria-label="繰り返し予定化のルール" className="mt-6 border-t border-bg-divider pt-4">
+      <h3 className="mb-2 text-[12px] font-semibold text-fg-emphasized">繰り返し予定化のルール</h3>
+      <p className="mb-3 text-[11px] leading-relaxed text-fg-muted">
+        「これ以降」「すべて」を選んで保存した、繰り返し予定への方針一覧です。削除すると、以降に取り込まれる新しい予定は既定の動作に戻ります（既に取り込み済みの個別予定の状態は変わりません）。
+      </p>
+
+      {error ? (
+        <div
+          role="alert"
+          className="mb-2 rounded bg-[#ef444420] px-2 py-1.5 text-[11px] text-accent-red"
+        >
+          {error}
+        </div>
+      ) : null}
+
+      {rulesQuery.isLoading ? (
+        <p className="text-[11px] text-fg-muted">読み込み中…</p>
+      ) : rules.length === 0 ? (
+        <p className="text-[11px] text-fg-muted">登録されているルールはまだありません。</p>
+      ) : (
+        <ul role="list" className="m-0 list-none space-y-1.5 p-0">
+          {rules.map((rule) => {
+            const calendarLabel =
+              subDisplayMap.get(`${rule.source}::${rule.externalCalendarId}`) ??
+              rule.externalCalendarId;
+            const scopeLabel =
+              rule.scope === "all" ? "すべての繰り返し" : "これ以降の予定もまとめて";
+            const valueLabel = rule.overrideValue === "shown" ? "予定化" : "予定化解除";
+            const recurringTitle =
+              recurringTitleMap.get(
+                `${rule.source}::${rule.externalCalendarId}::${rule.recurringEventId}`,
+              ) ?? "(ローカルに該当予定なし)";
+            return (
+              <li
+                key={rule.id}
+                className="flex items-start gap-3 rounded-md border border-bg-divider bg-bg-primary px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`rounded-[3px] border px-1 py-[1px] font-jp text-[9px] ${
+                        rule.overrideValue === "shown"
+                          ? "border-accent-blue/40 text-accent-blue"
+                          : "border-bg-divider text-fg-weak"
+                      }`}
+                    >
+                      {valueLabel}
+                    </span>
+                    <span className="truncate text-[10px] text-fg-faint">{calendarLabel}</span>
+                  </div>
+                  <div
+                    className="mt-1 truncate font-jp text-[12px] font-medium text-fg-emphasized"
+                    title={recurringTitle}
+                  >
+                    {recurringTitle}
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-fg-weak">
+                    {scopeLabel}
+                    {rule.scope === "this_and_following" && rule.fromStartTime
+                      ? ` ・ ${localDateOf(rule.fromStartTime)} ${formatClock(rule.fromStartTime)} 以降`
+                      : null}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center">
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(rule.id)}
+                    disabled={deleteMutation.isPending}
+                    className="rounded-[4px] border border-bg-divider bg-transparent px-2.5 py-[3px] font-jp text-[10px] text-fg-subtle disabled:opacity-60"
+                  >
+                    ルール削除
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }

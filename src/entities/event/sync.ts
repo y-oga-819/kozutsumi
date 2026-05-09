@@ -587,6 +587,9 @@ export function mapGoogleEventToUpsertInput(
     meetUrl: extractMeetUrl(event),
     hasAttachments: Array.isArray(event.attachments) && event.attachments.length > 0,
     description: event.description ?? "",
+    // ADR 0056: recurring instance なら master id を保持 (singleEvents=true でも返る)。
+    // 単発 event は undefined → null に揃えて schema (text nullable) と一致させる。
+    recurringEventId: event.recurringEventId ?? null,
   };
 }
 

@@ -28,6 +28,11 @@ export type UpdateEventInput = {
  * `externalCalendarId` (ADR 0033 / 0052) は subscription を介して呼び出し元が決める。primary calendar は
  * Google API resolve した実 id (= email)。リテラル `'primary'` は使わない。
  * `visibility_override` も同期で再 upsert されても触らない (ADR 0034 L4)。
+ *
+ * `recurringEventId` (ADR 0056) は recurring の master id。`singleEvents=true` で展開された
+ * instance に対しては Google API が値を返す (単発は null)。新規 instance 取り込み時、該当する
+ * `event_visibility_override_rules` があれば `visibility_override` を rule の値で初期化する
+ * (ADR 0056 §2)。既存 instance は再 upsert されても visibility_override は触らない。
  */
 export type UpsertGoogleCalendarEventInput = {
   externalCalendarId: string;
@@ -38,6 +43,7 @@ export type UpsertGoogleCalendarEventInput = {
   meetUrl: string | null;
   hasAttachments: boolean;
   description: string;
+  recurringEventId: string | null;
 };
 
 export interface EventGateway {

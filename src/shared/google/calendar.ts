@@ -19,6 +19,12 @@ export type GoogleCalendarEvent = {
     entryPoints?: Array<{ entryPointType?: string; uri?: string }>;
   };
   attachments?: Array<unknown>;
+  /**
+   * ADR 0056: recurring event を `singleEvents=true` で展開した instance に対し
+   * Google API が返す master id。NULL/undefined = 単発 event。kozutsumi 側は
+   * `events.recurring_event_id` に保持する (recurring グループ識別軸)。
+   */
+  recurringEventId?: string;
 };
 
 export type GoogleCalendarEventsListResponse = {
