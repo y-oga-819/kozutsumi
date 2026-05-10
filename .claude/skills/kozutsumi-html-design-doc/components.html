@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Components · kozutsumi-html-design-doc</title>
+  <style>
+    /* ===== Shared design tokens (template.html と同じ) ===== */
+    :root {
+      --ivory: #FAF9F5; --paper: #FFFFFF; --slate: #141413;
+      --clay: #D97757; --olive: #788C5D; --oat: #E3DACC;
+      --g100: #F2F0EA; --g200: #E6E2D8; --g300: #D5D0C2;
+      --g400: #B5AE9C; --g500: #8A8472; --g600: #5C5648; --g700: #2E2A22;
+      --serif: ui-serif, "Iowan Old Style", Georgia, serif;
+      --sans:  system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      --mono:  ui-monospace, "SF Mono", "Roboto Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { background: var(--ivory); color: var(--slate); font-family: var(--sans); font-size: 14.5px; line-height: 1.65; }
+    .page { max-width: 1080px; margin: 0 auto; padding: 64px 32px 96px; }
+
+    /* ===== Header ===== */
+    h1 { font-family: var(--serif); font-size: 38px; font-weight: 500; letter-spacing: -0.012em; margin: 0 0 8px; }
+    .doc-summary { color: var(--g600); margin: 0 0 48px; max-width: 60ch; }
+
+    /* ===== Catalog item layout ===== */
+    .catalog-item { margin-bottom: 64px; padding-bottom: 64px; border-bottom: 1px dashed var(--g300); }
+    .catalog-item:last-child { border-bottom: none; }
+    .catalog-item h2 {
+      font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--clay); margin: 0 0 6px;
+    }
+    .catalog-item .when { color: var(--g600); font-size: 13.5px; margin: 0 0 24px; max-width: 60ch; }
+    .preview { background: var(--paper); padding: 28px; border-radius: 8px; border: 1px solid var(--g200); margin-bottom: 16px; }
+    pre.snippet {
+      background: var(--g700); color: #E8E4D8; padding: 16px 20px; border-radius: 8px;
+      font-family: var(--mono); font-size: 12.5px; line-height: 1.55; overflow-x: auto; margin: 0;
+    }
+    pre.snippet .cm { color: #9C988A; }
+
+    /* ===== Component styles (本物の class — そのまま流用可) ===== */
+
+    /* eyebrow + h1 + summary */
+    .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: lowercase; color: var(--g500); margin-bottom: 14px; }
+    .doc-h1 { font-family: var(--serif); font-size: 32px; font-weight: 500; letter-spacing: -0.012em; margin: 0 0 12px; }
+    .doc-lead { font-size: 16px; color: var(--g600); max-width: 60ch; margin: 0; }
+
+    /* tldr */
+    .tldr { border-left: 3px solid var(--clay); background: var(--paper); padding: 18px 22px; border-radius: 0 8px 8px 0; }
+    .tldr h3 { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--clay); margin: 0 0 8px; }
+    .tldr p { margin: 0; }
+    .tldr p + p { margin-top: 8px; }
+
+    /* sec-head */
+    .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; }
+    .sec-head .num { font-family: var(--mono); font-size: 12px; background: var(--oat); color: var(--g700); padding: 3px 8px; border-radius: 4px; }
+    .sec-head h3 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 0; }
+
+    /* callout */
+    .callout { padding: 14px 18px; border-radius: 6px; margin: 12px 0; font-size: 14px; }
+    .callout.info    { background: #EEF2F7; border-left: 3px solid #5C82B5; color: #283A55; }
+    .callout.warn    { background: #FBEFE7; border-left: 3px solid var(--clay); color: #6E3520; }
+    .callout.success { background: #EFF2EA; border-left: 3px solid var(--olive); color: #3E4D2A; }
+    .callout strong { font-weight: 600; }
+
+    /* tag / sev */
+    .tag, .sev { display: inline-block; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; }
+    .tag { background: var(--g100); color: var(--g700); }
+    .tag.accent { background: var(--clay); color: white; }
+    .tag.olive  { background: var(--olive); color: white; }
+    .sev.high   { background: #F2D7CD; color: #7A2A0F; }
+    .sev.med    { background: #F2E6CD; color: #6E4F0F; }
+    .sev.low    { background: var(--g100); color: var(--g600); }
+
+    /* tabs */
+    .tabs { background: var(--paper); border: 1px solid var(--g200); border-radius: 8px; overflow: hidden; }
+    .tabs nav { display: flex; gap: 0; border-bottom: 1px solid var(--g200); background: var(--g100); }
+    .tabs nav button {
+      background: transparent; border: 0; padding: 10px 16px; font-family: var(--mono); font-size: 12px;
+      color: var(--g600); cursor: pointer; border-bottom: 2px solid transparent;
+    }
+    .tabs nav button[aria-selected="true"] { color: var(--slate); border-bottom-color: var(--clay); background: var(--paper); }
+    .tabs [role="tabpanel"] { padding: 16px 20px; display: none; }
+    .tabs [role="tabpanel"][data-active] { display: block; }
+    .tabs pre { margin: 0; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; }
+
+    /* timeline */
+    .timeline { display: grid; gap: 0; }
+    .milestone { display: grid; grid-template-columns: 100px 28px 1fr; gap: 0; padding: 16px 0; border-bottom: 1px dashed var(--g200); }
+    .milestone .when-col { font-family: var(--mono); font-size: 12px; color: var(--g500); text-align: right; padding-right: 16px; padding-top: 4px; }
+    .milestone .marker { position: relative; }
+    .milestone .marker .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--g300); border: 2px solid var(--paper); margin: 6px auto 0; position: relative; z-index: 1; }
+    .milestone .marker .dot.done { background: var(--olive); }
+    .milestone .marker::before { content: ""; position: absolute; left: 50%; top: 0; bottom: -16px; width: 1px; background: var(--g200); transform: translateX(-50%); }
+    .milestone:last-child .marker::before { display: none; }
+    .milestone .body h4 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 0 0 4px; }
+    .milestone .body p { margin: 0; color: var(--g600); font-size: 13.5px; }
+
+    /* compare-table */
+    .compare-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .compare-table th, .compare-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--g200); vertical-align: top; }
+    .compare-table th { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--g600); font-weight: 500; }
+    .compare-table .pick { background: #F8F4ED; }
+    .compare-table .pick td:first-child::before { content: "→ "; color: var(--clay); }
+
+    /* risk-table */
+    .risk-table { display: grid; gap: 0; }
+    .risk-row { display: grid; grid-template-columns: 1.6fr 80px 1.6fr; gap: 16px; padding: 14px 0; border-bottom: 1px dashed var(--g200); align-items: start; }
+    .risk-row .risk { font-weight: 500; }
+    .risk-row .mitigation { color: var(--g600); font-size: 13.5px; }
+
+    /* flow-svg wrapper */
+    .flow-svg { background: var(--paper); border: 1px solid var(--g200); border-radius: 8px; padding: 24px; }
+    .flow-svg svg { display: block; max-width: 100%; height: auto; }
+    .flow-svg .caption { font-family: var(--mono); font-size: 11px; color: var(--g500); margin-top: 12px; text-transform: lowercase; letter-spacing: 0.04em; }
+
+    /* thread */
+    .thread { display: grid; gap: 12px; }
+    .comment { display: grid; grid-template-columns: 36px 1fr; gap: 12px; }
+    .comment.nested { margin-left: 36px; }
+    .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--oat); color: var(--g700); display: grid; place-items: center; font-family: var(--mono); font-size: 12px; }
+    .bubble { background: var(--paper); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--g200); }
+    .bubble .author { font-size: 12.5px; color: var(--g600); margin-bottom: 4px; }
+    .bubble .author .time { font-family: var(--mono); margin-left: 8px; color: var(--g500); }
+
+    /* open-questions */
+    .open-questions { margin: 0; }
+    .open-questions dt { font-weight: 500; margin-top: 14px; }
+    .open-questions dt:first-child { margin-top: 0; }
+    .open-questions dd { margin: 4px 0 0; color: var(--g600); font-size: 13.5px; }
+    .open-questions dd .decide-with { font-family: var(--mono); font-size: 11px; color: var(--clay); margin-left: 6px; }
+
+    /* metaphor box (concept explainer 用) */
+    .metaphor { background: var(--oat); padding: 24px 28px; border-radius: 12px; margin: 24px 0; }
+    .metaphor h3 { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--g700); margin: 0 0 10px; }
+    .metaphor .line { font-family: var(--serif); font-size: 22px; font-weight: 500; line-height: 1.4; margin: 0; }
+
+    /* KPI quad (4 分割 summary) */
+    .kpi-quad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .kpi-quad .kpi { background: var(--paper); padding: 16px; border-radius: 8px; border: 1px solid var(--g200); }
+    .kpi-quad .label { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--g500); margin-bottom: 6px; }
+    .kpi-quad .value { font-family: var(--serif); font-size: 22px; font-weight: 500; }
+
+    /* responsive */
+    @media (max-width: 720px) {
+      .kpi-quad { grid-template-columns: repeat(2, 1fr); }
+      .risk-row { grid-template-columns: 1fr; gap: 6px; }
+      .milestone { grid-template-columns: 60px 24px 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+
+    <h1>Components</h1>
+    <p class="doc-summary">
+      <code>kozutsumi-html-design-doc</code> skill の組み立てパーツ集。各 item は
+      <strong>左にレンダリング例 / 下にコピペ用 snippet</strong>。
+      新規ドキュメントを書くときは <code>template.html</code> をベースに、必要なパーツを
+      ここから持ってくる。デザイン語彙は逸脱しない。
+    </p>
+
+    <!-- ============================================================ -->
+    <!-- 01. Eyebrow + H1 + Summary                                    -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>01 · Eyebrow + H1 + Summary</h2>
+      <p class="when">文書冒頭。読者が「何の文書か」を 2 秒で判断するための 3 行。</p>
+      <div class="preview">
+        <div class="eyebrow">milestone plan · phase 2</div>
+        <div class="doc-h1">Calendar 同期の段階導入</div>
+        <p class="doc-lead">Google Calendar との双方向同期を、リスク順に 4 マイルストーンに分割する計画。</p>
+      </div>
+<pre class="snippet">&lt;div class="eyebrow"&gt;milestone plan · phase 2&lt;/div&gt;
+&lt;h1&gt;Calendar 同期の段階導入&lt;/h1&gt;
+&lt;p class="summary"&gt;Google Calendar との双方向同期を、
+リスク順に 4 マイルストーンに分割する計画。&lt;/p&gt;</pre>
+    </article>
+
+    <!-- ============================================================ -->
+    <!-- 02. TL;DR                                                     -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>02 · TL;DR</h2>
+      <p class="when">結論を 3〜5 行で。読者がここまで読めば本文を読まずに済む粒度。clay 縦線がアイキャッチ。</p>
+      <div class="preview">
+        <div class="tldr">
+          <h3>TL;DR</h3>
+          <p>full sync を最初に固め、syncToken による差分同期は後追いで導入する。</p>
+          <p>provider token の refresh は自前実装、Supabase の自動 refresh が安定したら supersede 予定。</p>
+        </div>
+      </div>
+<pre class="snippet">&lt;div class="tldr"&gt;
+  &lt;h2&gt;TL;DR&lt;/h2&gt;
+  &lt;p&gt;結論を 3〜5 行で。&lt;/p&gt;
+  &lt;p&gt;補足が要れば 2 段落目に。&lt;/p&gt;
+&lt;/div&gt;</pre>
+    </article>
+
+    <!-- ============================================================ -->
+    <!-- 03. Section head (番号 + 見出し)                              -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>03 · Section head</h2>
+      <p class="when">各セクション冒頭。番号 chip + serif 見出し + 1 行の sec-intro でスキャンしやすくする。</p>
+      <div class="preview">
+        <div class="sec-head">
+          <span class="num">03</span>
+          <h3>Options explored</h3>
+        </div>
+        <p style="color: var(--g600); margin: 0;">検討した 3 案と却下理由。</p>
+      </div>
+<pre class="snippet">&lt;section&gt;
+  &lt;div class="sec-head"&gt;
+    &lt;span class="num"&gt;03&lt;/span&gt;
+    &lt;h2&gt;Options explored&lt;/h2&gt;
+  &lt;/div&gt;
+  &lt;p class="sec-intro"&gt;検討した 3 案と却下理由。&lt;/p&gt;
+&lt;/section&gt;</pre>
+    </article>
+
+    <!-- ============================================================ -->
+    <!-- 04. Callout (info / warn / success)                           -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>04 · Callout</h2>
+      <p class="when">本文中で「補足 / 警告 / 既決事項」を視覚的に区別する。多用するとノイズになるので 2〜3 個まで。</p>
+      <div class="preview">
+        <div class="callout info"><strong>Note.</strong> syncToken は Google 側で 7 日間で expire する。</div>
+        <div class="callout warn"><strong>Caution.</strong> webhook 方式は本番 URL が必要なため Phase 3 以降。</div>
+        <div class="callout success"><strong>Decided.</strong> 同期実行は Next.js Route Handler に寄せる（ADR-0042）。</div>
+      </div>
+<pre class="snippet">&lt;div class="callout info"&gt;&lt;strong&gt;Note.&lt;/strong&gt; ...&lt;/div&gt;
+&lt;div class="callout warn"&gt;&lt;strong&gt;Caution.&lt;/strong&gt; ...&lt;/div&gt;
+&lt;div class="callout success"&gt;&lt;strong&gt;Decided.&lt;/strong&gt; ...&lt;/div&gt;</pre>
+    </article>
+
+    <!-- ============================================================ -->
+    <!-- 05. Tags / Severity                                           -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>05 · Tag / Severity</h2>
+      <p class="when">表 / リスト内のステータスチップ。severity は high / med / low。</p>
+      <div class="preview">
+        <span class="tag">stock</span>
+        <span class="tag accent">flow</span>
+        <span class="tag olive">accepted</span>
+        &nbsp;&nbsp;
+        <span class="sev high">high</span>
+        <span class="sev med">med</span>
+        <span class="sev low">low</span>
+      </div>
+<pre class="snippet">&lt;span class="tag"&gt;stock&lt;/span&gt;
+&lt;span class="tag accent"&gt;flow&lt;/span&gt;
+&lt;span class="tag olive"&gt;accepted&lt;/span&gt;
+&lt;span class="sev high"&gt;high&lt;/span&gt;
+&lt;span class="sev med"&gt;med&lt;/span&gt;
+&lt;span class="sev low"&gt;low&lt;/span&gt;</pre>
+    </article>
+
+    <!-- ============================================================ -->
+    <!-- 06. KPI quad (4 分割 summary)                                  -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>06 · KPI quad</h2>
+      <p class="when">milestone 計画冒頭で「投資の規模感」を 1 視野に入れる用。</p>
+      <div class="preview">
+        <div class="kpi-quad">
+          <div class="kpi"><div class="label">effort</div><div class="value">3 weeks</div></div>
+          <div class="kpi"><div class="label">surfaces</div><div class="value">4</div></div>
+          <div class="kpi"><div class="label">tables</div><div class="value">2 new</div></div>
+          <div class="kpi"><div class="label">risk</div><div class="value">med</div></div>
+        </div>
+      </div>
+<pre class="snippet">&lt;div class="kpi-quad"&gt;
+  &lt;div class="kpi"&gt;&lt;div class="label"&gt;effort&lt;/div&gt;&lt;div class="value"&gt;3 weeks&lt;/div&gt;&lt;/div&gt;
+  &lt;div class="kpi"&gt;&lt;div class="label"&gt;surfaces&lt;/div&gt;&lt;div class="value"&gt;4&lt;/div&gt;&lt;/div&gt;
+  ...
+&lt;/div&gt;</pre>
+    </article>
+
+    <!-- ============================================================ -->
+    <!-- 07. Compare table (Options × axes)                            -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>07 · Compare table</h2>
+      <p class="when">Options を軸別に対比。選んだ案は <code>.pick</code> で行ハイライト。</p>
+      <div class="preview">
+        <table class="compare-table">
+          <thead>
+            <tr><th>Option</th><th>初期コスト</th><th>運用コスト</th><th>外部依存</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Webhook</td><td>高</td><td>低</td><td>強</td></tr>
+            <tr class="pick"><td>Polling (Route Handler)</td><td>低</td><td>中</td><td>弱</td></tr>
+            <tr><td>Cron + queue</td><td>中</td><td>中</td><td>中</td></tr>
+          </tbody>
+        </table>
+      </div>
+<pre class="snippet">&lt;table class="compare-table"&gt;
+  &lt;thead&gt;&lt;tr&gt;&lt;th&gt;Option&lt;/th&gt;&lt;th&gt;...&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;&lt;td&gt;A&lt;/td&gt;...&lt;/tr&gt;
+    &lt;tr class="pick"&gt;&lt;td&gt;B&lt;/td&gt;...&lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;</pre>
+    </article>
+
+    <!-- ============================================================ -->
+    <!-- 08. Timeline (milestones)                                     -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>08 · Timeline</h2>
+      <p class="when">マイルストーンを縦線 + ドットで。<code>.dot.done</code> で完了を olive 色に。</p>
+      <div class="preview">
+        <div class="timeline">
+          <div class="milestone">
+            <div class="when-col">M1 · w1</div>
+            <div class="marker"><div class="dot done"></div></div>
+            <div class="body"><h4>OAuth + token storage</h4><p>Supabase auth provider に google を追加、refresh token を暗号化保存。</p></div>
+          </div>
+          <div class="milestone">
+            <div class="when-col">M2 · w2</div>
+            <div class="marker"><div class="dot"></div></div>
+            <div class="body"><h4>Full sync (read-only)</h4><p>primary calendar の events を Supabase に取り込む。</p></div>
+          </div>
+          <div class="milestone">
+            <div class="when-col">M3 · w3</div>
+            <div class="marker"><div class="dot"></div></div>
+            <div class="body"><h4>Incremental sync (syncToken)</h4><p>差分のみ反映。expire 時は full sync にフォールバック。</p></div>
+          </div>
+        </div>
+      </div>
+<pre class="snippet">&lt;div class="timeline"&gt;
+  &lt;div class="milestone"&gt;
+    &lt;div class="when-col"&gt;M1 · w1&lt;/div&gt;
+    &lt;div class="marker"&gt;&lt;div class="dot done"&gt;&lt;/div&gt;&lt;/div&gt;
+    &lt;div class="body"&gt;&lt;h4&gt;...&lt;/h4&gt;&lt;p&gt;...&lt;/p&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  ...
+&lt;/div&gt;</pre>
+    </article>
+
+    <!-- ============================================================ -->
+    <!-- 09. Risk table                                                -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>09 · Risk table</h2>
+      <p class="when">Risk × Severity × Mitigation を横並びに。1 行 = 1 リスク。</p>
+      <div class="preview">
+        <div class="risk-table">
+          <div class="risk-row">
+            <div class="risk">syncToken の expire 中にイベント変更が発生</div>
+            <div><span class="sev high">high</span></div>
+            <div class="mitigation">expire 検知時に full sync にフォールバック。差分量を log で監視。</div>
+          </div>
+          <div class="risk-row">
+            <div class="risk">refresh token の rotate 失敗</div>
+            <div><span class="sev med">med</span></div>
+            <div class="mitigation">失敗時は user に再 OAuth を促す UI を出す。</div>
+          </div>
+        </div>
+      </div>
+<pre class="snippet">&lt;div class="risk-table"&gt;
+  &lt;div class="risk-row"&gt;
+    &lt;div class="risk"&gt;...&lt;/div&gt;
+    &lt;div&gt;&lt;span class="sev high"&gt;high&lt;/span&gt;&lt;/div&gt;
+    &lt;div class="mitigation"&gt;...&lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</pre>
+    </article>
+
+    <!-- ============================================================ -->
+    <!-- 10. Flow SVG                                                   -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>10 · Flow SVG</h2>
+      <p class="when">データ / 制御の流れを 1 枚で。実線 = 同期、破線 = 非同期。caption で凡例。</p>
+      <div class="preview">
+        <div class="flow-svg">
+          <svg viewBox="0 0 600 180" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 z" fill="#5C5648"/>
+              </marker>
+              <marker id="arrow-clay" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 z" fill="#D97757"/>
+              </marker>
+            </defs>
+            <!-- nodes -->
+            <rect x="20" y="60" width="120" height="60" rx="8" fill="#FFFFFF" stroke="#D5D0C2"/>
+            <text x="80" y="95" text-anchor="middle" font-family="ui-monospace" font-size="12" fill="#141413">Client</text>
+            <rect x="240" y="60" width="120" height="60" rx="8" fill="#FFFFFF" stroke="#D5D0C2"/>
+            <text x="300" y="95" text-anchor="middle" font-family="ui-monospace" font-size="12" fill="#141413">Route Handler</text>
+            <rect x="460" y="60" width="120" height="60" rx="8" fill="#FFFFFF" stroke="#D5D0C2"/>
+            <text x="520" y="95" text-anchor="middle" font-family="ui-monospace" font-size="12" fill="#141413">Google API</text>
+            <!-- arrows -->
+            <line x1="140" y1="90" x2="240" y2="90" stroke="#5C5648" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <line x1="360" y1="90" x2="460" y2="90" stroke="#5C5648" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <line x1="460" y1="110" x2="360" y2="110" stroke="#D97757" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow-clay)"/>
+          </svg>
+          <div class="caption">solid = request/response, dashed clay = webhook callback</div>
+        </div>
+      </div>
+<pre class="snippet">&lt;div class="flow-svg"&gt;
+  &lt;svg viewBox="0 0 600 180" xmlns="http://www.w3.org/2000/svg"&gt;
+    &lt;defs&gt;&lt;marker id="arrow" ...&gt;&lt;/marker&gt;&lt;/defs&gt;
+    &lt;rect ... /&gt; &lt;text ...&gt;Client&lt;/text&gt;
+    &lt;line ... marker-end="url(#arrow)" /&gt;
+  &lt;/svg&gt;
+  &lt;div class="caption"&gt;solid = ..., dashed = ...&lt;/div&gt;
+&lt;/div&gt;</pre>
+    </article>
+
+    <!-- ============================================================ -->
+    <!-- 11. Tabs (code variants)                                      -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>11 · Tabs</h2>
+      <p class="when">設定例 / 実装例 / 期待値など、3 視点を切り替えて見せる。JS 不要なら最初の panel だけ表示も可。</p>
+      <div class="preview">
+        <div class="tabs" id="tabs-demo">
+          <nav role="tablist">
+            <button role="tab" aria-selected="true" data-tab="a">limits.yaml</button>
+            <button role="tab" aria-selected="false" data-tab="b">route.ts</button>
+            <button role="tab" aria-selected="false" data-tab="c">response</button>
+          </nav>
+          <div role="tabpanel" data-active><pre><span class="cm"># 1 user / 60s</span>
+api.tasks.create:
+  rate: 1
+  per: 60s</pre></div>
+          <div role="tabpanel"><pre>export const POST = withRateLimit(
+  "api.tasks.create",
+  handler,
+);</pre></div>
+          <div role="tabpanel"><pre>HTTP/1.1 429 Too Many Requests
+Retry-After: 42</pre></div>
+        </div>
+      </div>
+<pre class="snippet">&lt;div class="tabs"&gt;
+  &lt;nav role="tablist"&gt;
+    &lt;button role="tab" aria-selected="true" data-tab="a"&gt;limits.yaml&lt;/button&gt;
+    &lt;button role="tab" aria-selected="false" data-tab="b"&gt;route.ts&lt;/button&gt;
+  &lt;/nav&gt;
+  &lt;div role="tabpanel" data-active&gt;&lt;pre&gt;...&lt;/pre&gt;&lt;/div&gt;
+  &lt;div role="tabpanel"&gt;&lt;pre&gt;...&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;script&gt;
+document.querySelectorAll('.tabs').forEach(t =&gt; {
+  const tabs = t.querySelectorAll('[role="tab"]');
+  const panels = t.querySelectorAll('[role="tabpanel"]');
+  tabs.forEach((b, i) =&gt; b.addEventListener('click', () =&gt; {
+    tabs.forEach(x =&gt; x.setAttribute('aria-selected', 'false'));
+    panels.forEach(p =&gt; p.removeAttribute('data-active'));
+    b.setAttribute('aria-selected', 'true');
+    panels[i].setAttribute('data-active', '');
+  }));
+});
+&lt;/script&gt;</pre>
+    </article>
+
+    <!-- ============================================================ -->
+    <!-- 12. Metaphor box (concept explainer)                          -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>12 · Metaphor</h2>
+      <p class="when">concept explainer 冒頭で「これは○○のようなものだ」と一気に掴ませる。1 文で。</p>
+      <div class="preview">
+        <div class="metaphor">
+          <h3>Metaphor</h3>
+          <p class="line">「行動パターン分析」は、コードレビューと同じ。最初は何も知らないが、毎日読むうちに「この人らしさ」が見えてくる。</p>
+        </div>
+      </div>
+<pre class="snippet">&lt;div class="metaphor"&gt;
+  &lt;h3&gt;Metaphor&lt;/h3&gt;
+  &lt;p class="line"&gt;...&lt;/p&gt;
+&lt;/div&gt;</pre>
+    </article>
+
+    <!-- ============================================================ -->
+    <!-- 13. Thread (議論引用)                                          -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>13 · Thread</h2>
+      <p class="when">過去の議論や user feedback を引用する用。nested で返信を表現。</p>
+      <div class="preview">
+        <div class="thread">
+          <div class="comment">
+            <div class="avatar">YO</div>
+            <div class="bubble">
+              <div class="author">y-oga <span class="time">2026-04-12</span></div>
+              <div>「秘書」と呼ぶ以上、提案は黙って待つだけじゃなくて、向こうから話しかけてくる必要がある気がする。</div>
+            </div>
+          </div>
+          <div class="comment nested">
+            <div class="avatar">CL</div>
+            <div class="bubble">
+              <div class="author">claude <span class="time">2026-04-12</span></div>
+              <div>逆に「話しかけすぎ」が一番嫌われるから、頻度の自動学習が前提条件になりますね。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+<pre class="snippet">&lt;div class="thread"&gt;
+  &lt;div class="comment"&gt;
+    &lt;div class="avatar"&gt;YO&lt;/div&gt;
+    &lt;div class="bubble"&gt;
+      &lt;div class="author"&gt;y-oga &lt;span class="time"&gt;2026-04-12&lt;/span&gt;&lt;/div&gt;
+      &lt;div&gt;...&lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class="comment nested"&gt;...&lt;/div&gt;
+&lt;/div&gt;</pre>
+    </article>
+
+    <!-- ============================================================ -->
+    <!-- 14. Open questions                                            -->
+    <!-- ============================================================ -->
+    <article class="catalog-item">
+      <h2>14 · Open questions</h2>
+      <p class="when">未決定事項。<code>decide-with</code> で「誰と / いつまでに」を明示。</p>
+      <div class="preview">
+        <dl class="open-questions">
+          <dt>Q. expire 検知のしきい値は何日に置く？</dt>
+          <dd>full sync コストとの bal。<span class="decide-with">decide-with: M2 振り返り</span></dd>
+          <dt>Q. 複数カレンダー対応は Phase 2 / Phase 3 のどちら？</dt>
+          <dd>primary だけで足りるか user feedback 次第。<span class="decide-with">decide-with: alpha 後</span></dd>
+        </dl>
+      </div>
+<pre class="snippet">&lt;dl class="open-questions"&gt;
+  &lt;dt&gt;Q. ...&lt;/dt&gt;
+  &lt;dd&gt;...&lt;span class="decide-with"&gt;decide-with: ...&lt;/span&gt;&lt;/dd&gt;
+&lt;/dl&gt;</pre>
+    </article>
+
+  </main>
+
+  <script>
+    // tabs (snippet と同じ)
+    document.querySelectorAll('.tabs').forEach(t => {
+      const tabs = t.querySelectorAll('[role="tab"]');
+      const panels = t.querySelectorAll('[role="tabpanel"]');
+      tabs.forEach((b, i) => b.addEventListener('click', () => {
+        tabs.forEach(x => x.setAttribute('aria-selected', 'false'));
+        panels.forEach(p => p.removeAttribute('data-active'));
+        b.setAttribute('aria-selected', 'true');
+        panels[i].setAttribute('data-active', '');
+      }));
+    });
+  </script>
+</body>
+</html>
