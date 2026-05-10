@@ -522,6 +522,76 @@
         font-weight: 500;
       }
 
+      /* code example (15) — 自然言語より短く正確に表現したい時 */
+      pre.code {
+        background: var(--g700);
+        color: #e8e4d8;
+        padding: 18px 20px;
+        border-radius: 8px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.7;
+        overflow-x: auto;
+        margin: 12px 0;
+      }
+      pre.code .kw {
+        color: var(--clay);
+      }
+      pre.code .str {
+        color: var(--olive);
+      }
+      pre.code .cm {
+        color: #9c988a;
+      }
+      pre.code .fn {
+        color: #c9b98a;
+      }
+
+      /* diff (16) — Before→After で挙動の変化を見せたい時 */
+      .diff {
+        background: var(--g700);
+        color: #e8e4d8;
+        padding: 12px 0;
+        border-radius: 8px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.7;
+        overflow-x: auto;
+        margin: 12px 0;
+      }
+      .diff .diff-row {
+        display: grid;
+        grid-template-columns: 48px 18px 1fr;
+        padding: 0 12px;
+      }
+      .diff .diff-row .ln {
+        color: #777;
+        text-align: right;
+        padding-right: 8px;
+      }
+      .diff .diff-row .mark {
+        text-align: center;
+      }
+      .diff .diff-row.add {
+        background: rgba(120, 140, 93, 0.15);
+      }
+      .diff .diff-row.del {
+        background: rgba(217, 119, 87, 0.18);
+      }
+      .diff .diff-row.add .mark {
+        color: var(--olive);
+      }
+      .diff .diff-row.del .mark {
+        color: var(--clay);
+      }
+      .diff .diff-row.hunk {
+        background: rgba(255, 255, 255, 0.04);
+        color: #9c988a;
+      }
+      .diff .diff-row.ctx {
+        color: #b8b4a8;
+      }
+
       /* responsive */
       @media (max-width: 720px) {
         .kpi-quad {
@@ -1097,6 +1167,82 @@ document.querySelectorAll('.tabs').forEach(t =&gt; {
   &lt;dd&gt;...&lt;span class="decide-with"&gt;decide-with: ...&lt;/span&gt;&lt;/dd&gt;
 &lt;/dl&gt;</pre
         >
+      </article>
+
+      <article class="catalog-item">
+        <h2>15 · Code example</h2>
+        <p class="when">
+          自然言語より <strong>短く正確</strong>に書ける時のみ使う（型定義 / 設定値 / API シグネチャ /
+          1 行の式）。関数全体の引用は避け、Related の URL リンクに逃がす。 構文ハイライトは
+          <code>.kw</code>（キーワード）/ <code>.str</code>（文字列）/ <code>.cm</code>（コメント）/
+          <code>.fn</code>（関数名）の 4 色。
+        </p>
+        <div class="preview">
+          <pre class="code"><span class="cm">// 例: visibility 3 層の TypeScript 型</span>
+<span class="kw">type</span> CalendarSubscription = {
+  id: <span class="kw">string</span>;
+  external_calendar_id: <span class="kw">string</span>;
+  visibility_default: <span class="str">"included"</span> | <span class="str">"hidden"</span>;
+  <span class="cm">// expire 検知のしきい値は open-questions で議論中</span>
+};</pre>
+        </div>
+        <pre class="snippet">
+&lt;pre class="code"&gt;&lt;span class="cm"&gt;// ...&lt;/span&gt;
+&lt;span class="kw"&gt;type&lt;/span&gt; X = {
+  id: &lt;span class="kw"&gt;string&lt;/span&gt;;
+  status: &lt;span class="str"&gt;"a"&lt;/span&gt; | &lt;span class="str"&gt;"b"&lt;/span&gt;;
+&lt;/pre&gt;</pre>
+      </article>
+
+      <article class="catalog-item">
+        <h2>16 · Diff</h2>
+        <p class="when">
+          Before → After で <strong>挙動の変化</strong>を見せたい時。 削除と追加の両方が要点で、
+          追加だけなら 15 Code example で足りる。 行構造は <code>.ln</code>（行番号）+
+          <code>.mark</code>（+/−）+ コード本体の 3 列グリッド。 <code>.hunk</code> でファイル位置、
+          <code>.ctx</code> で前後 1〜2 行のコンテキスト、 <code>.add</code> / <code>.del</code> で
+          差分行を示す。
+        </p>
+        <div class="preview">
+          <div class="diff">
+            <div class="diff-row hunk">
+              <span class="ln"></span><span class="mark"></span><span>@@ src/entities/event/sync.ts @@</span>
+            </div>
+            <div class="diff-row ctx">
+              <span class="ln">42</span><span class="mark"> </span><span>function importEvent(raw) {</span>
+            </div>
+            <div class="diff-row del">
+              <span class="ln">43</span><span class="mark">−</span><span>  if (raw.allDay) return null;</span>
+            </div>
+            <div class="diff-row add">
+              <span class="ln">43</span><span class="mark">+</span><span>  if (raw.allDay) return toAllDayEvent(raw);</span>
+            </div>
+            <div class="diff-row add">
+              <span class="ln">44</span><span class="mark">+</span><span>  if (raw.duration === 0) return toZeroLenEvent(raw);</span>
+            </div>
+            <div class="diff-row ctx">
+              <span class="ln">45</span><span class="mark"> </span><span>  return toRegularEvent(raw);</span>
+            </div>
+            <div class="diff-row ctx">
+              <span class="ln">46</span><span class="mark"> </span><span>}</span>
+            </div>
+          </div>
+        </div>
+        <pre class="snippet">
+&lt;div class="diff"&gt;
+  &lt;div class="diff-row hunk"&gt;
+    &lt;span class="ln"&gt;&lt;/span&gt;&lt;span class="mark"&gt;&lt;/span&gt;&lt;span&gt;@@ path @@&lt;/span&gt;
+  &lt;/div&gt;
+  &lt;div class="diff-row ctx"&gt;
+    &lt;span class="ln"&gt;42&lt;/span&gt;&lt;span class="mark"&gt; &lt;/span&gt;&lt;span&gt;...&lt;/span&gt;
+  &lt;/div&gt;
+  &lt;div class="diff-row del"&gt;
+    &lt;span class="ln"&gt;43&lt;/span&gt;&lt;span class="mark"&gt;−&lt;/span&gt;&lt;span&gt;...&lt;/span&gt;
+  &lt;/div&gt;
+  &lt;div class="diff-row add"&gt;
+    &lt;span class="ln"&gt;43&lt;/span&gt;&lt;span class="mark"&gt;+&lt;/span&gt;&lt;span&gt;...&lt;/span&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</pre>
       </article>
     </main>
 
