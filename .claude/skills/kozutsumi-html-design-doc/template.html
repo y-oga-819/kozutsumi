@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
     <title>[ドキュメントタイトル] · kozutsumi</title>
     <style>
       /* ===== Design tokens (kozutsumi-html-design-doc) =====
@@ -220,7 +221,14 @@
           <h2>Context</h2>
         </div>
         <p class="sec-intro">[前提・現状・関連 ADR。読者が同じ土俵に立つために必要な背景。]</p>
-        <p>[既存の判断: <a class="ref" href="../adr/0000-template.md">ADR-NNNN</a>]</p>
+        <p>
+          [既存の判断:
+          <a
+            class="ref"
+            href="https://github.com/y-oga-819/kozutsumi/blob/main/docs/adr/0000-template.md"
+            >ADR-NNNN</a
+          >]
+        </p>
       </section>
 
       <!-- ===== 03〜. Body =====
@@ -264,11 +272,21 @@
       <div class="related">
         <h2>Related</h2>
         <ul>
-          <li>ADR: <a href="../adr/NNNN-xxx.md">ADR-NNNN — タイトル</a></li>
+          <li>
+            ADR:
+            <a href="https://github.com/y-oga-819/kozutsumi/blob/main/docs/adr/NNNN-xxx.md"
+              >ADR-NNNN — タイトル</a
+            >
+          </li>
           <li>
             Issue: <a href="https://github.com/y-oga-819/kozutsumi/issues/N">#N — タイトル</a>
           </li>
-          <li>Code: <code>src/path/to/file.ts:LL</code></li>
+          <li>
+            Code:
+            <a href="https://github.com/y-oga-819/kozutsumi/blob/main/src/path/to/file.ts#L42"
+              ><code>src/path/to/file.ts:42</code></a
+            >
+          </li>
         </ul>
       </div>
     </main>
