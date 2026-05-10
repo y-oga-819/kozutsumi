@@ -1172,8 +1172,8 @@ document.querySelectorAll('.tabs').forEach(t =&gt; {
       <article class="catalog-item">
         <h2>15 · Code example</h2>
         <p class="when">
-          自然言語より <strong>短く正確</strong>に書ける時のみ使う（型定義 / 設定値 / API シグネチャ /
-          1 行の式）。関数全体の引用は避け、Related の URL リンクに逃がす。 構文ハイライトは
+          自然言語より <strong>短く正確</strong>に書ける時のみ使う（型定義 / 設定値 / API シグネチャ
+          / 1 行の式）。関数全体の引用は避け、Related の URL リンクに逃がす。 構文ハイライトは
           <code>.kw</code>（キーワード）/ <code>.str</code>（文字列）/ <code>.cm</code>（コメント）/
           <code>.fn</code>（関数名）の 4 色。
         </p>
@@ -1191,7 +1191,8 @@ document.querySelectorAll('.tabs').forEach(t =&gt; {
 &lt;span class="kw"&gt;type&lt;/span&gt; X = {
   id: &lt;span class="kw"&gt;string&lt;/span&gt;;
   status: &lt;span class="str"&gt;"a"&lt;/span&gt; | &lt;span class="str"&gt;"b"&lt;/span&gt;;
-&lt;/pre&gt;</pre>
+&lt;/pre&gt;</pre
+        >
       </article>
 
       <article class="catalog-item">
@@ -1206,22 +1207,28 @@ document.querySelectorAll('.tabs').forEach(t =&gt; {
         <div class="preview">
           <div class="diff">
             <div class="diff-row hunk">
-              <span class="ln"></span><span class="mark"></span><span>@@ src/entities/event/sync.ts @@</span>
+              <span class="ln"></span><span class="mark"></span
+              ><span>@@ src/entities/event/sync.ts @@</span>
             </div>
             <div class="diff-row ctx">
-              <span class="ln">42</span><span class="mark"> </span><span>function importEvent(raw) {</span>
+              <span class="ln">42</span><span class="mark"> </span
+              ><span>function importEvent(raw) {</span>
             </div>
             <div class="diff-row del">
-              <span class="ln">43</span><span class="mark">−</span><span>  if (raw.allDay) return null;</span>
+              <span class="ln">43</span><span class="mark">−</span
+              ><span> if (raw.allDay) return null;</span>
             </div>
             <div class="diff-row add">
-              <span class="ln">43</span><span class="mark">+</span><span>  if (raw.allDay) return toAllDayEvent(raw);</span>
+              <span class="ln">43</span><span class="mark">+</span
+              ><span> if (raw.allDay) return toAllDayEvent(raw);</span>
             </div>
             <div class="diff-row add">
-              <span class="ln">44</span><span class="mark">+</span><span>  if (raw.duration === 0) return toZeroLenEvent(raw);</span>
+              <span class="ln">44</span><span class="mark">+</span
+              ><span> if (raw.duration === 0) return toZeroLenEvent(raw);</span>
             </div>
             <div class="diff-row ctx">
-              <span class="ln">45</span><span class="mark"> </span><span>  return toRegularEvent(raw);</span>
+              <span class="ln">45</span><span class="mark"> </span
+              ><span> return toRegularEvent(raw);</span>
             </div>
             <div class="diff-row ctx">
               <span class="ln">46</span><span class="mark"> </span><span>}</span>
@@ -1242,7 +1249,8 @@ document.querySelectorAll('.tabs').forEach(t =&gt; {
   &lt;div class="diff-row add"&gt;
     &lt;span class="ln"&gt;43&lt;/span&gt;&lt;span class="mark"&gt;+&lt;/span&gt;&lt;span&gt;...&lt;/span&gt;
   &lt;/div&gt;
-&lt;/div&gt;</pre>
+&lt;/div&gt;</pre
+        >
       </article>
     </main>
 
