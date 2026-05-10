@@ -448,8 +448,8 @@
           <strong>介入しない</strong> (パフォーマンスが出ているなら続行)。
         </p>
         <p>
-          既存 ADR はほぼ supersede 不要。新規 ADR 8 本前後で確定する。Vision の書き換えは ADR
-          確定後。
+          既存 ADR はほぼ supersede 不要。新規 ADR 8 本 (ADR-0057〜0064) で確定済み。Vision の
+          書き換えは本軌道修正 ADR 群が出揃った後に実施。
         </p>
       </div>
 
@@ -1496,33 +1496,72 @@
           </dd>
         </dl>
 
-        <h3>distill 候補 ADR (M-α 着手前)</h3>
+        <h3>distill 完了 ADR (2026-05-10)</h3>
         <ol>
           <li>
-            <strong>差別化の核を「ゴール駆動の AI 分解」に再定義</strong> (D1) —
-            vision-level、現「行動ベース」の位置付け再整理
-          </li>
-          <li>
-            <strong>UI 動詞を 3 つに絞る + stack top auto-bind</strong> (D2) — ADR-0003 / 0004
-            の延長
-          </li>
-          <li>
-            <strong>1-tap 割り込み記録</strong> (D3) — 既存の割り込み push/pop モデル (architecture
-            1.4) の supersede or 補強
-          </li>
-          <li><strong>Calendar event は非対称 stop (auto-stop / manual resume)</strong> (D4)</li>
-          <li>
-            <strong
-              >1 時間粒度の AI 分解 + 完了条件 + timer 文脈外でのみ介入
-              (warmup・モーダル一切なし)</strong
+            <a
+              class="ref"
+              href="https://github.com/y-oga-819/kozutsumi/blob/main/docs/adr/0057-redefine-moat-as-goal-driven-ai-decomposition.md"
+              >ADR-0057</a
             >
-            (D5) — ADR-0017 / 0049 / 0053 の延長
+            差別化の核を「ゴール駆動の AI 分解」に再定義 (D1)
           </li>
-          <li><strong>朝 15 分の棚卸し儀式</strong> (D6) — 新画面、新 entity (daily-review)</li>
-          <li><strong>過集中は介入しない (強制中断 anti-pattern の明文化)</strong> (D7)</li>
           <li>
-            <strong>タスク作成は title 必須のみ + AI 補完テンプレ</strong> (D8) — ADR-0036 / 0037
-            の延長 (body 欄をメモ書き欄として活用)
+            <a
+              class="ref"
+              href="https://github.com/y-oga-819/kozutsumi/blob/main/docs/adr/0058-timer-three-verbs-and-no-ai-interruption.md"
+              >ADR-0058</a
+            >
+            timer UX = 3 動詞 + stack top auto-bind + timer 中の AI 介入禁止 (D2 + D5
+            の介入禁止部分)
+          </li>
+          <li>
+            <a
+              class="ref"
+              href="https://github.com/y-oga-819/kozutsumi/blob/main/docs/adr/0059-one-tap-interrupt-recording.md"
+              >ADR-0059</a
+            >
+            1-tap 割り込み記録 (D3)
+          </li>
+          <li>
+            <a
+              class="ref"
+              href="https://github.com/y-oga-819/kozutsumi/blob/main/docs/adr/0060-calendar-event-asymmetric-stop.md"
+              >ADR-0060</a
+            >
+            Calendar event は非対称 stop (auto-stop / manual resume) (D4)
+          </li>
+          <li>
+            <a
+              class="ref"
+              href="https://github.com/y-oga-819/kozutsumi/blob/main/docs/adr/0061-ai-decomposition-one-hour-target-and-done-condition-schema.md"
+              >ADR-0061</a
+            >
+            AI 分解は 1h 推奨 + 完了条件 (Goal / Done / First step) を AI が言語化 (D5 残り)
+          </li>
+          <li>
+            <a
+              class="ref"
+              href="https://github.com/y-oga-819/kozutsumi/blob/main/docs/adr/0062-morning-review-ritual-fifteen-minutes.md"
+              >ADR-0062</a
+            >
+            朝 15 分の棚卸し儀式 (default opt-in) (D6)
+          </li>
+          <li>
+            <a
+              class="ref"
+              href="https://github.com/y-oga-819/kozutsumi/blob/main/docs/adr/0063-no-intervention-on-hyperfocus.md"
+              >ADR-0063</a
+            >
+            過集中は介入しない (強制中断 anti-pattern の明文化) (D7)
+          </li>
+          <li>
+            <a
+              class="ref"
+              href="https://github.com/y-oga-819/kozutsumi/blob/main/docs/adr/0064-task-creation-title-only-with-ai-template-fill.md"
+              >ADR-0064</a
+            >
+            タスク作成は title 必須のみ + AI 後追い補完テンプレ (D8)
           </li>
         </ol>
       </section>
