@@ -56,7 +56,7 @@ milestone を切る前に、議論の全景を 1 枚に展開したい時。
 2. 議論が固まったら **「Decision」セクションの各判断を `kozutsumi-adr` skill で個別 ADR に distill する**
 3. ADR 起票後、HTML 内の Decision セクションは ADR への参照リンクに置き換える（重複させない）
 4. `kozutsumi-flow` skill で Milestone + issue を起票
-5. HTML はアーカイブとして残す（誰がいつ何を考えたかの履歴になる）
+5. PR マージ前に HTML を削除する commit を追加する（§3 参照）
 
 ### Trigger B: 設計コンセプト explainer
 
