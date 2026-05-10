@@ -1,244 +1,276 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>[ドキュメントタイトル] · kozutsumi</title>
-  <style>
-    /* ===== Design tokens (kozutsumi-html-design-doc) =====
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>[ドキュメントタイトル] · kozutsumi</title>
+    <style>
+      /* ===== Design tokens (kozutsumi-html-design-doc) =====
        components.html と同じ語彙。逸脱禁止。 */
-    :root {
-      --ivory: #FAF9F5;
-      --paper: #FFFFFF;
-      --slate: #141413;
-      --clay:  #D97757;
-      --olive: #788C5D;
-      --oat:   #E3DACC;
-      --g100: #F2F0EA;
-      --g200: #E6E2D8;
-      --g300: #D5D0C2;
-      --g400: #B5AE9C;
-      --g500: #8A8472;
-      --g600: #5C5648;
-      --g700: #2E2A22;
+      :root {
+        --ivory: #faf9f5;
+        --paper: #ffffff;
+        --slate: #141413;
+        --clay: #d97757;
+        --olive: #788c5d;
+        --oat: #e3dacc;
+        --g100: #f2f0ea;
+        --g200: #e6e2d8;
+        --g300: #d5d0c2;
+        --g400: #b5ae9c;
+        --g500: #8a8472;
+        --g600: #5c5648;
+        --g700: #2e2a22;
 
-      --serif: ui-serif, "Iowan Old Style", "Apple Garamond", Georgia, "Times New Roman", serif;
-      --sans:  system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
-      --mono:  ui-monospace, "SF Mono", "Roboto Mono", "Source Code Pro", monospace;
-    }
+        --serif: ui-serif, "Iowan Old Style", "Apple Garamond", Georgia, "Times New Roman", serif;
+        --sans: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+        --mono: ui-monospace, "SF Mono", "Roboto Mono", "Source Code Pro", monospace;
+      }
 
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; }
-    body {
-      background: var(--ivory);
-      color: var(--slate);
-      font-family: var(--sans);
-      font-size: 14.5px;
-      line-height: 1.65;
-      -webkit-font-smoothing: antialiased;
-    }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--ivory);
+        color: var(--slate);
+        font-family: var(--sans);
+        font-size: 14.5px;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
 
-    .page {
-      max-width: 880px;
-      margin: 0 auto;
-      padding: 64px 32px 96px;
-    }
+      .page {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 64px 32px 96px;
+      }
 
-    /* ----- Header ----- */
-    .eyebrow {
-      font-family: var(--mono);
-      font-size: 11px;
-      letter-spacing: 0.06em;
-      text-transform: lowercase;
-      color: var(--g500);
-      margin-bottom: 14px;
-    }
-    h1 {
-      font-family: var(--serif);
-      font-size: 38px;
-      font-weight: 500;
-      line-height: 1.2;
-      letter-spacing: -0.012em;
-      margin: 0 0 12px;
-    }
-    .summary {
-      font-size: 16px;
-      color: var(--g600);
-      max-width: 60ch;
-      margin: 0 0 32px;
-    }
+      /* ----- Header ----- */
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: lowercase;
+        color: var(--g500);
+        margin-bottom: 14px;
+      }
+      h1 {
+        font-family: var(--serif);
+        font-size: 38px;
+        font-weight: 500;
+        line-height: 1.2;
+        letter-spacing: -0.012em;
+        margin: 0 0 12px;
+      }
+      .summary {
+        font-size: 16px;
+        color: var(--g600);
+        max-width: 60ch;
+        margin: 0 0 32px;
+      }
 
-    /* ----- TL;DR ----- */
-    .tldr {
-      border-left: 3px solid var(--clay);
-      background: var(--paper);
-      padding: 18px 22px;
-      border-radius: 0 8px 8px 0;
-      margin-bottom: 56px;
-    }
-    .tldr h2 {
-      font-family: var(--mono);
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--clay);
-      margin: 0 0 8px;
-    }
-    .tldr p { margin: 0; }
-    .tldr p + p { margin-top: 8px; }
+      /* ----- TL;DR ----- */
+      .tldr {
+        border-left: 3px solid var(--clay);
+        background: var(--paper);
+        padding: 18px 22px;
+        border-radius: 0 8px 8px 0;
+        margin-bottom: 56px;
+      }
+      .tldr h2 {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--clay);
+        margin: 0 0 8px;
+      }
+      .tldr p {
+        margin: 0;
+      }
+      .tldr p + p {
+        margin-top: 8px;
+      }
 
-    /* ----- Sections ----- */
-    section { margin-bottom: 64px; }
-    .sec-head {
-      display: flex;
-      align-items: baseline;
-      gap: 14px;
-      margin-bottom: 18px;
-    }
-    .sec-head .num {
-      font-family: var(--mono);
-      font-size: 12px;
-      background: var(--oat);
-      color: var(--g700);
-      padding: 3px 8px;
-      border-radius: 4px;
-    }
-    .sec-head h2 {
-      font-family: var(--serif);
-      font-size: 26px;
-      font-weight: 500;
-      margin: 0;
-    }
-    .sec-intro {
-      color: var(--g600);
-      max-width: 60ch;
-      margin: 0 0 24px;
-    }
+      /* ----- Sections ----- */
+      section {
+        margin-bottom: 64px;
+      }
+      .sec-head {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+      .sec-head .num {
+        font-family: var(--mono);
+        font-size: 12px;
+        background: var(--oat);
+        color: var(--g700);
+        padding: 3px 8px;
+        border-radius: 4px;
+      }
+      .sec-head h2 {
+        font-family: var(--serif);
+        font-size: 26px;
+        font-weight: 500;
+        margin: 0;
+      }
+      .sec-intro {
+        color: var(--g600);
+        max-width: 60ch;
+        margin: 0 0 24px;
+      }
 
-    h3 {
-      font-family: var(--serif);
-      font-size: 19px;
-      font-weight: 500;
-      margin: 32px 0 8px;
-    }
+      h3 {
+        font-family: var(--serif);
+        font-size: 19px;
+        font-weight: 500;
+        margin: 32px 0 8px;
+      }
 
-    /* ----- Inline ----- */
-    code {
-      font-family: var(--mono);
-      font-size: 0.92em;
-      background: var(--g100);
-      padding: 1px 5px;
-      border-radius: 3px;
-    }
-    a { color: var(--clay); text-decoration: none; border-bottom: 1px solid transparent; }
-    a:hover { border-bottom-color: var(--clay); }
-    a.ref {
-      font-family: var(--mono);
-      font-size: 0.88em;
-      color: var(--g600);
-    }
+      /* ----- Inline ----- */
+      code {
+        font-family: var(--mono);
+        font-size: 0.92em;
+        background: var(--g100);
+        padding: 1px 5px;
+        border-radius: 3px;
+      }
+      a {
+        color: var(--clay);
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+      }
+      a:hover {
+        border-bottom-color: var(--clay);
+      }
+      a.ref {
+        font-family: var(--mono);
+        font-size: 0.88em;
+        color: var(--g600);
+      }
 
-    /* ----- Footer ----- */
-    .related {
-      margin-top: 80px;
-      padding-top: 24px;
-      border-top: 1px solid var(--g200);
-    }
-    .related h2 {
-      font-family: var(--mono);
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--g500);
-      margin: 0 0 12px;
-    }
-    .related ul { margin: 0; padding-left: 18px; }
-    .related li { margin-bottom: 4px; font-size: 13.5px; }
+      /* ----- Footer ----- */
+      .related {
+        margin-top: 80px;
+        padding-top: 24px;
+        border-top: 1px solid var(--g200);
+      }
+      .related h2 {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--g500);
+        margin: 0 0 12px;
+      }
+      .related ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .related li {
+        margin-bottom: 4px;
+        font-size: 13.5px;
+      }
 
-    /* ===== components.html から必要な class を追記する =====
+      /* ===== components.html から必要な class を追記する =====
        例: .callout, .tag, .timeline, .compare-table, .risk-table,
             .tabs, .flow-svg, .thread, .open-questions など
        使うものだけコピーして肥大化を防ぐ。 */
-  </style>
-</head>
-<body>
-  <main class="page">
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <!-- ===== Header ===== -->
+      <div class="eyebrow">[文書分類 · phase / scope]</div>
+      <h1>[ドキュメントタイトル]</h1>
+      <p class="summary">
+        [一行サマリー。読者がここまで読んで「自分が読むべきか」を判断できる粒度。]
+      </p>
 
-    <!-- ===== Header ===== -->
-    <div class="eyebrow">[文書分類 · phase / scope]</div>
-    <h1>[ドキュメントタイトル]</h1>
-    <p class="summary">[一行サマリー。読者がここまで読んで「自分が読むべきか」を判断できる粒度。]</p>
-
-    <!-- ===== TL;DR ===== -->
-    <div class="tldr">
-      <h2>TL;DR</h2>
-      <p>[結論を 3〜5 行で。「何を」「なぜ」「次にすること」がわかること。]</p>
-      <p>[補足が要れば 2 段落目に。それ以上なら本文へ。]</p>
-    </div>
-
-    <!-- ===== 01. Why now / 問題提起 ===== -->
-    <section>
-      <div class="sec-head">
-        <span class="num">01</span>
-        <h2>Why now</h2>
+      <!-- ===== TL;DR ===== -->
+      <div class="tldr">
+        <h2>TL;DR</h2>
+        <p>[結論を 3〜5 行で。「何を」「なぜ」「次にすること」がわかること。]</p>
+        <p>[補足が要れば 2 段落目に。それ以上なら本文へ。]</p>
       </div>
-      <p class="sec-intro">[なぜ今この議論をするか。トリガー（ユーザー行動 / バグ / 競合 / 制約変化）。]</p>
-      <p>[本文]</p>
-    </section>
 
-    <!-- ===== 02. Context ===== -->
-    <section>
-      <div class="sec-head">
-        <span class="num">02</span>
-        <h2>Context</h2>
-      </div>
-      <p class="sec-intro">[前提・現状・関連 ADR。読者が同じ土俵に立つために必要な背景。]</p>
-      <p>[既存の判断: <a class="ref" href="../adr/0000-template.md">ADR-NNNN</a>]</p>
-    </section>
+      <!-- ===== 01. Why now / 問題提起 ===== -->
+      <section>
+        <div class="sec-head">
+          <span class="num">01</span>
+          <h2>Why now</h2>
+        </div>
+        <p class="sec-intro">
+          [なぜ今この議論をするか。トリガー（ユーザー行動 / バグ / 競合 / 制約変化）。]
+        </p>
+        <p>[本文]</p>
+      </section>
 
-    <!-- ===== 03〜. Body =====
+      <!-- ===== 02. Context ===== -->
+      <section>
+        <div class="sec-head">
+          <span class="num">02</span>
+          <h2>Context</h2>
+        </div>
+        <p class="sec-intro">[前提・現状・関連 ADR。読者が同じ土俵に立つために必要な背景。]</p>
+        <p>[既存の判断: <a class="ref" href="../adr/0000-template.md">ADR-NNNN</a>]</p>
+      </section>
+
+      <!-- ===== 03〜. Body =====
          用途別に Body を組む。SKILL.md §5 を参照:
          - Plan:    Options → Trade-offs → Decision → Mechanism → Milestones
          - Concept: Metaphor → Mechanism → Compare → Where it lives
          - Feature: Request path → Configuration → Gotchas → FAQ
          components.html の snippet をコピペして組み立てる。 -->
-    <section>
-      <div class="sec-head">
-        <span class="num">03</span>
-        <h2>[Body セクションタイトル]</h2>
+      <section>
+        <div class="sec-head">
+          <span class="num">03</span>
+          <h2>[Body セクションタイトル]</h2>
+        </div>
+        <p class="sec-intro">[このセクションで読者に渡す情報の見出し]</p>
+        <p>[本文 / 図 / 表 / コード]</p>
+      </section>
+
+      <!-- ===== Risks & Mitigations ===== -->
+      <section>
+        <div class="sec-head">
+          <span class="num">N</span>
+          <h2>Risks &amp; Mitigations</h2>
+        </div>
+        <p class="sec-intro">
+          [何が壊れうるか + 対策。components.html の risk-table を使うと良い。]
+        </p>
+      </section>
+
+      <!-- ===== Open Questions ===== -->
+      <section>
+        <div class="sec-head">
+          <span class="num">N+1</span>
+          <h2>Open Questions</h2>
+        </div>
+        <p class="sec-intro">
+          [未決定 + decide-with（誰と / いつまでに）。決着したら ADR 化して削除。]
+        </p>
+      </section>
+
+      <!-- ===== Related ===== -->
+      <div class="related">
+        <h2>Related</h2>
+        <ul>
+          <li>ADR: <a href="../adr/NNNN-xxx.md">ADR-NNNN — タイトル</a></li>
+          <li>
+            Issue: <a href="https://github.com/y-oga-819/kozutsumi/issues/N">#N — タイトル</a>
+          </li>
+          <li>Code: <code>src/path/to/file.ts:LL</code></li>
+        </ul>
       </div>
-      <p class="sec-intro">[このセクションで読者に渡す情報の見出し]</p>
-      <p>[本文 / 図 / 表 / コード]</p>
-    </section>
-
-    <!-- ===== Risks & Mitigations ===== -->
-    <section>
-      <div class="sec-head">
-        <span class="num">N</span>
-        <h2>Risks &amp; Mitigations</h2>
-      </div>
-      <p class="sec-intro">[何が壊れうるか + 対策。components.html の risk-table を使うと良い。]</p>
-    </section>
-
-    <!-- ===== Open Questions ===== -->
-    <section>
-      <div class="sec-head">
-        <span class="num">N+1</span>
-        <h2>Open Questions</h2>
-      </div>
-      <p class="sec-intro">[未決定 + decide-with（誰と / いつまでに）。決着したら ADR 化して削除。]</p>
-    </section>
-
-    <!-- ===== Related ===== -->
-    <div class="related">
-      <h2>Related</h2>
-      <ul>
-        <li>ADR: <a href="../adr/NNNN-xxx.md">ADR-NNNN — タイトル</a></li>
-        <li>Issue: <a href="https://github.com/y-oga-819/kozutsumi/issues/N">#N — タイトル</a></li>
-        <li>Code: <code>src/path/to/file.ts:LL</code></li>
-      </ul>
-    </div>
-
-  </main>
-</body>
+    </main>
+  </body>
 </html>
