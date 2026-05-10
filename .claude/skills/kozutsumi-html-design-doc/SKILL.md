@@ -1,6 +1,13 @@
 ---
 name: kozutsumi-html-design-doc
-description: kozutsumi の plan / 設計コンセプト / 機能仕様を「人間が上から下に読み下せる単一 HTML ドキュメント」として書く運用ルール。ADR / Issue 群が分散していて全体像が頭に入らない、milestone 計画の議論を 1 枚で見通したい、抽象的な設計コンセプトを比喩や図で説明したい、機能の挙動を TL;DR から実装まで段階的に explain したい、などの作業で必ず参照する。`docs/views/` 配下の HTML を書く / 編集する話題、「設計書を読み下したい」「全体像を 1 枚にまとめたい」「思考の場が欲しい」「raw.githack で開きたい」が出たら invoke する。stock の正は ADR (markdown) であり、HTML はそこに収まらない人間用ビューに限る。
+description: 複雑な設計トピックを「上から下に読み下す単一 HTML ドキュメント」として `docs/views/` に書く運用。milestone 計画 / 設計コンセプト explainer / 機能仕様 explainer の 3 用途。stock の正は ADR (markdown) で、HTML はそこに収まらない人間用ビューに限る。raw.githack 経由で配信。
+when_to_use: |
+  - ADR / Issue 群が分散していて全体像が頭に入らない、1 枚で見通したい
+  - milestone 計画の options / trade-offs / risks / open questions を一気に展開したい
+  - 抽象的な設計コンセプトを比喩・対比・図で説明したい
+  - 機能の挙動を TL;DR → 実装 → 注意点 → FAQ で段階的に explain したい
+  - `docs/views/` 配下の HTML を書く / 編集する
+  - 「設計書を読み下したい」「全体像を 1 枚にまとめたい」「思考の場が欲しい」「raw.githack で開きたい」が出た
 ---
 
 # kozutsumi HTML 設計書ドキュメント運用
