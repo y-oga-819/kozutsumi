@@ -796,7 +796,7 @@
           と同等。「ユーザーが触るのは timer の動詞だけ」を最優先原則として死守する。
         </div>
 
-        <h3>D6 · 朝 15 分の棚卸し儀式</h3>
+        <h3>D6 · 朝 15 分の棚卸し儀式 (default opt-in)</h3>
         <p>論点 C=c2 で確定。中量版:</p>
         <ul>
           <li>
@@ -804,10 +804,21 @@
           </li>
           <li>今日の stack 確認 + 重い順 / 軽い順並び替え</li>
           <li>「今日の意図」を 1 つだけ選ぶ</li>
+          <li>
+            過集中で長時間記録が残ったタスクの<strong>事後補正</strong> + 「時間に見合う成果が
+            出たか」の妥当性振り返りも含める
+          </li>
         </ul>
         <p>
           15 分で完結するキャップ。c3 (週次振り返り / 先送り判断) は別セッションに分離する想定。
         </p>
+        <div class="callout info">
+          <strong>Note.</strong> 起動方式は
+          <strong>default opt-in</strong> (ユーザーが明示的に開く)。 自動起動 (起動時に強制表示)
+          は<strong>採用しない</strong> — 「差し込まれるとやる気が 無くなる」体感を尊重。dogfooding
+          で「差し込まれてもやる気が保てる」感触が出たら、自動化を M-γ
+          実装中に再検討する余地は残す。
+        </div>
 
         <h3>D7 · 過集中は介入しない</h3>
         <p>
@@ -1317,7 +1328,8 @@
                 D5 (1h 推奨制 + 完了条件) と D8 (タスク作成 title 必須 + AI 補完) を一体実装。 既存
                 M9「大量に分解されたタスクの進捗体験」を
                 <strong>scope 書き換え or close + 新 milestone 起票</strong> で吸収。M10
-                「秘書から相談があります」は D5/D8 の延長として M-β の中に取り込めるか要検討。
+                「秘書から相談があります」は<strong>本 milestone に統合して close</strong> (D5/D8
+                で対話の入口は作る、複数往復ヒアリングは D6 朝の棚卸しが担う)。
               </p>
             </div>
           </div>
@@ -1327,8 +1339,12 @@
             <div class="body">
               <h4>朝 15 分の棚卸し儀式</h4>
               <p>
-                D6 を実装。Whoop 風 Recovery Score の表示、stack
-                並び替え、今日の意図選択。新規ビューが要る (現 stack view とは別画面)。
+                D6 を実装。Whoop 風 Recovery Score の表示、stack 並び替え、今日の意図選択、
+                過集中の事後補正。新規ビューが要る (現 stack view とは別画面)。
+                <strong
+                  >画面レイアウト / 体験設計は機能要件 (D5 / D6 / D8) が ADR で確定し、
+                  ユースケースが揃ってから別命題として整理</strong
+                >する (本 HTML では扱わない)。
               </p>
             </div>
           </div>
@@ -1356,8 +1372,9 @@
             を書き換え or close + 新 milestone 起票
           </li>
           <li>
-            <strong>M10 AI秘書との対話によるより精度の高いタスク分解</strong> — M-β の AI 分解
-            proposal で多くを吸収。「対話」部分が独立価値あるなら別 milestone のまま、なければ統合
+            <strong>M10 AI秘書との対話によるより精度の高いタスク分解</strong> —
+            <strong>M-β に統合して close</strong> (D5/D8 で対話の入口は作る、複数往復ヒアリングは D6
+            朝の棚卸しが担う)
           </li>
         </ul>
       </section>
@@ -1442,14 +1459,7 @@
         </p>
 
         <dl class="open-questions">
-          <dt>Q1. M10「秘書から相談があります」を独立 milestone として残すか</dt>
-          <dd>
-            D5 の AI 分解 / D8
-            のテンプレ補完で「対話」の入口は作れる。さらに「複数往復のヒアリング」
-            が独立価値を持つかは要検討。<span class="decide-with">decide-with: M-β 設計時</span>
-          </dd>
-
-          <dt>Q2. KPI の組み替え方針 (feature-spec.md L50-69)</dt>
+          <dt>Q1. KPI の組み替え方針 (feature-spec.md L50-69)</dt>
           <dd>
             「見積もり精度 ±20% / トップ開始率 80% / スタック消化率 70%」を「定着 +
             インサイト精度」中心に組み替える。LeetCode 型 (S/M/L 別カウント) を参考に。<span
@@ -1458,7 +1468,7 @@
             >
           </dd>
 
-          <dt>Q3. vision.md の差別化軸書き換えタイミング</dt>
+          <dt>Q2. vision.md の差別化軸書き換えタイミング</dt>
           <dd>
             D1〜D8 を ADR に distill 完了してから vision.md を書き換える順序。HTML
             上で先行する案を提示するのは可。<span class="decide-with"
@@ -1466,7 +1476,7 @@
             >
           </dd>
 
-          <dt>Q4. 過集中の事後補正 schema 詳細</dt>
+          <dt>Q3. 過集中の事後補正 schema 詳細</dt>
           <dd>
             朝の棚卸し (D6) で実作業時間を補正 +
             「時間に見合う成果が出たか」の妥当性振り返りを含める 方針は確定。残る論点: (a)
@@ -1477,27 +1487,12 @@
             >
           </dd>
 
-          <dt>Q5. D8 タスク作成テンプレ schema</dt>
+          <dt>Q4. D8 タスク作成テンプレ schema</dt>
           <dd>
             必須は title / 推奨はメモ書き、までは確定。残る論点: (a) AI が補完する schema の項目
             (Goal / Done / First step / Risk / その他) と必須・任意の境界、(b) 補完タイミング
             (作成直後 / 詳細閲覧時 / 朝の棚卸し)、(c) ユーザーが手動で書いた値と AI
             補完値の競合解決。<span class="decide-with">decide-with: M-β 設計時</span>
-          </dd>
-
-          <dt>Q6. 朝の棚卸しを「儀式」として強制するか opt-in か</dt>
-          <dd>
-            Comment 4「朝の Task Recovery Score」は提示型 (説教調を避ける)。kozutsumi
-            では「起動時に自動表示」or「ユーザーが開く」のどちらか。前者は習慣化に有利、後者は
-            Autonomy 寄り。<span class="decide-with">decide-with: M-γ 設計時</span>
-          </dd>
-
-          <dt>Q7. 既存 stack view と棚卸し画面の関係</dt>
-          <dd>
-            stack view (静か / current task に集中) と棚卸し画面 (語る / インサイト + 並び替え)
-            の二画面構成。導線、デフォルト起動画面、相互の遷移パターン。<span class="decide-with"
-              >decide-with: M-γ 設計時</span
-            >
           </dd>
         </dl>
 
