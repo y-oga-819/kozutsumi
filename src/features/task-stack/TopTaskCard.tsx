@@ -286,11 +286,16 @@ type TimerControlsProps = {
 };
 
 // ADR-0065: 3 ボタンは hardcoded。設定経由の add/remove は未実装。
-// `label` は aria-label / title 共通で、e2e は role=button name=label で取れる。
-const INTERRUPT_SOURCES: readonly { source: InterruptSource; label: string; short: string }[] = [
-  { source: "slack", label: "Slack 割り込み", short: "S" },
-  { source: "notion", label: "Notion 割り込み", short: "N" },
-  { source: "pr_review", label: "PR Review 割り込み", short: "P" },
+// `ariaLabel` は aria-label / title 共通 (e2e は role=button name=ariaLabel で取れる)。
+// `text` はボタン内に表示する短いラベル — アイコンより視認性 / 押し間違い低減を優先。
+const INTERRUPT_SOURCES: readonly {
+  source: InterruptSource;
+  ariaLabel: string;
+  text: string;
+}[] = [
+  { source: "slack", ariaLabel: "Slack 割り込み", text: "Slack" },
+  { source: "notion", ariaLabel: "Notion 割り込み", text: "Notion" },
+  { source: "pr_review", ariaLabel: "レビュー 割り込み", text: "レビュー" },
 ] as const;
 
 function TimerControls({
@@ -333,12 +338,12 @@ function TimerControls({
               key={s.source}
               type="button"
               onClick={stop(() => onInterrupt(s.source))}
-              aria-label={s.label}
-              title={s.label}
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-transparent font-jp text-[10px] font-semibold"
+              aria-label={s.ariaLabel}
+              title={s.ariaLabel}
+              className="flex h-9 cursor-pointer items-center rounded-lg bg-transparent px-2 font-jp text-[10px] font-semibold"
               style={{ border: `1.5px solid ${color}40`, color: "currentColor" }}
             >
-              <span aria-hidden="true">⚡{s.short}</span>
+              {s.text}
             </button>
           ))}
           <button

@@ -31,7 +31,7 @@ import { expect, test } from "./fixtures";
 const SOURCE_CASES: readonly { source: "slack" | "notion" | "pr_review"; buttonName: string }[] = [
   { source: "slack", buttonName: "Slack 割り込み" },
   { source: "notion", buttonName: "Notion 割り込み" },
-  { source: "pr_review", buttonName: "PR Review 割り込み" },
+  { source: "pr_review", buttonName: "レビュー 割り込み" },
 ] as const;
 
 test.describe("ADR-0065: source 別 1-tap 割り込みボタン", () => {
