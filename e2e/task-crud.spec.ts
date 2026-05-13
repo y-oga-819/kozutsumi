@@ -20,8 +20,10 @@ import { expect, test } from "./fixtures";
  * ボタン (15m / 30m / 1h / 2h / 4h / 1d / large) に置き換わった。estimated_minutes は
  * 登録時に取らず NULL のまま入る (補正は AI 推定 / 子分解の経路に倒す, ADR 0038)。
  *
- * #170 / ADR 0037: body は TaskForm 1 画面で書き切れるようになった (任意入力)。
+ * #170 / ADR 0037 / 0064: body は TaskForm 1 画面で書き切れるようになった。
+ * ADR 0064 で「メモ書き (推奨)」として再解釈され、AI 補完の起点になる。
  * #170 / ADR 0039: project は登録時に任意。未指定なら project_id=NULL で入る。
+ * #242 / ADR 0064: task_size も必須から任意化。title のみ必須で投入できる。
  */
 test.describe("タスク作成 (tasks 行整合)", () => {
   test("title / body / task_size / project が tasks 行に正しく落ちる (#170)", async ({
@@ -40,7 +42,7 @@ test.describe("タスク作成 (tasks 行整合)", () => {
     const addDialog = page.getByRole("dialog", { name: "追加メニュー" });
     await addDialog.getByRole("tab", { name: "タスク" }).click();
     await addDialog.getByLabel("タイトル").fill(taskTitle);
-    await addDialog.getByLabel("詳細 (任意)").fill(taskBody);
+    await addDialog.getByLabel("詳細 (推奨)").fill(taskBody);
     await addDialog.getByRole("radio", { name: "1時間" }).click();
     await addDialog.getByLabel("プロジェクト (任意)").selectOption({ label: projectName });
     await addDialog.getByRole("button", { name: "追加" }).click();
@@ -69,10 +71,13 @@ test.describe("タスク作成 (tasks 行整合)", () => {
     expect(logs.filter((l) => l.task_id === task.id)).toHaveLength(0);
   });
 
-  test("project 未指定 / body 空でも登録でき project_id=NULL / body='' で入る (#170 / ADR 0039)", async ({
+  test("title のみで投入でき project_id / body / task_size が NULL/'' で入る (#242 / ADR 0064)", async ({
     signedInPage: page,
     testUserId: userId,
   }) => {
+    // ADR 0064: 「サクッと放り込める」を構造的に担保する。title だけで stack に
+    // 投入できることが、思いつきの捕捉体験の最優先軸。残り schema は AI が
+    // 後追いで補完するため、登録時の必須項目は title のみ。
     const taskTitle = "Inbox 的タスク";
     const admin = createAdminClient();
 
@@ -80,8 +85,7 @@ test.describe("タスク作成 (tasks 行整合)", () => {
     const addDialog = page.getByRole("dialog", { name: "追加メニュー" });
     await addDialog.getByRole("tab", { name: "タスク" }).click();
     await addDialog.getByLabel("タイトル").fill(taskTitle);
-    await addDialog.getByRole("radio", { name: "30分" }).click();
-    // project は未指定のまま (default の「未指定 (後で決める)」を維持)
+    // body / task_size / project / dependsOnEventId はすべて未入力のまま
     await addDialog.getByRole("button", { name: "追加" }).click();
     await expect(addDialog).toHaveCount(0);
 
@@ -89,7 +93,7 @@ test.describe("タスク作成 (tasks 行整合)", () => {
     expect(task.title).toBe(taskTitle);
     expect(task.project_id).toBeNull();
     expect(task.body).toBe("");
-    expect(task.task_size).toBe("30m");
+    expect(task.task_size).toBeNull();
     expect(task.estimated_minutes).toBeNull();
     expect(task.status).toBe("idle");
   });
