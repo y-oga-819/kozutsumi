@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 
+import type { InterruptSource } from "@/entities/action-log/types";
 import type { Event } from "@/entities/event/types";
 import type { PauseReason } from "@/entities/task/time-entries";
 import type { Task } from "@/entities/task/types";
@@ -33,6 +34,12 @@ export type TopTimerBinding = {
   onPauseRequest: () => void;
   onResume: () => void;
   onComplete: () => void;
+  /**
+   * ADR-0065: source 別 1-tap 割り込み。active 時のみ表示する想定で、押下で
+   * timer を paused に落としつつ `task_interrupted` を 1 件記録する
+   * (metadata.source に発生源、reason モーダルは出さない)。
+   */
+  onInterrupt: (source: InterruptSource) => void;
 };
 
 type TaskStackProps = {
@@ -148,6 +155,7 @@ export function TaskStack({
                   onPauseRequest={topTimer.onPauseRequest}
                   onResume={topTimer.onResume}
                   onComplete={topTimer.onComplete}
+                  onInterrupt={topTimer.onInterrupt}
                 />
               ) : (
                 <TaskRow

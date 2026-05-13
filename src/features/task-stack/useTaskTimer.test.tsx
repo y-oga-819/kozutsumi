@@ -17,6 +17,7 @@ vi.mock("@/entities/action-log/logger", () => ({
     TASK_TITLE_CHANGED: "task_title_changed",
     INTERRUPTION_PUSHED: "interruption_pushed",
     INTERRUPTION_COMPLETED: "interruption_completed",
+    TASK_INTERRUPTED: "task_interrupted",
     STACK_PROPOSED: "stack_proposed",
     STACK_PROPOSAL_ACCEPTED: "stack_proposal_accepted",
   }),
@@ -105,7 +106,7 @@ describe("useTaskTimer", () => {
     vi.restoreAllMocks();
   });
 
-  test("task=null のとき start/pause/resume/complete は no-op", async () => {
+  test("task=null のとき start/pause/resume/complete/interrupt は no-op", async () => {
     const { Wrapper } = wrapTimer(m);
     const { result } = renderHook(() => useTaskTimer(null), {
       wrapper: Wrapper,
@@ -115,6 +116,7 @@ describe("useTaskTimer", () => {
       await result.current.pause("voluntary");
       await result.current.resume();
       await result.current.complete();
+      await result.current.interrupt("slack");
     });
     expect(m.start).not.toHaveBeenCalled();
     expect(m.update).not.toHaveBeenCalled();
@@ -182,6 +184,94 @@ describe("useTaskTimer", () => {
     expect(logMock).toHaveBeenCalledWith("task_paused", {
       task_id: "t1",
       pause_reason: "meeting",
+    });
+  });
+
+  // ADR-0065: source 別 1-tap 割り込みは pause と同じ状態遷移 (active → paused)
+  // を踏むが、
+  // - pause_reason は "interruption" 固定 (モーダル経由ではない)
+  // - action_log は task_paused ではなく task_interrupted + source を残す
+  // ことで「reason 選択モーダル経由の中断」と「source 別 1-tap 割り込み」を
+  // 後段で区別できる。
+  test("interrupt(slack): open entry を interruption で閉じ、source 付き TASK_INTERRUPTED を残す (task_paused は出さない)", async () => {
+    const open = {
+      id: "te-open",
+      taskId: "t1",
+      startedAt: "2026-04-19T10:00:00.000Z",
+      pausedAt: null,
+      pauseReason: null,
+      durationSeconds: null,
+    };
+    m.list.mockResolvedValue([open]);
+    m.getOpen.mockResolvedValue(open);
+    const activeTask: Task = { ...baseTask, status: "active" };
+    const { Wrapper } = wrapTimer(m);
+    const { result } = renderHook(() => useTaskTimer(activeTask), {
+      wrapper: Wrapper,
+    });
+    await act(async () => {
+      await result.current.interrupt("slack");
+    });
+    expect(m.close).toHaveBeenCalledWith(open, "interruption");
+    expect(m.update).toHaveBeenCalledWith("t1", { status: "paused" });
+    expect(logMock).toHaveBeenCalledWith("task_interrupted", {
+      task_id: "t1",
+      source: "slack",
+    });
+    // task_paused は打たない (= ADR-0065 の「source 別 1-tap」シグナルを混ぜない)
+    expect(logMock).not.toHaveBeenCalledWith("task_paused", expect.anything());
+  });
+
+  test("interrupt(notion / pr_review): どの source でも同じフローで metadata.source だけが変わる", async () => {
+    const open = {
+      id: "te-open",
+      taskId: "t1",
+      startedAt: "2026-04-19T10:00:00.000Z",
+      pausedAt: null,
+      pauseReason: null,
+      durationSeconds: null,
+    };
+    m.list.mockResolvedValue([open]);
+    m.getOpen.mockResolvedValue(open);
+    const activeTask: Task = { ...baseTask, status: "active" };
+    const { Wrapper } = wrapTimer(m);
+    const { result } = renderHook(() => useTaskTimer(activeTask), {
+      wrapper: Wrapper,
+    });
+    await act(async () => {
+      await result.current.interrupt("notion");
+    });
+    expect(logMock).toHaveBeenLastCalledWith("task_interrupted", {
+      task_id: "t1",
+      source: "notion",
+    });
+    await act(async () => {
+      await result.current.interrupt("pr_review");
+    });
+    expect(logMock).toHaveBeenLastCalledWith("task_interrupted", {
+      task_id: "t1",
+      source: "pr_review",
+    });
+  });
+
+  test("interrupt: open entry が無い場合でも status=paused に遷移し、TASK_INTERRUPTED を残す", async () => {
+    // 既に paused になっている (= race で別タブが close 済み) ケースのフォールバック。
+    // close は呼ばれないが status 更新とログは行う。
+    m.list.mockResolvedValue([]);
+    m.getOpen.mockResolvedValue(null);
+    const activeTask: Task = { ...baseTask, status: "active" };
+    const { Wrapper } = wrapTimer(m);
+    const { result } = renderHook(() => useTaskTimer(activeTask), {
+      wrapper: Wrapper,
+    });
+    await act(async () => {
+      await result.current.interrupt("slack");
+    });
+    expect(m.close).not.toHaveBeenCalled();
+    expect(m.update).toHaveBeenCalledWith("t1", { status: "paused" });
+    expect(logMock).toHaveBeenCalledWith("task_interrupted", {
+      task_id: "t1",
+      source: "slack",
     });
   });
 

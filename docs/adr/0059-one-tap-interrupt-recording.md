@@ -1,6 +1,6 @@
 # ADR 0059: 突発割り込みは 1-tap で timer 停止 + イベント記録、stack には push しない
 
-- **Status**: Accepted
+- **Status**: Superseded by [ADR-0065](./0065-interrupt-buttons-per-source.md)
 - **Date**: 2026-05-10
 - **Related**: `docs/design/architecture.md` §1.4 / [Issue #234](https://github.com/y-oga-819/kozutsumi/issues/234) / [ADR-0058](./0058-timer-three-verbs-and-no-ai-interruption.md) / [ADR-0062](./0062-morning-review-ritual-fifteen-minutes.md)
 

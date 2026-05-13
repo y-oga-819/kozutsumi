@@ -12,6 +12,11 @@ export type ActionType =
   | "task_dependency_cleared"
   | "interruption_pushed"
   | "interruption_completed"
+  // ADR-0059: 1-tap 割り込みボタンで timer を停止した瞬間を記録する。
+  // 「事前分類は要求しない」設計なので metadata は task_id のみ。
+  // 旧 architecture §1.4 の interruption_pushed / interruption_completed
+  // (push/pop モデル) からは離れた別系統のシグナル。
+  | "task_interrupted"
   | "stack_proposed"
   | "stack_proposal_accepted"
   | "calendar_synced"
@@ -85,6 +90,14 @@ export type DecompositionModifiedKind =
   | "child_added";
 
 export type PauseReason = "meeting" | "interruption" | "voluntary";
+
+/**
+ * ADR-0065: 1-tap 割り込みボタンの発生源 (source) 列挙。dogfooding 初期は
+ * hardcoded の 3 値で開始する。user-defined source を将来追加するときは
+ * union を緩めて (string) 受ける形に変える。DB (`action_logs.metadata`) は
+ * JSONB なので schema 変更なしに増減できる。
+ */
+export type InterruptSource = "slack" | "notion" | "pr_review";
 
 /** Google Calendar 同期がどの経路でトリガーされたか。Phase 4 の頻度分析に使う (#51)。 */
 export type CalendarSyncTrigger = "manual" | "lazy";
@@ -167,6 +180,11 @@ export type ActionMetadataMap = {
   };
   interruption_pushed: { task_id: string };
   interruption_completed: { task_id: string };
+  // ADR-0065: 1-tap 割り込み記録。timer を停止した時点の task_id + 押した
+  // ボタンの source (発生源) を保持する。source は user 視点で割り込み発生時に
+  // 確定している情報なので、事前 1-tap の時点で記録するのが最も情報量が高い
+  // (朝の棚卸しでの事後復元には頼らない)。
+  task_interrupted: { task_id: string; source: InterruptSource };
   stack_proposed: Record<string, unknown>;
   stack_proposal_accepted: Record<string, unknown>;
   calendar_synced: {

@@ -72,6 +72,7 @@ const idleTimer: TopTimerBinding = {
   onPauseRequest: noop,
   onResume: noop,
   onComplete: noop,
+  onInterrupt: noop,
 };
 
 const NOW_MS = FIXED_NOW.getTime();
@@ -88,6 +89,7 @@ const topProps = {
   onPauseRequest: noop,
   onResume: noop,
   onComplete: noop,
+  onInterrupt: noop,
 };
 
 describe("TopTaskCard", () => {
@@ -142,6 +144,49 @@ describe("TopTaskCard", () => {
     expect(onPauseRequest).toHaveBeenCalledTimes(1);
     fireEvent.click(getByLabelText("完了"));
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  // ADR-0065: source 別 1-tap 割り込みは active 中だけ Slack / Notion / PR Review の
+  // 3 ボタンを並べる。各クリックで onInterrupt(source) が 1 回発火し、reason
+  // 選択モーダル (onPauseRequest) は経由しない。
+  test("active タスクは『Slack / Notion / レビュー 割り込み』3 ボタンを表示し、押下で onInterrupt(source) が発火する", () => {
+    const onInterrupt = vi.fn();
+    const onPauseRequest = vi.fn();
+    const { getByLabelText } = render(
+      <TopTaskCard
+        {...topProps}
+        task={{ ...baseTask, status: "active" }}
+        onPauseRequest={onPauseRequest}
+        onInterrupt={onInterrupt}
+      />,
+    );
+    fireEvent.click(getByLabelText("Slack 割り込み"));
+    expect(onInterrupt).toHaveBeenLastCalledWith("slack");
+    fireEvent.click(getByLabelText("Notion 割り込み"));
+    expect(onInterrupt).toHaveBeenLastCalledWith("notion");
+    fireEvent.click(getByLabelText("レビュー 割り込み"));
+    expect(onInterrupt).toHaveBeenLastCalledWith("pr_review");
+    expect(onInterrupt).toHaveBeenCalledTimes(3);
+    expect(onPauseRequest).not.toHaveBeenCalled();
+  });
+
+  test("idle / paused では割り込みボタン群を表示しない (= active のみ)", () => {
+    const { queryByLabelText, rerender } = render(
+      <TopTaskCard {...topProps} task={{ ...baseTask, status: "idle" }} />,
+    );
+    expect(queryByLabelText("Slack 割り込み")).toBeNull();
+    expect(queryByLabelText("Notion 割り込み")).toBeNull();
+    expect(queryByLabelText("レビュー 割り込み")).toBeNull();
+    rerender(
+      <TopTaskCard
+        {...topProps}
+        task={{ ...baseTask, status: "paused" }}
+        pauseReason="voluntary"
+      />,
+    );
+    expect(queryByLabelText("Slack 割り込み")).toBeNull();
+    expect(queryByLabelText("Notion 割り込み")).toBeNull();
+    expect(queryByLabelText("レビュー 割り込み")).toBeNull();
   });
 
   test("paused タスクは『再開』+『完了』を表示する", () => {

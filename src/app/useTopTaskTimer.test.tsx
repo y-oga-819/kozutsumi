@@ -16,6 +16,7 @@ vi.mock("@/entities/action-log/logger", () => ({
     TASK_TITLE_CHANGED: "task_title_changed",
     INTERRUPTION_PUSHED: "interruption_pushed",
     INTERRUPTION_COMPLETED: "interruption_completed",
+    TASK_INTERRUPTED: "task_interrupted",
     STACK_PROPOSED: "stack_proposed",
     STACK_PROPOSAL_ACCEPTED: "stack_proposal_accepted",
   }),
@@ -186,6 +187,36 @@ describe("useTopTaskTimer (stack top auto-bind / ADR-0058 Decision 2)", () => {
     expect(result.current.pauseModalOpen).toBe(true);
     expect(m.close).not.toHaveBeenCalled();
     expect(m.update).not.toHaveBeenCalled();
+  });
+
+  // ADR-0065: source 別 1-tap 割り込みは PauseReasonModal を一切経由しない。
+  // timer.interrupt(source) が直接走り、open entry を "interruption" で close、
+  // action_log は task_interrupted + metadata.source を残す。
+  test("onInterrupt(source) は modal を開かず、interruption で entry を close + task_interrupted を log する", async () => {
+    const open = {
+      id: "te-open",
+      taskId: "t1",
+      startedAt: "2026-04-19T10:00:00.000Z",
+      pausedAt: null,
+      pauseReason: null,
+      durationSeconds: null,
+    };
+    m.list.mockResolvedValue([open]);
+    m.getOpen.mockResolvedValue(open);
+    const { Wrapper } = wrapTimer(m);
+    const { result } = renderHook(() => useTopTaskTimer({ ...baseTask, status: "active" }), {
+      wrapper: Wrapper,
+    });
+    await act(async () => {
+      result.current.topTimer.onInterrupt("slack");
+    });
+    expect(result.current.pauseModalOpen).toBe(false);
+    expect(m.close).toHaveBeenCalledWith(open, "interruption");
+    expect(m.update).toHaveBeenCalledWith("t1", { status: "paused" });
+    expect(logMock).toHaveBeenCalledWith("task_interrupted", {
+      task_id: "t1",
+      source: "slack",
+    });
   });
 
   test("handlePauseSelect で modal を閉じ、選んだ reason で pause を発火する", async () => {
