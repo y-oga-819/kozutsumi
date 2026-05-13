@@ -42,7 +42,7 @@ test.describe("タスク作成 (tasks 行整合)", () => {
     const addDialog = page.getByRole("dialog", { name: "追加メニュー" });
     await addDialog.getByRole("tab", { name: "タスク" }).click();
     await addDialog.getByLabel("タイトル").fill(taskTitle);
-    await addDialog.getByLabel("メモ書き (推奨)").fill(taskBody);
+    await addDialog.getByLabel("詳細 (推奨)").fill(taskBody);
     await addDialog.getByRole("radio", { name: "1時間" }).click();
     await addDialog.getByLabel("プロジェクト (任意)").selectOption({ label: projectName });
     await addDialog.getByRole("button", { name: "追加" }).click();

@@ -20,8 +20,9 @@ type TaskFormProps = {
  * #170 / ADR 0036 / 0037 / 0038 / 0039 / 0064: シンプル世界観の単一登録経路。
  *
  * - title のみ必須 (ADR 0064: 思いついた瞬間に title だけで stack に投入できる)
- * - body は推奨 (ADR 0037 の body 欄を ADR 0064 で「メモ書き」として再解釈。
- *   AI が後追いで Goal / Done / First step を補完する起点になる)
+ * - body は推奨 (ADR 0037 の body 欄を ADR 0064 で「メモ書き的な詳細」として
+ *   再解釈。UI 表記は「詳細」のまま統一し、AI が後追いで Goal / Done /
+ *   First step を補完する起点になる)
  * - task_size は任意 (ADR 0064 で必須から任意化。未入力なら AI 補完 / 朝の棚卸しに倒す)
  * - project は任意 (ADR 0039 で後付け / 伝播 RPC 経由で修正可能になる前提)
  * - estimated_minutes は登録時に取らない。AI 分解 / 補正の責務に倒す
@@ -86,7 +87,7 @@ export function TaskForm({ projects, events, onSubmit, onClose }: TaskFormProps)
       </label>
 
       <label className="flex flex-col gap-1">
-        <span className="font-jp text-[10px] text-fg-weak">メモ書き (推奨)</span>
+        <span className="font-jp text-[10px] text-fg-weak">詳細 (推奨)</span>
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
