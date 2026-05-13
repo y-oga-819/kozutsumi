@@ -12,80 +12,95 @@ import {
 import { expect, test } from "./fixtures";
 
 /**
- * Issue #239 / ADR-0059:
- *   1-tap 割り込みボタンは active な timer を 1 タップで paused に落とし、
- *   action_log に `task_interrupted` を 1 件だけ記録する。
+ * Issue #239 / ADR-0065 (Supersedes ADR-0059):
+ *   割り込みボタンは source 別に 3 個 (Slack / Notion / PR Review) 並ぶ。
+ *   各ボタンは 1 タップで active な timer を paused に落とし、
+ *   action_log に `task_interrupted` を 1 件記録する (metadata.source 付き)。
  *
  * 不変条件 (= 本 spec が CI で踏み続ける):
  *   1. `中断の理由` モーダル (PauseReasonModal) は経由しない (= reason 選択を要求しない)
  *   2. time_entries は `pause_reason="interruption"` で close される
- *   3. action_logs には `task_interrupted` が積まれ、`task_paused` は積まれない
- *      (= モーダル経由の中断と区別できる)
+ *   3. action_logs には `task_interrupted` が積まれ (metadata.source に押下 source)、
+ *      `task_paused` は積まれない (= モーダル経由の中断と区別できる)
  *   4. 停止後の任意の再開は user 操作 (= 「再開」ボタン押下) でのみ起きる
  *
  * ADR-0058 (timer 3 動詞 + 能動 AI 介入禁止) の guard rail は
- * timer-no-ai-intervention.spec.ts が別途踏んでいる。本 spec は ADR-0059 の
- * 1-tap シグナルが DB に正確に落ちる側を担保する。
+ * timer-no-ai-intervention.spec.ts が別途踏んでいる。本 spec は ADR-0065 の
+ * source 別 1-tap シグナルが DB に正確に落ちる側を担保する。
  */
-test.describe("ADR-0059: 1-tap 割り込みボタン", () => {
-  test("active 中の 1-tap で paused へ落ち、task_interrupted のみ記録される (モーダルは経由しない)", async ({
-    signedInPageWithProject: page,
-    projectName,
-    testUserId: userId,
-  }) => {
-    const taskTitle = "1-tap 割り込み検証";
-    const admin = createAdminClient();
+const SOURCE_CASES: readonly { source: "slack" | "notion" | "pr_review"; buttonName: string }[] = [
+  { source: "slack", buttonName: "Slack 割り込み" },
+  { source: "notion", buttonName: "Notion 割り込み" },
+  { source: "pr_review", buttonName: "PR Review 割り込み" },
+] as const;
 
-    await createTask(page, taskTitle, projectName);
-    const task = await getTaskByTitle(admin, userId, taskTitle);
-    const taskId = task.id;
+test.describe("ADR-0065: source 別 1-tap 割り込みボタン", () => {
+  for (const c of SOURCE_CASES) {
+    test(`${c.source}: active 中の 1-tap で paused へ落ち、task_interrupted(source=${c.source}) のみ記録される (モーダルは経由しない)`, async ({
+      signedInPageWithProject: page,
+      projectName,
+      testUserId: userId,
+    }) => {
+      const taskTitle = `1-tap 割り込み検証 (${c.source})`;
+      const admin = createAdminClient();
 
-    // --- start ----
-    await page.getByRole("button", { name: "開始" }).click();
-    await expect(page.getByRole("button", { name: "中断" })).toBeVisible();
-    await expectTaskStatus(admin, taskId, "active");
-    // 割り込みボタンが active 中だけ表示される (=ADR-0059 不変条件: 1-tap)
-    const interruptButton = page.getByRole("button", { name: "割り込み" });
-    await expect(interruptButton).toBeVisible();
+      await createTask(page, taskTitle, projectName);
+      const task = await getTaskByTitle(admin, userId, taskTitle);
+      const taskId = task.id;
 
-    // --- 1-tap 割り込み ----
-    await interruptButton.click();
-    // モーダルは出ない (= 事前分類を要求しない / ADR-0059 Decision 2)
-    await expect(page.getByRole("dialog", { name: "中断の理由" })).toHaveCount(0);
-    // active → paused に遷移
-    await expect(page.getByRole("button", { name: "再開" })).toBeVisible();
-    await expectTaskStatus(admin, taskId, "paused");
-    // 停止後は割り込みボタンも消える (paused では押せない)
-    await expect(page.getByRole("button", { name: "割り込み" })).toHaveCount(0);
+      // --- start ----
+      await page.getByRole("button", { name: "開始" }).click();
+      await expect(page.getByRole("button", { name: "中断" })).toBeVisible();
+      await expectTaskStatus(admin, taskId, "active");
+      // source 別の 3 ボタンが active 中だけ表示される
+      for (const s of SOURCE_CASES) {
+        await expect(page.getByRole("button", { name: s.buttonName })).toBeVisible();
+      }
 
-    // --- action_log: task_interrupted が積まれる ----
-    const interruptedLog = await waitForActionLog(
-      admin,
-      userId,
-      (l) => l.action_type === "task_interrupted" && l.task_id === taskId,
-      { description: "task_interrupted log" },
-    );
-    expect((interruptedLog.metadata as { task_id?: string }).task_id).toBe(taskId);
+      // --- 1-tap 割り込み (該当 source) ----
+      await page.getByRole("button", { name: c.buttonName }).click();
+      // モーダルは出ない (= 事前 reason 選択を要求しない / ADR-0065 Decision)
+      await expect(page.getByRole("dialog", { name: "中断の理由" })).toHaveCount(0);
+      // active → paused に遷移
+      await expect(page.getByRole("button", { name: "再開" })).toBeVisible();
+      await expectTaskStatus(admin, taskId, "paused");
+      // 停止後は割り込みボタン群も消える (paused では押せない)
+      for (const s of SOURCE_CASES) {
+        await expect(page.getByRole("button", { name: s.buttonName })).toHaveCount(0);
+      }
 
-    // task_paused は積まれない (= ADR-0059 のシグナル分離)。
-    // waitForActionLog で待つと「来なかったこと」を確認できないため、interrupted を
-    // 観測した直後の time-entry 更新まで待ってから getActionLogs で集合確認する。
-    const entries = await waitForTimeEntries(
-      admin,
-      taskId,
-      (es) => es.length === 1 && es[0].paused_at !== null,
-      { description: "entry closed after interrupt" },
-    );
-    assertTimeEntriesInvariants(entries);
-    expect(entries[0].pause_reason).toBe("interruption");
-    expect(entries[0].duration_seconds).not.toBeNull();
+      // --- action_log: task_interrupted (source 付き) が積まれる ----
+      const interruptedLog = await waitForActionLog(
+        admin,
+        userId,
+        (l) =>
+          l.action_type === "task_interrupted" &&
+          l.task_id === taskId &&
+          (l.metadata as { source?: string }).source === c.source,
+        { description: `task_interrupted log with source=${c.source}` },
+      );
+      const meta = interruptedLog.metadata as { task_id?: string; source?: string };
+      expect(meta.task_id).toBe(taskId);
+      expect(meta.source).toBe(c.source);
 
-    // 集合 assert: task に対する action_log は task_started → task_interrupted のみ
-    // (task_paused は出ない)。
-    const allLogs = await getActionLogs(admin, userId);
-    const ourTypes = allLogs.filter((l) => l.task_id === taskId).map((l) => l.action_type);
-    expect(ourTypes).toEqual(["task_started", "task_interrupted"]);
-  });
+      // --- time_entry: pause_reason=interruption で close される ----
+      const entries = await waitForTimeEntries(
+        admin,
+        taskId,
+        (es) => es.length === 1 && es[0].paused_at !== null,
+        { description: "entry closed after interrupt" },
+      );
+      assertTimeEntriesInvariants(entries);
+      expect(entries[0].pause_reason).toBe("interruption");
+      expect(entries[0].duration_seconds).not.toBeNull();
+
+      // 集合 assert: task に対する action_log は task_started → task_interrupted のみ
+      // (task_paused は出ない)。
+      const allLogs = await getActionLogs(admin, userId);
+      const ourTypes = allLogs.filter((l) => l.task_id === taskId).map((l) => l.action_type);
+      expect(ourTypes).toEqual(["task_started", "task_interrupted"]);
+    });
+  }
 
   test("割り込み後の resume は user 操作 (再開ボタン押下) でのみ起きる (= 自動再開しない)", async ({
     signedInPageWithProject: page,
@@ -100,7 +115,7 @@ test.describe("ADR-0059: 1-tap 割り込みボタン", () => {
 
     await page.getByRole("button", { name: "開始" }).click();
     await expect(page.getByRole("button", { name: "中断" })).toBeVisible();
-    await page.getByRole("button", { name: "割り込み" }).click();
+    await page.getByRole("button", { name: "Slack 割り込み" }).click();
     await expect(page.getByRole("button", { name: "再開" })).toBeVisible();
     await expectTaskStatus(admin, taskId, "paused");
 

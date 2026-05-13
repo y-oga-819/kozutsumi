@@ -30,8 +30,9 @@ export const ACTION_TYPES = Object.freeze({
   TASK_DEPENDENCY_CLEARED: "task_dependency_cleared",
   INTERRUPTION_PUSHED: "interruption_pushed",
   INTERRUPTION_COMPLETED: "interruption_completed",
-  // ADR-0059: 1-tap 割り込み記録。task_paused とは別系統で、「事前分類なし」の
-  // 1 タップ操作だったことを後段の朝の棚卸し / 行動分析が区別できるようにする。
+  // ADR-0065: source 別の 1-tap 割り込み記録。metadata.source に Slack /
+  // Notion / PR Review 等の発生源を保持し、task_paused (モーダル経由の中断)
+  // と区別する。source 値の union 制約は types.ts の InterruptSource に集約。
   TASK_INTERRUPTED: "task_interrupted",
   STACK_PROPOSED: "stack_proposed",
   STACK_PROPOSAL_ACCEPTED: "stack_proposal_accepted",

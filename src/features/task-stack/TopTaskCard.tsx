@@ -1,5 +1,6 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 
+import type { InterruptSource } from "@/entities/action-log/types";
 import type { Event } from "@/entities/event/types";
 import { getProject } from "@/entities/project/projects";
 import { useProjects } from "@/entities/project/ProjectsContext";
@@ -52,8 +53,12 @@ type TopTaskCardProps = {
   onPauseRequest: () => void;
   onResume: () => void;
   onComplete: () => void;
-  /** ADR-0059: active 中にだけ表示する 1-tap 割り込みボタンの押下 callback。 */
-  onInterrupt: () => void;
+  /**
+   * ADR-0065: active 中にだけ表示する source 別 1-tap 割り込みボタンの押下
+   * callback。Slack / Notion / PR Review の 3 ボタンが共通で本 callback を
+   * 呼び、引数 source で区別する。
+   */
+  onInterrupt: (source: InterruptSource) => void;
 };
 
 export function TopTaskCard({
@@ -277,8 +282,16 @@ type TimerControlsProps = {
   onPauseRequest: () => void;
   onResume: () => void;
   onComplete: () => void;
-  onInterrupt: () => void;
+  onInterrupt: (source: InterruptSource) => void;
 };
+
+// ADR-0065: 3 ボタンは hardcoded。設定経由の add/remove は未実装。
+// `label` は aria-label / title 共通で、e2e は role=button name=label で取れる。
+const INTERRUPT_SOURCES: readonly { source: InterruptSource; label: string; short: string }[] = [
+  { source: "slack", label: "Slack 割り込み", short: "S" },
+  { source: "notion", label: "Notion 割り込み", short: "N" },
+  { source: "pr_review", label: "PR Review 割り込み", short: "P" },
+] as const;
 
 function TimerControls({
   status,
@@ -294,9 +307,14 @@ function TimerControls({
     fn();
   };
   // Top-only complete (ADR 0016 §7): どの状態でも Complete を併置する。
-  // ADR-0059: 割り込みボタンは active 中だけ表示する (走っていないものは「割り込まれない」)。
+  // ADR-0065: source 別の割り込みボタン群は active 中だけ表示する。
+  //
+  // NOTE: 現在の Top カードは「停止 + 完了 + source 別割り込み × 3」で active 時に
+  // 5 ボタンが並ぶ。導線の正しさを優先して詰め込む暫定 UI。専有面積を含む
+  // タイマー UI 全体の再設計は別 issue で扱う (pomodoro 系 timer × task card の
+  // 融合、別 view の検討)。
   return (
-    <div className="flex shrink-0 items-center gap-1.5">
+    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
       {status === "idle" && (
         <button
           type="button"
@@ -310,16 +328,19 @@ function TimerControls({
       )}
       {status === "active" && (
         <>
-          <button
-            type="button"
-            onClick={stop(onInterrupt)}
-            aria-label="割り込み"
-            title="割り込み (1-tap で停止 + 記録、分類は朝の棚卸しで)"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-transparent"
-            style={{ border: `1.5px solid ${color}40`, color: "currentColor" }}
-          >
-            <BoltIcon />
-          </button>
+          {INTERRUPT_SOURCES.map((s) => (
+            <button
+              key={s.source}
+              type="button"
+              onClick={stop(() => onInterrupt(s.source))}
+              aria-label={s.label}
+              title={s.label}
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-transparent font-jp text-[10px] font-semibold"
+              style={{ border: `1.5px solid ${color}40`, color: "currentColor" }}
+            >
+              <span aria-hidden="true">⚡{s.short}</span>
+            </button>
+          ))}
           <button
             type="button"
             onClick={stop(onPauseRequest)}
@@ -368,15 +389,6 @@ function PauseIcon() {
     <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
       <rect x="2" y="2" width="3" height="8" rx="1" />
       <rect x="7" y="2" width="3" height="8" rx="1" />
-    </svg>
-  );
-}
-
-function BoltIcon() {
-  // ADR-0059: 1-tap 割り込みボタンのアイコン。⚡ を線で描画する。
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-      <polygon points="8,1 3,8 6.5,8 5,13 11,5 7.5,5" />
     </svg>
   );
 }

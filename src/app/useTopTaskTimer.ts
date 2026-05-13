@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 
+import type { InterruptSource } from "@/entities/action-log/types";
 import type { PauseReason } from "@/entities/task/time-entries";
 import type { Task } from "@/entities/task/types";
 import type { TopTimerBinding } from "@/features/task-stack/TaskStack";
@@ -44,10 +45,10 @@ export function useTopTaskTimer(topTask: Task | null): UseTopTaskTimerResult {
       onComplete: () => {
         void timer.complete();
       },
-      // ADR-0059: 1-tap で interrupt を発火する。モーダルを挟まないので
-      // setPauseModalOpen は通らない (= reason 選択経路と完全に独立)。
-      onInterrupt: () => {
-        void timer.interrupt();
+      // ADR-0065: source を渡して 1-tap で interrupt を発火する。モーダルを
+      // 挟まないので setPauseModalOpen は通らない (= reason 選択経路と完全に独立)。
+      onInterrupt: (source: InterruptSource) => {
+        void timer.interrupt(source);
       },
     }),
     [timer],

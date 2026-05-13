@@ -507,17 +507,37 @@ describe("log(task_interrupted)", () => {
     vi.restoreAllMocks();
   });
 
-  // ADR-0059: 1-tap 割り込みは task_id だけを metadata に持つ (時刻は created_at で十分、
-  // 分類は朝の棚卸し ADR-0062 で後追い)。column.task_id にも同じ値を書き、
-  // Phase 4 の「割り込み頻度 × 時間帯」分析が単純 SELECT で出せるようにする。
-  test("metadata に task_id のみを含めて insert する (column.task_id も同値)", async () => {
-    log(ACTION_TYPES.TASK_INTERRUPTED, { task_id: "t1" });
+  // ADR-0065: 1-tap 割り込みは task_id + source を metadata に持つ。
+  // column.task_id にも同じ値を書き、Phase 4 の「割り込み頻度 × 時間帯 × source」
+  // 分析が単純 SELECT で出せるようにする。
+  test("metadata に task_id + source を含めて insert する (column.task_id も同値)", async () => {
+    log(ACTION_TYPES.TASK_INTERRUPTED, { task_id: "t1", source: "slack" });
     await flushMicrotasks();
     expect(insertMock).toHaveBeenCalledWith({
       user_id: "user-1",
       action_type: "task_interrupted",
       task_id: "t1",
-      metadata: { task_id: "t1" },
+      metadata: { task_id: "t1", source: "slack" },
+      actor_type: "user",
+    });
+  });
+
+  test("source は notion / pr_review も同じ schema で insert できる", async () => {
+    log(ACTION_TYPES.TASK_INTERRUPTED, { task_id: "t1", source: "notion" });
+    log(ACTION_TYPES.TASK_INTERRUPTED, { task_id: "t1", source: "pr_review" });
+    await flushMicrotasks();
+    expect(insertMock).toHaveBeenNthCalledWith(1, {
+      user_id: "user-1",
+      action_type: "task_interrupted",
+      task_id: "t1",
+      metadata: { task_id: "t1", source: "notion" },
+      actor_type: "user",
+    });
+    expect(insertMock).toHaveBeenNthCalledWith(2, {
+      user_id: "user-1",
+      action_type: "task_interrupted",
+      task_id: "t1",
+      metadata: { task_id: "t1", source: "pr_review" },
       actor_type: "user",
     });
   });

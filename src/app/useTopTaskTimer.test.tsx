@@ -189,9 +189,10 @@ describe("useTopTaskTimer (stack top auto-bind / ADR-0058 Decision 2)", () => {
     expect(m.update).not.toHaveBeenCalled();
   });
 
-  // ADR-0059: 1-tap 割り込みは PauseReasonModal を一切経由しない。timer.interrupt() が
-  // 直接走り、open entry を "interruption" で close して action_log は task_interrupted を残す。
-  test("onInterrupt は modal を開かず、interruption で entry を close + task_interrupted を log する", async () => {
+  // ADR-0065: source 別 1-tap 割り込みは PauseReasonModal を一切経由しない。
+  // timer.interrupt(source) が直接走り、open entry を "interruption" で close、
+  // action_log は task_interrupted + metadata.source を残す。
+  test("onInterrupt(source) は modal を開かず、interruption で entry を close + task_interrupted を log する", async () => {
     const open = {
       id: "te-open",
       taskId: "t1",
@@ -207,12 +208,15 @@ describe("useTopTaskTimer (stack top auto-bind / ADR-0058 Decision 2)", () => {
       wrapper: Wrapper,
     });
     await act(async () => {
-      result.current.topTimer.onInterrupt();
+      result.current.topTimer.onInterrupt("slack");
     });
     expect(result.current.pauseModalOpen).toBe(false);
     expect(m.close).toHaveBeenCalledWith(open, "interruption");
     expect(m.update).toHaveBeenCalledWith("t1", { status: "paused" });
-    expect(logMock).toHaveBeenCalledWith("task_interrupted", { task_id: "t1" });
+    expect(logMock).toHaveBeenCalledWith("task_interrupted", {
+      task_id: "t1",
+      source: "slack",
+    });
   });
 
   test("handlePauseSelect で modal を閉じ、選んだ reason で pause を発火する", async () => {
