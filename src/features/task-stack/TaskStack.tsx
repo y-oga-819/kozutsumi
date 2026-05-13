@@ -33,6 +33,11 @@ export type TopTimerBinding = {
   onPauseRequest: () => void;
   onResume: () => void;
   onComplete: () => void;
+  /**
+   * ADR-0059: 1-tap 割り込み。active 時のみ表示する想定で、押下で timer を
+   * paused に落としつつ `task_interrupted` を 1 件記録する (reason モーダルは出さない)。
+   */
+  onInterrupt: () => void;
 };
 
 type TaskStackProps = {
@@ -148,6 +153,7 @@ export function TaskStack({
                   onPauseRequest={topTimer.onPauseRequest}
                   onResume={topTimer.onResume}
                   onComplete={topTimer.onComplete}
+                  onInterrupt={topTimer.onInterrupt}
                 />
               ) : (
                 <TaskRow

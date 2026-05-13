@@ -202,6 +202,7 @@ describe("ACTION_TYPES", () => {
       TASK_DEPENDENCY_CLEARED: "task_dependency_cleared",
       INTERRUPTION_PUSHED: "interruption_pushed",
       INTERRUPTION_COMPLETED: "interruption_completed",
+      TASK_INTERRUPTED: "task_interrupted",
       STACK_PROPOSED: "stack_proposed",
       STACK_PROPOSAL_ACCEPTED: "stack_proposal_accepted",
       CALENDAR_SYNCED: "calendar_synced",
@@ -487,6 +488,36 @@ describe("log(task_category_changed)", () => {
       action_type: "task_category_changed",
       task_id: "t1",
       metadata: { task_id: "t1", from: "doc", to: "research" },
+      actor_type: "user",
+    });
+  });
+});
+
+describe("log(task_interrupted)", () => {
+  beforeEach(() => {
+    clearLog();
+    __resetLoggerClientForTest();
+    insertMock.mockClear();
+    fromMock.mockClear();
+    getUserMock.mockClear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // ADR-0059: 1-tap 割り込みは task_id だけを metadata に持つ (時刻は created_at で十分、
+  // 分類は朝の棚卸し ADR-0062 で後追い)。column.task_id にも同じ値を書き、
+  // Phase 4 の「割り込み頻度 × 時間帯」分析が単純 SELECT で出せるようにする。
+  test("metadata に task_id のみを含めて insert する (column.task_id も同値)", async () => {
+    log(ACTION_TYPES.TASK_INTERRUPTED, { task_id: "t1" });
+    await flushMicrotasks();
+    expect(insertMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      action_type: "task_interrupted",
+      task_id: "t1",
+      metadata: { task_id: "t1" },
       actor_type: "user",
     });
   });

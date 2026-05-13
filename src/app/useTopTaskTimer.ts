@@ -44,6 +44,11 @@ export function useTopTaskTimer(topTask: Task | null): UseTopTaskTimerResult {
       onComplete: () => {
         void timer.complete();
       },
+      // ADR-0059: 1-tap で interrupt を発火する。モーダルを挟まないので
+      // setPauseModalOpen は通らない (= reason 選択経路と完全に独立)。
+      onInterrupt: () => {
+        void timer.interrupt();
+      },
     }),
     [timer],
   );

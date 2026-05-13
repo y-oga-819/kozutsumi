@@ -72,6 +72,7 @@ const idleTimer: TopTimerBinding = {
   onPauseRequest: noop,
   onResume: noop,
   onComplete: noop,
+  onInterrupt: noop,
 };
 
 const NOW_MS = FIXED_NOW.getTime();
@@ -88,6 +89,7 @@ const topProps = {
   onPauseRequest: noop,
   onResume: noop,
   onComplete: noop,
+  onInterrupt: noop,
 };
 
 describe("TopTaskCard", () => {
@@ -142,6 +144,39 @@ describe("TopTaskCard", () => {
     expect(onPauseRequest).toHaveBeenCalledTimes(1);
     fireEvent.click(getByLabelText("完了"));
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  // ADR-0059: 1-tap 割り込みは active 中だけ表示する。クリックで onInterrupt が
+  // 1 回発火し、reason 選択モーダルは経由しない (= onPauseRequest は呼ばれない)。
+  test("active タスクは『割り込み』ボタンも表示し、押下で onInterrupt が発火する", () => {
+    const onInterrupt = vi.fn();
+    const onPauseRequest = vi.fn();
+    const { getByLabelText } = render(
+      <TopTaskCard
+        {...topProps}
+        task={{ ...baseTask, status: "active" }}
+        onPauseRequest={onPauseRequest}
+        onInterrupt={onInterrupt}
+      />,
+    );
+    fireEvent.click(getByLabelText("割り込み"));
+    expect(onInterrupt).toHaveBeenCalledTimes(1);
+    expect(onPauseRequest).not.toHaveBeenCalled();
+  });
+
+  test("idle / paused では『割り込み』ボタンは表示しない (= active のみ)", () => {
+    const { queryByLabelText, rerender } = render(
+      <TopTaskCard {...topProps} task={{ ...baseTask, status: "idle" }} />,
+    );
+    expect(queryByLabelText("割り込み")).toBeNull();
+    rerender(
+      <TopTaskCard
+        {...topProps}
+        task={{ ...baseTask, status: "paused" }}
+        pauseReason="voluntary"
+      />,
+    );
+    expect(queryByLabelText("割り込み")).toBeNull();
   });
 
   test("paused タスクは『再開』+『完了』を表示する", () => {

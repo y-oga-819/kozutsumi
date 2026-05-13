@@ -52,6 +52,8 @@ type TopTaskCardProps = {
   onPauseRequest: () => void;
   onResume: () => void;
   onComplete: () => void;
+  /** ADR-0059: active 中にだけ表示する 1-tap 割り込みボタンの押下 callback。 */
+  onInterrupt: () => void;
 };
 
 export function TopTaskCard({
@@ -69,6 +71,7 @@ export function TopTaskCard({
   onPauseRequest,
   onResume,
   onComplete,
+  onInterrupt,
 }: TopTaskCardProps) {
   const { projectsById } = useProjects();
   const proj = getProject(projectsById, task.projectId);
@@ -160,6 +163,7 @@ export function TopTaskCard({
               onPauseRequest={onPauseRequest}
               onResume={onResume}
               onComplete={onComplete}
+              onInterrupt={onInterrupt}
             />
           </div>
           {preview && (
@@ -273,6 +277,7 @@ type TimerControlsProps = {
   onPauseRequest: () => void;
   onResume: () => void;
   onComplete: () => void;
+  onInterrupt: () => void;
 };
 
 function TimerControls({
@@ -282,12 +287,14 @@ function TimerControls({
   onPauseRequest,
   onResume,
   onComplete,
+  onInterrupt,
 }: TimerControlsProps) {
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.stopPropagation();
     fn();
   };
   // Top-only complete (ADR 0016 §7): どの状態でも Complete を併置する。
+  // ADR-0059: 割り込みボタンは active 中だけ表示する (走っていないものは「割り込まれない」)。
   return (
     <div className="flex shrink-0 items-center gap-1.5">
       {status === "idle" && (
@@ -302,15 +309,27 @@ function TimerControls({
         </button>
       )}
       {status === "active" && (
-        <button
-          type="button"
-          onClick={stop(onPauseRequest)}
-          aria-label="中断"
-          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-transparent"
-          style={{ border: `1.5px solid ${color}40`, color: "currentColor" }}
-        >
-          <PauseIcon />
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={stop(onInterrupt)}
+            aria-label="割り込み"
+            title="割り込み (1-tap で停止 + 記録、分類は朝の棚卸しで)"
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-transparent"
+            style={{ border: `1.5px solid ${color}40`, color: "currentColor" }}
+          >
+            <BoltIcon />
+          </button>
+          <button
+            type="button"
+            onClick={stop(onPauseRequest)}
+            aria-label="中断"
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-transparent"
+            style={{ border: `1.5px solid ${color}40`, color: "currentColor" }}
+          >
+            <PauseIcon />
+          </button>
+        </>
       )}
       {status === "paused" && (
         <button
@@ -349,6 +368,15 @@ function PauseIcon() {
     <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
       <rect x="2" y="2" width="3" height="8" rx="1" />
       <rect x="7" y="2" width="3" height="8" rx="1" />
+    </svg>
+  );
+}
+
+function BoltIcon() {
+  // ADR-0059: 1-tap 割り込みボタンのアイコン。⚡ を線で描画する。
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+      <polygon points="8,1 3,8 6.5,8 5,13 11,5 7.5,5" />
     </svg>
   );
 }

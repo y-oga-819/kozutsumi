@@ -12,6 +12,11 @@ export type ActionType =
   | "task_dependency_cleared"
   | "interruption_pushed"
   | "interruption_completed"
+  // ADR-0059: 1-tap 割り込みボタンで timer を停止した瞬間を記録する。
+  // 「事前分類は要求しない」設計なので metadata は task_id のみ。
+  // 旧 architecture §1.4 の interruption_pushed / interruption_completed
+  // (push/pop モデル) からは離れた別系統のシグナル。
+  | "task_interrupted"
   | "stack_proposed"
   | "stack_proposal_accepted"
   | "calendar_synced"
@@ -167,6 +172,10 @@ export type ActionMetadataMap = {
   };
   interruption_pushed: { task_id: string };
   interruption_completed: { task_id: string };
+  // ADR-0059: 1-tap 割り込み記録。timer を停止した時点の task_id のみ。
+  // 分類 / 振り返り / タスク化は朝の棚卸し (ADR-0062) で後追いするため、
+  // ここに分類フィールドは持たない (中断理由は close 時の pause_reason で別途記録される)。
+  task_interrupted: { task_id: string };
   stack_proposed: Record<string, unknown>;
   stack_proposal_accepted: Record<string, unknown>;
   calendar_synced: {

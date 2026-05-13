@@ -25,6 +25,15 @@ type TaskTimerApi = {
   pause: (reason: PauseReason) => Promise<void>;
   resume: () => Promise<void>;
   complete: () => Promise<void>;
+  /**
+   * ADR-0059: 1-tap 割り込み。pause と同じ状態遷移 (active → paused) を踏むが、
+   * reason 選択モーダルを挟まず、time_entries は `pause_reason="interruption"`
+   * で閉じる。action_log は `task_paused` ではなく `task_interrupted` を 1 件
+   * だけ落とし、1 タップ操作だったことを後段の朝の棚卸し / 行動分析が識別できる
+   * ようにする (= 同じ pause_reason="interruption" でも、モーダル経由の中断と
+   * 1-tap 割り込みは action_log 上で区別される)。
+   */
+  interrupt: () => Promise<void>;
 };
 
 /**
@@ -124,6 +133,20 @@ export function useTaskTimer(task: Task | null): TaskTimerApi {
     [task, openEntry, taskGateway, taskTimeEntryGateway, invalidate],
   );
 
+  const interrupt = useCallback(async () => {
+    if (!task) return;
+    const open = openEntry ?? (await taskTimeEntryGateway.getOpen(task.id));
+    if (open) {
+      await taskTimeEntryGateway.close(open, "interruption");
+    }
+    await taskGateway.update(task.id, { status: "paused" });
+    // ADR-0059: 1-tap 割り込みは task_paused を打たず task_interrupted のみ。
+    // state 遷移 (active → paused) は task_time_entries.paused_at と
+    // tasks.status で再構成可能なので、action_log では「1-tap だった」事実だけを残す。
+    log(ACTION_TYPES.TASK_INTERRUPTED, { task_id: task.id });
+    await invalidate();
+  }, [task, openEntry, taskGateway, taskTimeEntryGateway, invalidate]);
+
   const resume = useCallback(async () => {
     if (!task) return;
     await taskTimeEntryGateway.start(task.id);
@@ -169,6 +192,7 @@ export function useTaskTimer(task: Task | null): TaskTimerApi {
       pause,
       resume,
       complete,
+      interrupt,
     }),
     [
       isActive,
@@ -181,6 +205,7 @@ export function useTaskTimer(task: Task | null): TaskTimerApi {
       pause,
       resume,
       complete,
+      interrupt,
     ],
   );
 }

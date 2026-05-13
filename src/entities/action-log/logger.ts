@@ -30,6 +30,9 @@ export const ACTION_TYPES = Object.freeze({
   TASK_DEPENDENCY_CLEARED: "task_dependency_cleared",
   INTERRUPTION_PUSHED: "interruption_pushed",
   INTERRUPTION_COMPLETED: "interruption_completed",
+  // ADR-0059: 1-tap 割り込み記録。task_paused とは別系統で、「事前分類なし」の
+  // 1 タップ操作だったことを後段の朝の棚卸し / 行動分析が区別できるようにする。
+  TASK_INTERRUPTED: "task_interrupted",
   STACK_PROPOSED: "stack_proposed",
   STACK_PROPOSAL_ACCEPTED: "stack_proposal_accepted",
   CALENDAR_SYNCED: "calendar_synced",
