@@ -582,4 +582,120 @@ describe("TaskStack", () => {
     fireEvent.click(getByText("Top task"));
     expect(onOpenDetail).toHaveBeenCalledWith("t1");
   });
+
+  // ADR-0058 Decision 2「stack top が timer の current task として自動 bind される」
+  // を行レンダリング側で守る。任意のタスクを「current task」として明示選択する UI
+  // (Top 以外の行の start/pause ボタン等) が増えると本テストで検出する。
+  describe("stack top と timer の auto-bind (ADR-0058 Decision 2)", () => {
+    test("timer 動詞 (開始/中断/再開/完了) は stack top の行にのみ存在する", () => {
+      const { getAllByLabelText, queryAllByLabelText } = render(
+        <TaskStack
+          events={[]}
+          now={NOW_MS}
+          // Top: idle (開始 + 完了), Second/Third: idle (動詞ボタン無し)
+          pendingTasks={pending}
+          doneTasks={[]}
+          topTimer={idleTimer}
+          onReorder={noop}
+          onReorderGroup={noop}
+          onToggleDone={noop}
+          onOpenDetail={noop}
+        />,
+      );
+      // Top: idle なので 開始 + 完了 が出る (TopTaskCard tests と整合)
+      expect(getAllByLabelText("開始")).toHaveLength(1);
+      expect(getAllByLabelText("完了")).toHaveLength(1);
+      // Top 以外の行 (TaskRow) には timer 動詞ボタンが存在しないこと
+      expect(queryAllByLabelText("中断")).toHaveLength(0);
+      expect(queryAllByLabelText("再開")).toHaveLength(0);
+    });
+
+    test("Top が active でも『中断/完了』ボタンは 1 つだけ (他行に伝播しない)", () => {
+      const activePending: Task[] = [
+        { ...baseTask, id: "t1", title: "Top task", status: "active" },
+        { ...baseTask, id: "t2", title: "Second task" },
+        { ...baseTask, id: "t3", title: "Third task" },
+      ];
+      const { getAllByLabelText, queryAllByLabelText } = render(
+        <TaskStack
+          events={[]}
+          now={NOW_MS}
+          pendingTasks={activePending}
+          doneTasks={[]}
+          topTimer={{ ...idleTimer, elapsedSeconds: 60 }}
+          onReorder={noop}
+          onReorderGroup={noop}
+          onToggleDone={noop}
+          onOpenDetail={noop}
+        />,
+      );
+      expect(getAllByLabelText("中断")).toHaveLength(1);
+      expect(getAllByLabelText("完了")).toHaveLength(1);
+      expect(queryAllByLabelText("開始")).toHaveLength(0);
+      expect(queryAllByLabelText("再開")).toHaveLength(0);
+    });
+
+    test("Top の『開始』ボタン押下で topTimer.onStart が発火する (Top 経由でのみ結線)", () => {
+      const onStart = vi.fn();
+      const { getByLabelText } = render(
+        <TaskStack
+          events={[]}
+          now={NOW_MS}
+          pendingTasks={pending}
+          doneTasks={[]}
+          topTimer={{ ...idleTimer, onStart }}
+          onReorder={noop}
+          onReorderGroup={noop}
+          onToggleDone={noop}
+          onOpenDetail={noop}
+        />,
+      );
+      fireEvent.click(getByLabelText("開始"));
+      expect(onStart).toHaveBeenCalledTimes(1);
+    });
+
+    test("pendingTasks の並び順が変わると Top に表示される task が追従する", () => {
+      const order1: Task[] = [
+        { ...baseTask, id: "t1", title: "Top task" },
+        { ...baseTask, id: "t2", title: "Second task" },
+      ];
+      const { rerender, container, getAllByLabelText } = render(
+        <TaskStack
+          events={[]}
+          now={NOW_MS}
+          pendingTasks={order1}
+          doneTasks={[]}
+          topTimer={idleTimer}
+          onReorder={noop}
+          onReorderGroup={noop}
+          onToggleDone={noop}
+          onOpenDetail={noop}
+        />,
+      );
+      // 最初は Top = "Top task"
+      const firstLi = container.querySelectorAll("ul[aria-label='タスクスタック'] > li")[0];
+      expect(firstLi?.textContent).toContain("Top task");
+
+      // 並び替えで Second が先頭に来た想定 (AppShell が pendingTasks を入れ替える)
+      const order2: Task[] = [order1[1], order1[0]];
+      rerender(
+        <TaskStack
+          events={[]}
+          now={NOW_MS}
+          pendingTasks={order2}
+          doneTasks={[]}
+          topTimer={idleTimer}
+          onReorder={noop}
+          onReorderGroup={noop}
+          onToggleDone={noop}
+          onOpenDetail={noop}
+        />,
+      );
+      const newFirstLi = container.querySelectorAll("ul[aria-label='タスクスタック'] > li")[0];
+      // 新しい Top は元の Second
+      expect(newFirstLi?.textContent).toContain("Second task");
+      // 並び替え後も Top にのみ動詞が集中
+      expect(getAllByLabelText("開始")).toHaveLength(1);
+    });
+  });
 });
