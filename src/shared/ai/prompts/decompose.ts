@@ -16,11 +16,11 @@
  * - 子の task_category も同じ AI 呼び出しで推論する (ADR 0022)。値域外・欠損は null に倒し、
  *   `other` で握り潰さない (ADR 0013 augmentation only)。category だけの parse 失敗で
  *   子の生成自体は止めない (title / estimated_minutes が取れていれば子を作る)。
- * - 子の完了条件 (goal / done / first_step) を AI が言語化する (ADR 0061)。粒度の目安は
- *   30-90 分 (1h 中心) の推奨で、強制ではない。完了条件は body と同じフェイルソフトで、
- *   欠損・型違いは空文字に倒し、子の生成自体は止めない。DB 永続化と schema 詳細
- *   (項目の必須・任意 / 競合解決) は #244 ADR / #246 で確定する。本モジュールは prompt
- *   生成と parse までを担う。
+ * - 子の完了条件 (deliverable / done / first_step) を AI が言語化する (ADR 0061 / 0066)。
+ *   粒度の目安は 30-90 分 (1h 中心) の推奨で、強制ではない。完了条件は body と同じ
+ *   フェイルソフトで、欠損・型違いは空文字に倒し、子の生成自体は止めない。DB 永続化は
+ *   #246、補完タイミング / 競合解決は #244 で確定する。本モジュールは prompt 生成と
+ *   parse までを担う。
  */
 
 import {
@@ -62,13 +62,14 @@ export type DecomposedChild = {
    */
   taskSize: TaskSizeValue | null;
   /**
-   * ADR 0061 / Issue #243: 子タスクの完了条件。AI が言語化する 3 項目で、
-   * 「ゴールが見えないタスクで詰まる」「First step が大きすぎて着手できない」を
-   * 予防する (goal = 達成目標 / done = 完了判定条件 / firstStep = 最初の一手)。
-   * body と同じフェイルソフト: 欠損・型違いは空文字に倒す。DB 永続化と schema
-   * 詳細は #244 ADR / #246 で確定するため、本 issue では parse まで。
+   * ADR 0061 / 0066 / Issue #243: 子タスクの完了条件。AI が言語化する 3 項目で、
+   * 別軸 (何を生むか / いつ完了か / どう始めるか) を表す:
+   * - deliverable = そのタスクが生む成果物 (名詞)。「何が出来上がったか」
+   * - done        = deliverable が完成したと言える観測可能な条件
+   * - firstStep   = 着手の最初の一手 (大きすぎると着手障壁になる)
+   * body と同じフェイルソフト: 欠損・型違いは空文字に倒す。DB 永続化は #246。
    */
-  goal: string;
+  deliverable: string;
   done: string;
   firstStep: string;
 };
@@ -78,8 +79,8 @@ const MAX_TITLE_LEN = 80;
 // task body 全体が肥大化しないよう 600 文字で hard cap する (truncate)。
 const TARGET_BODY_LEN = 200;
 const MAX_BODY_LEN = 600;
-// 完了条件 (goal / done / first_step, ADR 0061) は一文程度の短い文言を想定する。
-// AI が暴走しても 1 項目 200 文字で hard cap する (truncate)。
+// 完了条件 (deliverable / done / first_step, ADR 0061 / 0066) は一文程度の短い文言を
+// 想定する。AI が暴走しても 1 項目 200 文字で hard cap する (truncate)。
 const MAX_CRITERION_LEN = 200;
 
 const ALLOWED_ESTIMATE_BUCKETS = [5, 10, 15, 20, 30, 45, 60, 90, 120] as const;
@@ -156,11 +157,11 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
     "estimated_minutes (≤ 2h 専用) と task_size (全 size 帯) は別軸。",
     "task_size は必ず埋める。estimated_minutes が null でも task_size は埋める。",
     "",
-    "# 各子タスクの完了条件 (goal / done / first_step)",
-    "着手のハードルを下げるため、各子タスクに完了条件を 3 項目言語化する。",
-    "- goal       : この子タスクで最終的に何を達成するのか。1 文で簡潔に書く。",
-    "- done       : 何が出来ていれば「完了」と判断できるかの具体条件。曖昧な状態 (「だいたい出来た」) ではなく観測可能な条件にする。",
-    "- first_step : 着手してまず手を動かす最初の一手。ここが大きいと着手できないので、すぐ始められる小ささにする。",
+    "# 各子タスクの完了条件 (deliverable / done / first_step)",
+    "着手のハードルを下げるため、各子タスクに完了条件を 3 項目言語化する。3 項目は別軸 (何を生むか / いつ完了か / どう始めるか)。",
+    "- deliverable : そのタスクが生む成果物を名詞で書く。「時間を使った」ではなく「何が出来上がったか」。状態変化タスクなら「〜された状態」。",
+    "- done        : deliverable が完成したと言える観測可能な条件。曖昧な状態 (「だいたい出来た」) ではなく、満たしたか判定できる条件にする。",
+    "- first_step  : 着手してまず手を動かす最初の一手。ここが大きいと着手できないので、すぐ始められる小ささにする。",
     "3 項目とも各子タスクに含める。タスクが単純で書くことが薄くても、最低限の一文を埋める。",
     'どうしても言語化できない項目だけ空文字 "" を返してよい。',
     "",
@@ -173,8 +174,8 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
     "",
     "# 出力形式",
     "JSON 配列のみを返す。前後に説明文や markdown fence を付けない。",
-    "各要素は title / body / estimated_minutes / task_category / task_size / goal / done / first_step の 8 フィールドを持つ。",
-    '例: [{"title":"...","body":"- 手順1\\n- 手順2","estimated_minutes":30,"task_category":"coding","task_size":"30m","goal":"...","done":"...","first_step":"..."},{"title":"...","body":"","estimated_minutes":null,"task_category":"research","task_size":null,"goal":"...","done":"...","first_step":"..."}]',
+    "各要素は title / body / estimated_minutes / task_category / task_size / deliverable / done / first_step の 8 フィールドを持つ。",
+    '例: [{"title":"...","body":"- 手順1\\n- 手順2","estimated_minutes":30,"task_category":"coding","task_size":"30m","deliverable":"...","done":"...","first_step":"..."},{"title":"...","body":"","estimated_minutes":null,"task_category":"research","task_size":null,"deliverable":"...","done":"...","first_step":"..."}]',
   ].join("\n");
 }
 
@@ -188,8 +189,8 @@ export function buildDecomposePrompt(parent: DecomposeInput): string {
  *   この「1 件 → skipped」品質ガードは件数 cap ではないので残す)
  * - title が空 / 80 文字超過 → entry を捨てる (それ以外を採用)
  * - estimated_minutes が許容バケット外 → null に倒す (整数 / null 以外も null)
- * - goal / done / first_step (完了条件, ADR 0061) は欠損・型違いを空文字に倒す
- *   (body と同じフェイルソフト。長すぎは truncate。entry は捨てない)
+ * - deliverable / done / first_step (完了条件, ADR 0061 / 0066) は欠損・型違いを空文字に
+ *   倒す (body と同じフェイルソフト。長すぎは truncate。entry は捨てない)
  *
  * 戻り値:
  *   `null`            : パース不能 (= AI 失敗扱い、`none` のまま残す)
@@ -247,16 +248,25 @@ function normalizeChild(raw: unknown): DecomposedChild | null {
   // body は欠損 / 型違い → 空文字。長すぎ → 末尾 truncate。空文字を許容する
   // (title だけで十分な子の場合に AI が "" を返す)。
   const body = normalizeBody(obj.body);
-  // ADR 0061: 完了条件 3 項目も body 同様フェイルソフト。欠損・型違いは空文字に倒し、
-  // 子の生成自体は止めない (schema 詳細は #244 ADR で確定するため、本 issue では空許容)。
-  const goal = normalizeCriterion(obj.goal);
+  // ADR 0061 / 0066: 完了条件 3 項目も body 同様フェイルソフト。欠損・型違いは空文字に
+  // 倒し、子の生成自体は止めない (AI が言語化できないケースを空で許容する)。
+  const deliverable = normalizeCriterion(obj.deliverable);
   const done = normalizeCriterion(obj.done);
   const firstStep = normalizeCriterion(obj.first_step);
-  return { title, body, estimatedMinutes: estimate, taskCategory, taskSize, goal, done, firstStep };
+  return {
+    title,
+    body,
+    estimatedMinutes: estimate,
+    taskCategory,
+    taskSize,
+    deliverable,
+    done,
+    firstStep,
+  };
 }
 
 /**
- * 完了条件 (goal / done / first_step, ADR 0061) の値ガード。
+ * 完了条件 (deliverable / done / first_step, ADR 0061 / 0066) の値ガード。
  *
  * - 文字列以外 / 欠損 → 空文字 (body と同じフェイルソフト。子の生成は止めない)
  * - MAX_CRITERION_LEN 超過 → 末尾 truncate (AI 暴走時の hard cap)
