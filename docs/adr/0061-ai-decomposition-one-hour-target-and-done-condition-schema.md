@@ -50,6 +50,6 @@ AI 分解の出力 schema と粒度を以下に確定する:
 
 ## Notes
 
-- 完了条件 schema の詳細 (項目数 / 必須・任意 / 補完タイミング / ユーザー手動入力との競合解決) は M-β 設計時に確定する。本 ADR では「Goal / Done / First step を AI が言語化する」「目標は 30-90 分推奨」までを決める
+- 完了条件 schema の詳細 (項目数 / 必須・任意 / 補完タイミング / ユーザー手動入力との競合解決) は M-β 設計時に確定する。本 ADR では「Goal / Done / First step を AI が言語化する」「目標は 30-90 分推奨」までを決める → 完了条件 schema の **項目** は [ADR-0066](./0066-decompose-completion-criteria-deliverable-done-first-step.md) で確定 (Goal は廃止し `deliverable` に置換)。補完タイミング / 競合解決は引き続き #244 の論点。
 - ADR-0017 の race condition (親 active 化中に分解結果到着) は本 ADR で AI 分解を timer 文脈外に限定したため発生しない (timer 中は分解が走らない)
 - 将来見直す条件: dogfooding で「1h 推奨」が user の作業リズムに合わないことが繰り返し観測されたら推奨レンジを再調整
