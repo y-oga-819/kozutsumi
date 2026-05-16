@@ -64,6 +64,7 @@ ADR 0013 で AI は augmentation only と決めており、core path (タスク 
 
 - 「分解結果到着までの暫定 status pill 表示時間が長すぎる場合のバナー / 取消し UI」の必要性は実装後の運用で判断する。本 ADR では決めない。
 - race condition (親 active 化中に分解結果が到着) の具体的解決策は実装 issue で確定する。本 ADR は「非同期にする」までしか決めない。
+- 発火制御の追加: Decision 2 の自動発火 (作成時に fire-and-forget) は維持されるが、[ADR-0067](./0067-ai-decompose-opt-out-auto-firing.md) で opt-out 制御 (作成フォームの per-task トグル + ユーザー設定 / 既定 ON) と手動分解ボタンが追加された。自動発火はデフォルトのままで、ユーザーが切れる退路を足す位置づけ。本 ADR の非同期 (fire-and-forget / core path を AI から独立させる) という核は変更されない。
 - 将来見直す条件:
   - Gemini が streaming で部分結果を返せるようになり、同期 UX のレイテンシ感が許容できる
   - タスク追加 + 分解の一気通貫が UX 上強く望まれるユースケースが出てくる
