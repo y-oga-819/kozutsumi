@@ -44,6 +44,39 @@ describe("buildDecomposePrompt", () => {
     expect(prompt).toContain("親タスクの文脈なしで");
   });
 
+  // ADR 0061 / Issue #243: 1 時間粒度を「推奨目安」として prompt に明示する。
+  // 強制ではない (5 分や 2〜3 時間も許容) ことも併記する。
+  test("ADR 0061: 30〜90 分 (1h 中心) の粒度目安が推奨として prompt に含まれる", () => {
+    const prompt = buildDecomposePrompt({
+      title: "x",
+      body: "",
+      estimatedMinutes: null,
+    });
+
+    expect(prompt).toContain("30〜90 分");
+    expect(prompt).toContain("1 時間");
+    // 強制ではないことが明示されている (推奨目安)
+    expect(prompt).toContain("強制ではない");
+  });
+
+  // ADR 0061 / Issue #243: 各子に完了条件 (goal / done / first_step) を生成させる。
+  test("ADR 0061: 完了条件 (goal / done / first_step) の生成指示が prompt に含まれる", () => {
+    const prompt = buildDecomposePrompt({
+      title: "x",
+      body: "",
+      estimatedMinutes: null,
+    });
+
+    expect(prompt).toContain("完了条件");
+    expect(prompt).toContain("goal");
+    expect(prompt).toContain("done");
+    expect(prompt).toContain("first_step");
+    // 出力例に 3 項目が含まれる
+    expect(prompt).toContain('"goal"');
+    expect(prompt).toContain('"done"');
+    expect(prompt).toContain('"first_step"');
+  });
+
   test("task_category の値域と各項目の定義が prompt に含まれる (ADR 0022)", () => {
     const prompt = buildDecomposePrompt({
       title: "x",
@@ -192,7 +225,7 @@ describe("buildDecomposePrompt", () => {
 });
 
 describe("parseDecomposeResponse", () => {
-  test("正常な JSON 配列をパースする (estimated_minutes / task_category / task_size とも値域内なら採用)", () => {
+  test("正常な JSON 配列をパースする (8 フィールドとも値域内なら採用、ADR 0061)", () => {
     const input = JSON.stringify([
       {
         title: "下準備をする",
@@ -200,6 +233,9 @@ describe("parseDecomposeResponse", () => {
         estimated_minutes: 30,
         task_category: "research",
         task_size: "30m",
+        goal: "本作業に必要な前提を揃える",
+        done: "資料と環境がすべて手元にある",
+        first_step: "資料リストを書き出す",
       },
       {
         title: "本作業を進める",
@@ -207,6 +243,9 @@ describe("parseDecomposeResponse", () => {
         estimated_minutes: null,
         task_category: "coding",
         task_size: "1h",
+        goal: "機能を一通り動く状態にする",
+        done: "ローカルで動作確認できる",
+        first_step: "エントリポイントの関数を作る",
       },
       {
         title: "振り返り",
@@ -214,6 +253,9 @@ describe("parseDecomposeResponse", () => {
         estimated_minutes: 15,
         task_category: "doc",
         task_size: "15m",
+        goal: "次に活かせる学びを残す",
+        done: "メモが 3 行以上書けている",
+        first_step: "今日詰まった点を 1 つ書く",
       },
     ]);
 
@@ -226,6 +268,9 @@ describe("parseDecomposeResponse", () => {
         estimatedMinutes: 30,
         taskCategory: "research",
         taskSize: "30m",
+        goal: "本作業に必要な前提を揃える",
+        done: "資料と環境がすべて手元にある",
+        firstStep: "資料リストを書き出す",
       },
       {
         title: "本作業を進める",
@@ -233,6 +278,9 @@ describe("parseDecomposeResponse", () => {
         estimatedMinutes: null,
         taskCategory: "coding",
         taskSize: "1h",
+        goal: "機能を一通り動く状態にする",
+        done: "ローカルで動作確認できる",
+        firstStep: "エントリポイントの関数を作る",
       },
       {
         title: "振り返り",
@@ -240,6 +288,9 @@ describe("parseDecomposeResponse", () => {
         estimatedMinutes: 15,
         taskCategory: "doc",
         taskSize: "15m",
+        goal: "次に活かせる学びを残す",
+        done: "メモが 3 行以上書けている",
+        firstStep: "今日詰まった点を 1 つ書く",
       },
     ]);
   });
@@ -251,8 +302,26 @@ describe("parseDecomposeResponse", () => {
     const result = parseDecomposeResponse(input);
 
     expect(result).toEqual([
-      { title: "a", body: "", estimatedMinutes: 15, taskCategory: "coding", taskSize: "15m" },
-      { title: "b", body: "", estimatedMinutes: 15, taskCategory: "doc", taskSize: "30m" },
+      {
+        title: "a",
+        body: "",
+        estimatedMinutes: 15,
+        taskCategory: "coding",
+        taskSize: "15m",
+        goal: "",
+        done: "",
+        firstStep: "",
+      },
+      {
+        title: "b",
+        body: "",
+        estimatedMinutes: 15,
+        taskCategory: "doc",
+        taskSize: "30m",
+        goal: "",
+        done: "",
+        firstStep: "",
+      },
     ]);
   });
 
@@ -298,8 +367,26 @@ describe("parseDecomposeResponse", () => {
     const result = parseDecomposeResponse(JSON.stringify(items));
 
     expect(result).toEqual([
-      { title: "ok-1", body: "", estimatedMinutes: 15, taskCategory: "coding", taskSize: null },
-      { title: "ok-2", body: "", estimatedMinutes: 15, taskCategory: "doc", taskSize: null },
+      {
+        title: "ok-1",
+        body: "",
+        estimatedMinutes: 15,
+        taskCategory: "coding",
+        taskSize: null,
+        goal: "",
+        done: "",
+        firstStep: "",
+      },
+      {
+        title: "ok-2",
+        body: "",
+        estimatedMinutes: 15,
+        taskCategory: "doc",
+        taskSize: null,
+        goal: "",
+        done: "",
+        firstStep: "",
+      },
     ]);
   });
 
@@ -313,12 +400,7 @@ describe("parseDecomposeResponse", () => {
 
     const result = parseDecomposeResponse(JSON.stringify(items));
 
-    expect(result).toEqual([
-      { title: "a", body: "", estimatedMinutes: null, taskCategory: "coding", taskSize: null },
-      { title: "b", body: "", estimatedMinutes: null, taskCategory: "coding", taskSize: null },
-      { title: "c", body: "", estimatedMinutes: null, taskCategory: "coding", taskSize: null },
-      { title: "d", body: "", estimatedMinutes: 30, taskCategory: "coding", taskSize: null },
-    ]);
+    expect(result?.map((c) => c.estimatedMinutes)).toEqual([null, null, null, 30]);
   });
 
   test("task_category が値域外 / 欠損 / 型違い → null に倒す (entry は採用、ADR 0022 フェイルソフト)", () => {
@@ -333,14 +415,7 @@ describe("parseDecomposeResponse", () => {
 
     const result = parseDecomposeResponse(JSON.stringify(items));
 
-    expect(result).toEqual([
-      { title: "a", body: "", estimatedMinutes: 15, taskCategory: null, taskSize: null },
-      { title: "b", body: "", estimatedMinutes: 15, taskCategory: null, taskSize: null },
-      { title: "c", body: "", estimatedMinutes: 15, taskCategory: null, taskSize: null },
-      { title: "d", body: "", estimatedMinutes: 15, taskCategory: null, taskSize: null },
-      { title: "e", body: "", estimatedMinutes: 15, taskCategory: null, taskSize: null },
-      { title: "f", body: "", estimatedMinutes: 15, taskCategory: "doc", taskSize: null },
-    ]);
+    expect(result?.map((c) => c.taskCategory)).toEqual([null, null, null, null, null, "doc"]);
   });
 
   test("task_category は大文字 / 前後空白を許容して値域に合わせる (Coding → coding)", () => {
@@ -351,10 +426,7 @@ describe("parseDecomposeResponse", () => {
 
     const result = parseDecomposeResponse(JSON.stringify(items));
 
-    expect(result).toEqual([
-      { title: "a", body: "", estimatedMinutes: 15, taskCategory: "coding", taskSize: null },
-      { title: "b", body: "", estimatedMinutes: 15, taskCategory: "admin", taskSize: null },
-    ]);
+    expect(result?.map((c) => c.taskCategory)).toEqual(["coding", "admin"]);
   });
 
   test("task_size が値域外 / 欠損 / 型違い → null に倒す (entry は採用、ADR 0038 フェイルソフト)", () => {
@@ -431,6 +503,87 @@ describe("parseDecomposeResponse", () => {
     ]);
   });
 
+  // ADR 0061 / Issue #243: 完了条件 3 項目の抽出。
+  test("ADR 0061: goal / done / first_step が値域内なら抽出する", () => {
+    const items = [
+      {
+        title: "a",
+        body: "",
+        estimated_minutes: 15,
+        task_category: "coding",
+        goal: "API を叩けるようにする",
+        done: "200 が返ってくる",
+        first_step: "エンドポイント URL を控える",
+      },
+      {
+        title: "b",
+        body: "",
+        estimated_minutes: 15,
+        task_category: "coding",
+        goal: "テストを通す",
+        done: "全 case green",
+        first_step: "失敗ログを読む",
+      },
+    ];
+
+    const result = parseDecomposeResponse(JSON.stringify(items));
+
+    expect(result?.map((c) => ({ goal: c.goal, done: c.done, firstStep: c.firstStep }))).toEqual([
+      {
+        goal: "API を叩けるようにする",
+        done: "200 が返ってくる",
+        firstStep: "エンドポイント URL を控える",
+      },
+      { goal: "テストを通す", done: "全 case green", firstStep: "失敗ログを読む" },
+    ]);
+  });
+
+  test("ADR 0061: goal / done / first_step が欠損 / 型違い → 空文字に倒す (entry は採用、フェイルソフト)", () => {
+    const items = [
+      { title: "a", body: "", estimated_minutes: 15, task_category: "coding" }, // 全欠損
+      { title: "b", body: "", estimated_minutes: 15, task_category: "coding", goal: 123 }, // 型違い (number)
+      { title: "c", body: "", estimated_minutes: 15, task_category: "coding", done: null }, // 明示 null
+      {
+        title: "d",
+        body: "",
+        estimated_minutes: 15,
+        task_category: "coding",
+        goal: "G のみ",
+      }, // goal だけ
+    ];
+
+    const result = parseDecomposeResponse(JSON.stringify(items));
+
+    expect(result?.map((c) => ({ goal: c.goal, done: c.done, firstStep: c.firstStep }))).toEqual([
+      { goal: "", done: "", firstStep: "" },
+      { goal: "", done: "", firstStep: "" },
+      { goal: "", done: "", firstStep: "" },
+      { goal: "G のみ", done: "", firstStep: "" },
+    ]);
+  });
+
+  test("ADR 0061: 完了条件は前後空白を trim し、200 文字超過は truncate する", () => {
+    const longGoal = "あ".repeat(250);
+    const items = [
+      {
+        title: "a",
+        body: "",
+        estimated_minutes: 15,
+        task_category: "coding",
+        goal: "  前後に空白  ",
+        done: longGoal,
+        first_step: "短い",
+      },
+      { title: "b", body: "", estimated_minutes: 15, task_category: "coding" },
+    ];
+
+    const result = parseDecomposeResponse(JSON.stringify(items));
+
+    expect(result?.[0].goal).toBe("前後に空白");
+    expect(result?.[0].done.length).toBe(200);
+    expect(result?.[0].firstStep).toBe("短い");
+  });
+
   test("body が欠損 / 型違い (number / null) → 空文字に倒す (entry は採用、フェイルソフト)", () => {
     const items = [
       { title: "a", estimated_minutes: 15, task_category: "coding" }, // 欠損
@@ -485,6 +638,9 @@ describe("parseDecomposeResponse", () => {
         estimatedMinutes: 15,
         taskCategory: "research",
         taskSize: "15m",
+        goal: "",
+        done: "",
+        firstStep: "",
       },
       {
         title: "クライアント実装をする",
@@ -492,6 +648,9 @@ describe("parseDecomposeResponse", () => {
         estimatedMinutes: 30,
         taskCategory: "coding",
         taskSize: "30m",
+        goal: "",
+        done: "",
+        firstStep: "",
       },
     ]);
   });
