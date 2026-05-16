@@ -34,6 +34,13 @@ export type UpdateTaskInput = {
   decomposeStatus?: DecomposeStatus;
   taskCategory?: TaskCategory | null;
   taskSize?: TaskSize | null;
+  /**
+   * 完了条件の編集 (ADR 0061 / 0066, #246)。詳細パネルからの user 手動入力。
+   * フェイルソフトで空文字を許容する (null は持たない)。
+   */
+  deliverable?: string;
+  done?: string;
+  firstStep?: string;
   completedAt?: string | null;
 };
 

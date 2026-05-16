@@ -52,6 +52,9 @@ function makeRow(overrides: Partial<Tables<"tasks">> = {}): Tables<"tasks"> {
     decompose_status: "none",
     task_category: null,
     task_size: null,
+    deliverable: "",
+    done: "",
+    first_step: "",
     created_at: "2026-04-27T00:00:00.000Z",
     completed_at: null,
     ...overrides,
@@ -261,6 +264,82 @@ describe("SupabaseTaskGateway: task_size mapping (#169)", () => {
 
     expect(tasks).toHaveLength(1);
     expect(tasks[0]!.taskSize).toBe("1d");
+  });
+});
+
+/**
+ * 完了条件 mapping (#246 / ADR 0061 / 0066)。
+ * deliverable / done / first_step は task_category / task_size と同じ薄ラッパー責務。
+ * CHECK 制約 / NOT NULL DEFAULT '' の検証は migration 側 (raw SQL) の責務。
+ */
+describe("SupabaseTaskGateway: completion criteria mapping (#246)", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  test("update: 完了条件 3 項目が update.deliverable / done / first_step に乗る", async () => {
+    const { client, chain } = makeSupabase(
+      makeRow({ deliverable: "成果物 X", done: "条件 Y", first_step: "一手 Z" }),
+    );
+    const gateway = new SupabaseTaskGateway(client);
+
+    const task = await gateway.update("t1", {
+      deliverable: "成果物 X",
+      done: "条件 Y",
+      firstStep: "一手 Z",
+    });
+
+    expect(chain.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deliverable: "成果物 X",
+        done: "条件 Y",
+        first_step: "一手 Z",
+      }),
+    );
+    expect(task.deliverable).toBe("成果物 X");
+    expect(task.done).toBe("条件 Y");
+    expect(task.firstStep).toBe("一手 Z");
+  });
+
+  test("update: 空文字も明示的に書ける (フェイルソフトで完了条件をクリアする)", async () => {
+    const { client, chain } = makeSupabase(makeRow());
+    const gateway = new SupabaseTaskGateway(client);
+
+    await gateway.update("t1", { deliverable: "", done: "", firstStep: "" });
+
+    expect(chain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ deliverable: "", done: "", first_step: "" }),
+    );
+  });
+
+  test("update: 完了条件を patch に含めなければ update に乗らない", async () => {
+    const { client, chain } = makeSupabase(makeRow());
+    const gateway = new SupabaseTaskGateway(client);
+
+    await gateway.update("t1", { title: "y" });
+
+    const call = chain.update.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(call).not.toHaveProperty("deliverable");
+    expect(call).not.toHaveProperty("done");
+    expect(call).not.toHaveProperty("first_step");
+  });
+
+  test("list: row.deliverable / done / first_step が Task の同名フィールドに写る", async () => {
+    const { client } = makeSupabase(makeRow());
+    const row = makeRow({ deliverable: "d", done: "x", first_step: "f" });
+    const orderInner = vi.fn(async () => ({ data: [row], error: null }));
+    const orderOuter = vi.fn(() => ({ order: orderInner }));
+    const select = vi.fn(() => ({ order: orderOuter }));
+    (client.from as ReturnType<typeof vi.fn>).mockReturnValueOnce({ select });
+
+    const gateway = new SupabaseTaskGateway(client);
+    const tasks = await gateway.list();
+
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]!.deliverable).toBe("d");
+    expect(tasks[0]!.done).toBe("x");
+    expect(tasks[0]!.firstStep).toBe("f");
   });
 });
 

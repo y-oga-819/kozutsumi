@@ -1,4 +1,4 @@
-import { fireEvent, render as rtlRender } from "@testing-library/react";
+import { fireEvent, render as rtlRender, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { LatestDecomposeLog } from "../../entities/action-log/gateway";
 import type { Event } from "../../entities/event/types";
@@ -43,6 +43,9 @@ const baseTask: Task = {
   decomposeStatus: "none",
   taskCategory: null,
   taskSize: null,
+  deliverable: "",
+  done: "",
+  firstStep: "",
   createdAt: "2026-04-11T00:00:00",
   completedAt: null,
 };
@@ -1026,5 +1029,97 @@ describe("TaskDetailPanel - 子タスクの再分解 (Issue #121 / ADR 0027)", (
     });
     expect(queryByRole("button", { name: "もっと細かく" })).toBeNull();
     expect(queryByRole("button", { name: "AI 分解を実行" })).toBeNull();
+  });
+});
+
+// 完了条件 (deliverable / done / first_step) の表示・編集 (#246 / ADR 0061 / 0066)。
+// AI 分解が初期値を入れ、user が詳細パネルで上書きする。3 項目はまとめて編集し、
+// callback には trim 済みの値が渡る。section は role=region で scope できる。
+describe("TaskDetailPanel - 完了条件 (#246 / ADR 0061 / 0066)", () => {
+  test("onChangeCompletionCriteria 未指定なら完了条件 UI を出さない (旧呼び出し互換)", () => {
+    const { queryByRole } = renderPanel();
+    expect(queryByRole("region", { name: "完了条件" })).toBeNull();
+  });
+
+  test("onChangeCompletionCriteria 指定時、3 項目を表示する (値あり / 未設定の出し分け)", () => {
+    const { getByRole } = renderPanel({
+      task: { ...baseTask, deliverable: "API クライアント", done: "", firstStep: "" },
+      onChangeCompletionCriteria: vi.fn(),
+    });
+    const section = getByRole("region", { name: "完了条件" });
+    expect(within(section).getByText("API クライアント")).toBeTruthy();
+    // done / firstStep は空文字 → 「未設定」表示
+    expect(within(section).getAllByText("未設定")).toHaveLength(2);
+  });
+
+  test("「完了条件を編集」押下で入力欄 + 保存 / キャンセルに切り替わる", () => {
+    const { getByRole } = renderPanel({ onChangeCompletionCriteria: vi.fn() });
+    const section = getByRole("region", { name: "完了条件" });
+    fireEvent.click(within(section).getByRole("button", { name: "完了条件を編集" }));
+    expect(within(section).getByLabelText("成果物")).toBeTruthy();
+    expect(within(section).getByLabelText("完了の判定")).toBeTruthy();
+    expect(within(section).getByLabelText("最初の一歩")).toBeTruthy();
+    expect(within(section).getByRole("button", { name: "保存" })).toBeTruthy();
+    expect(within(section).getByRole("button", { name: "キャンセル" })).toBeTruthy();
+  });
+
+  test("編集 → 入力 → 保存で onChangeCompletionCriteria(taskId, 3 項目) を呼ぶ (前後空白は trim)", () => {
+    const onChangeCompletionCriteria = vi.fn();
+    const { getByRole } = renderPanel({ onChangeCompletionCriteria });
+    const section = getByRole("region", { name: "完了条件" });
+    fireEvent.click(within(section).getByRole("button", { name: "完了条件を編集" }));
+    fireEvent.change(within(section).getByLabelText("成果物"), {
+      target: { value: "  成果物 X  " },
+    });
+    fireEvent.change(within(section).getByLabelText("完了の判定"), {
+      target: { value: "条件 Y" },
+    });
+    fireEvent.change(within(section).getByLabelText("最初の一歩"), {
+      target: { value: "一手 Z" },
+    });
+    fireEvent.click(within(section).getByRole("button", { name: "保存" }));
+    expect(onChangeCompletionCriteria).toHaveBeenCalledWith("t1", {
+      deliverable: "成果物 X",
+      done: "条件 Y",
+      firstStep: "一手 Z",
+    });
+  });
+
+  test("保存後は display モードに戻り、入力欄は消える", () => {
+    const { getByRole } = renderPanel({ onChangeCompletionCriteria: vi.fn() });
+    const section = getByRole("region", { name: "完了条件" });
+    fireEvent.click(within(section).getByRole("button", { name: "完了条件を編集" }));
+    fireEvent.click(within(section).getByRole("button", { name: "保存" }));
+    expect(within(section).queryByLabelText("成果物")).toBeNull();
+    expect(within(section).getByRole("button", { name: "完了条件を編集" })).toBeTruthy();
+  });
+
+  test("キャンセルで onChangeCompletionCriteria は呼ばれず display モードに戻る", () => {
+    const onChangeCompletionCriteria = vi.fn();
+    const { getByRole } = renderPanel({ onChangeCompletionCriteria });
+    const section = getByRole("region", { name: "完了条件" });
+    fireEvent.click(within(section).getByRole("button", { name: "完了条件を編集" }));
+    fireEvent.change(within(section).getByLabelText("成果物"), {
+      target: { value: "破棄される" },
+    });
+    fireEvent.click(within(section).getByRole("button", { name: "キャンセル" }));
+    expect(onChangeCompletionCriteria).not.toHaveBeenCalled();
+    expect(within(section).getByRole("button", { name: "完了条件を編集" })).toBeTruthy();
+  });
+
+  test("編集開始時、入力欄には現在の完了条件値が入っている", () => {
+    const { getByRole } = renderPanel({
+      task: { ...baseTask, deliverable: "既存成果物", done: "既存完了", firstStep: "既存一手" },
+      onChangeCompletionCriteria: vi.fn(),
+    });
+    const section = getByRole("region", { name: "完了条件" });
+    fireEvent.click(within(section).getByRole("button", { name: "完了条件を編集" }));
+    expect((within(section).getByLabelText("成果物") as HTMLInputElement).value).toBe("既存成果物");
+    expect((within(section).getByLabelText("完了の判定") as HTMLInputElement).value).toBe(
+      "既存完了",
+    );
+    expect((within(section).getByLabelText("最初の一歩") as HTMLInputElement).value).toBe(
+      "既存一手",
+    );
   });
 });

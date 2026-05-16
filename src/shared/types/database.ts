@@ -82,6 +82,9 @@ export type Database = {
           decompose_status: Database["public"]["Enums"]["decompose_status"];
           task_category: TaskCategoryValue | null;
           task_size: TaskSizeValue | null;
+          deliverable: string;
+          done: string;
+          first_step: string;
           created_at: string;
           completed_at: string | null;
         };
@@ -100,6 +103,9 @@ export type Database = {
           decompose_status?: Database["public"]["Enums"]["decompose_status"];
           task_category?: TaskCategoryValue | null;
           task_size?: TaskSizeValue | null;
+          deliverable?: string;
+          done?: string;
+          first_step?: string;
           created_at?: string;
           completed_at?: string | null;
         };
@@ -118,6 +124,9 @@ export type Database = {
           decompose_status?: Database["public"]["Enums"]["decompose_status"];
           task_category?: TaskCategoryValue | null;
           task_size?: TaskSizeValue | null;
+          deliverable?: string;
+          done?: string;
+          first_step?: string;
           created_at?: string;
           completed_at?: string | null;
         };

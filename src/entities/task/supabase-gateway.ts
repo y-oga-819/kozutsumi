@@ -24,6 +24,9 @@ function fromRow(row: Tables<"tasks">): Task {
     decomposeStatus: row.decompose_status,
     taskCategory: row.task_category,
     taskSize: row.task_size,
+    deliverable: row.deliverable,
+    done: row.done,
+    firstStep: row.first_step,
     createdAt: row.created_at,
     completedAt: row.completed_at,
   };
@@ -149,6 +152,9 @@ export class SupabaseTaskGateway implements TaskGateway {
     if (patch.decomposeStatus !== undefined) update.decompose_status = patch.decomposeStatus;
     if (patch.taskCategory !== undefined) update.task_category = patch.taskCategory;
     if (patch.taskSize !== undefined) update.task_size = patch.taskSize;
+    if (patch.deliverable !== undefined) update.deliverable = patch.deliverable;
+    if (patch.done !== undefined) update.done = patch.done;
+    if (patch.firstStep !== undefined) update.first_step = patch.firstStep;
     if (patch.completedAt !== undefined) update.completed_at = patch.completedAt;
     const { data, error } = await this.supabase
       .from("tasks")

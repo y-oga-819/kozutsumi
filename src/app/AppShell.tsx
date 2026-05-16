@@ -120,6 +120,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
     updateDependency,
     updateCategory,
     updateSize,
+    updateCompletionCriteria,
     updateTaskProject,
     reorder,
     reorderGroup,
@@ -275,6 +276,7 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
               onChangeDependency={updateDependency}
               onChangeCategory={updateCategory}
               onChangeSize={updateSize}
+              onChangeCompletionCriteria={updateCompletionCriteria}
               onChangeProject={updateTaskProject}
               aiEnabled={aiEnabled}
               latestDecomposeLog={decomposeLogQuery.data ?? null}

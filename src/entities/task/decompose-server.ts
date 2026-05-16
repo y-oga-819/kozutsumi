@@ -149,6 +149,11 @@ async function runDecompose(
     // ADR 0038 / Issue #169: AI が推定した主観サイズ。fn_decompose_parent_task が
     // tasks.task_size 列に保存する (値域外 / null は parser 側で null に倒している)。
     task_size: child.taskSize,
+    // ADR 0061 / 0066 / Issue #246: AI が言語化した完了条件 3 項目。
+    // parser 側で欠損は空文字に倒しているので、ここでは素通しする。
+    deliverable: child.deliverable,
+    done: child.done,
+    first_step: child.firstStep,
   }));
 
   // ADR 0021 / Issue #150: 子 insert + 親 decompose_status 更新を 1 トランザクションで行う。

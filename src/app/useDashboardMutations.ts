@@ -46,6 +46,16 @@ export type DashboardMutations = {
    */
   updateSize: (id: string, taskSize: TaskSize | null) => void;
   /**
+   * #246 / ADR 0061 / 0066: 詳細パネルからの完了条件編集。
+   * deliverable / done / first_step をまとめて `tasks` 同名列に書く。AI 分解が入れた
+   * 初期値を user が上書きするルート。updateSize と同じく action_log は今は持たない
+   * (補完タイミング / AI 値との競合解決は #244 / #245 で確定する)。
+   */
+  updateCompletionCriteria: (
+    id: string,
+    criteria: { deliverable: string; done: string; firstStep: string },
+  ) => void;
+  /**
    * Issue #171 / ADR 0039: タスクの project_id 編集と親→子 / 子→兄弟+親 への伝播。
    * cache から target の親子関係を判定して mode を決め、対応する RPC (atomic) または
    * 単独 update を呼ぶ。1 操作 = 1 ログ (`task_project_changed`) + payload に伝播範囲。
@@ -259,6 +269,33 @@ export function useDashboardMutations(): DashboardMutations {
       const previous = queryClient.getQueryData<Task[]>(dashboardKeys.tasks);
       queryClient.setQueryData<Task[]>(dashboardKeys.tasks, (prev) =>
         (prev ?? []).map((t) => (t.id === id ? { ...t, taskSize } : t)),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(dashboardKeys.tasks, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.tasks });
+    },
+  });
+
+  // #246 / ADR 0061 / 0066: 完了条件 (deliverable / done / first_step) の上書き。
+  // AI 分解が初期値を入れるルートと、ユーザーが詳細パネルで上書きするルートが両方あり、
+  // どちらも `tasks` の同名列に落ちる。updateSize と同じく action_log は今は持たない。
+  const updateCompletionCriteriaMutation = useMutation({
+    mutationFn: ({
+      id,
+      criteria,
+    }: {
+      id: string;
+      criteria: { deliverable: string; done: string; firstStep: string };
+    }) => taskGateway.update(id, criteria),
+    onMutate: async ({ id, criteria }) => {
+      await queryClient.cancelQueries({ queryKey: dashboardKeys.tasks });
+      const previous = queryClient.getQueryData<Task[]>(dashboardKeys.tasks);
+      queryClient.setQueryData<Task[]>(dashboardKeys.tasks, (prev) =>
+        (prev ?? []).map((t) => (t.id === id ? { ...t, ...criteria } : t)),
       );
       return { previous };
     },
@@ -803,6 +840,8 @@ export function useDashboardMutations(): DashboardMutations {
       updateDependencyMutation.mutate({ id, dependsOnEventId }),
     updateCategory: (id, taskCategory) => updateCategoryMutation.mutate({ id, taskCategory }),
     updateSize: (id, taskSize) => updateSizeMutation.mutate({ id, taskSize }),
+    updateCompletionCriteria: (id, criteria) =>
+      updateCompletionCriteriaMutation.mutate({ id, criteria }),
     updateTaskProject,
     reorder,
     reorderGroup,

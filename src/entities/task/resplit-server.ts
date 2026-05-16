@@ -177,6 +177,10 @@ async function runResplit(
     task_category: c.taskCategory,
     // ADR 0038 / Issue #169: 子の主観サイズも保存する。
     task_size: c.taskSize,
+    // ADR 0061 / 0066 / Issue #246: 再分解後の子にも完了条件 3 項目を保存する。
+    deliverable: c.deliverable,
+    done: c.done,
+    first_step: c.firstStep,
   }));
 
   // ADR 0028 / 0030: rpc で delete + insert + reorder を atomic 実行する。
