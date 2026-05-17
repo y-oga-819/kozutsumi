@@ -138,7 +138,9 @@ test.describe("タスク編集 (TaskDetailPanel body)", () => {
     // 詳細パネルを開く (TopTaskCard 全体が onClick、title 文字を狙う)。
     await row.getByText(taskTitle).first().click();
 
-    await page.getByRole("button", { name: "編集" }).click();
+    // exact: true — 完了条件セクション (#246) の「完了条件を編集」ボタンと
+    // 部分一致しないよう、本文の「編集」ボタンだけを狙う。
+    await page.getByRole("button", { name: "編集", exact: true }).click();
     // textarea は role=textbox では取れない (placeholder ベース)。
     const textarea = page.getByPlaceholder("Markdownで詳細を入力...");
     await expect(textarea).toBeVisible();
@@ -146,7 +148,7 @@ test.describe("タスク編集 (TaskDetailPanel body)", () => {
     await page.getByRole("button", { name: "保存" }).click();
 
     // 保存後はパネルが view モードに戻り「編集」ボタンが再度見える。
-    await expect(page.getByRole("button", { name: "編集" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "編集", exact: true })).toBeVisible();
 
     // DB は楽観的更新と非同期 mutation の間に小ラグがあり得るので poll。
     await expect
