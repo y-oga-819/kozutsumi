@@ -49,6 +49,17 @@ export type Task = {
   decomposeStatus: DecomposeStatus;
   taskCategory: TaskCategory | null;
   taskSize: TaskSize | null;
+  /**
+   * 完了条件 (ADR 0061 / 0066, #246)。AI 分解が言語化し、詳細パネルで user が編集できる。
+   * 3 項目は別軸 (何を生むか / いつ完了か / どう始めるか):
+   * - deliverable = そのタスクが生む成果物 (名詞)
+   * - done        = deliverable が完成したと言える観測可能な条件
+   * - firstStep   = 着手の最初の一手
+   * フェイルソフト: 未設定 / AI が言語化できなかったケースは空文字 (null は持たない)。
+   */
+  deliverable: string;
+  done: string;
+  firstStep: string;
   createdAt: string;
   completedAt: string | null;
 };

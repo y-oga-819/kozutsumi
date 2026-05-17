@@ -316,6 +316,42 @@ describe("resplitChildTask", () => {
     expect(generate).toHaveBeenCalledWith(expect.stringContaining("task_size: 2h"));
   });
 
+  test("完了条件 3 項目が rpc params に含まれる / 欠損は空文字に倒れる (ADR 0061 / 0066 / #246)", async () => {
+    const { client, calls } = makeSupabase(defaultPlan(makeTargetRow()));
+    const generate = vi.fn(async () =>
+      JSON.stringify([
+        {
+          title: "導入部の構成を決める",
+          estimated_minutes: 10,
+          task_category: "doc",
+          deliverable: "導入の骨子",
+          done: "節タイトルが 3 つ決まっている",
+          first_step: "結論の一文を書く",
+        },
+        // 完了条件が欠損 → parser が空文字に倒す (フェイルソフト)
+        { title: "本文を書く", estimated_minutes: 15, task_category: "doc" },
+      ]),
+    );
+
+    const result = await resplitChildTask(makeDeps({ client, generate }));
+
+    expect(result.kind).toBe("resplit_succeeded");
+    const newChildren = calls.rpcCalls[0].params.p_new_children as Array<Record<string, unknown>>;
+    expect(newChildren).toHaveLength(2);
+    expect(newChildren[0]).toMatchObject({
+      title: "導入部の構成を決める",
+      deliverable: "導入の骨子",
+      done: "節タイトルが 3 つ決まっている",
+      first_step: "結論の一文を書く",
+    });
+    expect(newChildren[1]).toMatchObject({
+      title: "本文を書く",
+      deliverable: "",
+      done: "",
+      first_step: "",
+    });
+  });
+
   test("siblings を prompt に渡す (ADR 0029)", async () => {
     const { client } = makeSupabase(defaultPlan(makeTargetRow()));
     const generate = vi.fn(async () => VALID_RAW);

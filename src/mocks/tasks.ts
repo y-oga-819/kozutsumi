@@ -14,6 +14,9 @@ export function buildInitialTasks(): Task[] {
     decomposeStatus: "none" as const,
     taskCategory: null,
     taskSize: null,
+    deliverable: "",
+    done: "",
+    firstStep: "",
     createdAt: now,
     completedAt: null,
   };

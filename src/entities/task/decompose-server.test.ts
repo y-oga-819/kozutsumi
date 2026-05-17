@@ -632,6 +632,42 @@ describe("decomposeTask", () => {
 
     expect(generate).toHaveBeenCalledWith(expect.stringContaining("task_size: 未設定"));
   });
+
+  test("完了条件 3 項目が rpc params に含まれる / 欠損は空文字に倒れる (ADR 0061 / 0066 / #246)", async () => {
+    const { client, calls } = makeSupabase(defaultPlan(makeParentRow()));
+    const generate = vi.fn(async () =>
+      JSON.stringify([
+        {
+          title: "a",
+          estimated_minutes: 30,
+          task_category: "coding",
+          deliverable: "API クライアント",
+          done: "ユニットテストが緑",
+          first_step: "型定義ファイルを作る",
+        },
+        // 完了条件が欠損 → parser が空文字に倒す (フェイルソフト)
+        { title: "b", estimated_minutes: 15, task_category: "doc" },
+      ]),
+    );
+
+    const result = await decomposeTask(makeDeps({ client, generate }));
+
+    expect(result.kind).toBe("decomposed");
+    const newChildren = calls.rpcCalls[0].params.p_new_children as Array<Record<string, unknown>>;
+    expect(newChildren).toHaveLength(2);
+    expect(newChildren[0]).toMatchObject({
+      title: "a",
+      deliverable: "API クライアント",
+      done: "ユニットテストが緑",
+      first_step: "型定義ファイルを作る",
+    });
+    expect(newChildren[1]).toMatchObject({
+      title: "b",
+      deliverable: "",
+      done: "",
+      first_step: "",
+    });
+  });
 });
 
 describe("classifyGenerateError", () => {

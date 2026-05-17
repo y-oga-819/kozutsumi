@@ -55,6 +55,16 @@ export type TaskDetailPanelProps = {
    */
   onChangeProject?: (id: string, projectId: string | null) => void;
   /**
+   * 完了条件 (`tasks.deliverable` / `done` / `first_step`) の編集 (ADR 0061 / 0066 / #246)。
+   * AI 分解が初期値を言語化し、user が詳細パネルで上書きできる。3 項目はまとめて渡す
+   * (フェイルソフトで空文字を許容、null は持たない)。
+   * 未指定なら完了条件 UI を出さない (旧呼び出し / テスト互換)。
+   */
+  onChangeCompletionCriteria?: (
+    id: string,
+    criteria: { deliverable: string; done: string; firstStep: string },
+  ) => void;
+  /**
    * AI 分解の最新試行ログ (`task_decomposed` / `task_decompose_failed` /
    * `task_decompose_skipped` の最新 1 件)。なければ null。
    * 親が undefined を渡した場合は AI 分解情報エリアを描画しない (旧呼び出し互換)。
@@ -90,6 +100,7 @@ export function TaskDetailPanel({
   onChangeCategory,
   onChangeSize,
   onChangeProject,
+  onChangeCompletionCriteria,
   latestDecomposeLog,
   isDecomposeLogLoading,
   aiEnabled = true,
@@ -429,6 +440,14 @@ export function TaskDetailPanel({
             </div>
           )}
 
+          {onChangeCompletionCriteria && (
+            <CompletionCriteriaSection
+              task={task}
+              onChange={onChangeCompletionCriteria}
+              accentColor={proj.color}
+            />
+          )}
+
           {showDecomposeSection && (
             <DecomposeInfoSection
               task={task}
@@ -594,6 +613,131 @@ function ProjectChangeConfirmDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+// ADR 0061 / 0066 / #246: 完了条件 3 項目。値域 (deliverable / done / first_step) は
+// DB の列 / Task 型と single source of truth で揃え、ここでは表示ラベルと placeholder のみ持つ。
+const COMPLETION_CRITERIA_FIELDS = [
+  { key: "deliverable", label: "成果物", placeholder: "何が出来上がるか" },
+  { key: "done", label: "完了の判定", placeholder: "完成したと言える条件" },
+  { key: "firstStep", label: "最初の一歩", placeholder: "まず手を動かす一手" },
+] as const;
+
+/**
+ * 完了条件セクション (ADR 0061 / 0066 / #246)。
+ * deliverable / done / first_step の 3 項目を表示し、まとめて編集できる。
+ * AI 分解が初期値を言語化し、user が詳細パネルで上書きする。3 項目はフェイルソフトで
+ * 空文字を許容する (未設定 / AI が言語化できなかったケースを空文字で表す)。
+ *
+ * 編集体験は body editor と揃える (編集ボタン → 入力欄 → 保存 / キャンセル)。
+ * セクションは `<section aria-label="完了条件">` で scope し、編集ボタンは body の
+ * 「編集」ボタンと accessible name が衝突しないよう「完了条件を編集」とする。
+ */
+function CompletionCriteriaSection({
+  task,
+  onChange,
+  accentColor,
+}: {
+  task: Task;
+  onChange: (
+    id: string,
+    criteria: { deliverable: string; done: string; firstStep: string },
+  ) => void;
+  accentColor: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({
+    deliverable: task.deliverable,
+    done: task.done,
+    firstStep: task.firstStep,
+  });
+
+  const startEditing = () => {
+    // 編集開始時に最新の task 値で draft を初期化する (AI 分解で値が後から入る経路に追従)。
+    setDraft({ deliverable: task.deliverable, done: task.done, firstStep: task.firstStep });
+    setEditing(true);
+  };
+
+  const handleSave = () => {
+    onChange(task.id, {
+      deliverable: draft.deliverable.trim(),
+      done: draft.done.trim(),
+      firstStep: draft.firstStep.trim(),
+    });
+    setEditing(false);
+  };
+
+  return (
+    <section aria-label="完了条件" className="px-5 pb-2 pt-1">
+      <div className="mb-1 font-jp text-[10px] text-fg-weak">完了条件</div>
+      {editing ? (
+        <>
+          <div className="flex flex-col gap-2">
+            {COMPLETION_CRITERIA_FIELDS.map((field) => (
+              <label key={field.key} className="flex flex-col gap-0.5">
+                <span className="font-jp text-[10px] text-fg-subtle">{field.label}</span>
+                <input
+                  type="text"
+                  value={draft[field.key]}
+                  placeholder={field.placeholder}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                  className="rounded border border-bg-divider bg-bg-elevated px-2 py-1 font-jp text-[11px] text-fg-default outline-none focus:border-accent-blue"
+                />
+              </label>
+            ))}
+          </div>
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="cursor-pointer rounded-[4px] border border-bg-divider bg-transparent px-3 py-1 font-jp text-[10px] text-fg-subtle"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="cursor-pointer rounded-[4px] px-3 py-1 font-jp text-[10px] font-semibold text-fg-invert"
+              style={{ background: accentColor }}
+            >
+              保存
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <dl className="m-0 flex flex-col gap-1">
+            {COMPLETION_CRITERIA_FIELDS.map((field) => {
+              const value = task[field.key];
+              return (
+                <div key={field.key} className="flex gap-2">
+                  <dt className="w-[52px] shrink-0 font-jp text-[10px] text-fg-weak">
+                    {field.label}
+                  </dt>
+                  <dd
+                    className={`m-0 font-jp text-[10px] leading-[1.5] ${
+                      value ? "text-fg-subtle" : "italic text-fg-faint"
+                    }`}
+                  >
+                    {value || "未設定"}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+          <div className="mt-1.5 flex justify-end">
+            <button
+              type="button"
+              onClick={startEditing}
+              className="cursor-pointer rounded-[4px] border border-bg-divider bg-transparent px-2.5 py-[3px] font-jp text-[10px] text-fg-subtle"
+            >
+              完了条件を編集
+            </button>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 

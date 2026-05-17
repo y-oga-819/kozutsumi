@@ -49,6 +49,9 @@ const baseTask: Task = {
   decomposeStatus: "none",
   taskCategory: null,
   taskSize: null,
+  deliverable: "",
+  done: "",
+  firstStep: "",
   createdAt: "2026-04-19T09:00:00.000Z",
   completedAt: null,
 };
