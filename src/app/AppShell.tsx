@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAutoSeed } from "./useAutoSeed";
 import {
@@ -44,6 +44,7 @@ import {
   useTaskGateway,
 } from "@/shared/gateway/GatewayContext";
 import { writeSampleDataMode } from "@/shared/lib/sample-data";
+import { isCompletionCriteriaEligible } from "@/shared/lib/task";
 import { todayIso } from "@/shared/lib/time";
 
 type View = "stack" | "tree" | "events";
@@ -137,7 +138,27 @@ export function AppShell({ initialView, aiEnabled, user }: AppShellProps) {
     deleteTask,
     triggerDecomposeWithOptimistic,
     triggerResplitWithOptimistic,
+    triggerCompleteCriteria,
   } = useDashboardMutations();
+
+  // #245 / ADR 0064 / 0066 / 0067: タスク詳細画面を開いたとき、完了条件 (deliverable /
+  // done / first_step) が未補完なら AI 後追い補完を fire-and-forget で起動する。
+  // パネル 1 回の open につき 1 回だけ起動する (ref で多重発火を抑止し、close で解除)。
+  // server / triggerCompleteCriteria 側も guard を持つので、ここは無駄な fetch を
+  // 避けるための前段ガード。
+  const completeCriteriaFiredForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!detailId) {
+      completeCriteriaFiredForRef.current = null;
+      return;
+    }
+    if (completeCriteriaFiredForRef.current === detailId) return;
+    if (!aiEnabled) return;
+    const task = tasks.find((t) => t.id === detailId);
+    if (!task || !isCompletionCriteriaEligible(task)) return;
+    completeCriteriaFiredForRef.current = detailId;
+    triggerCompleteCriteria(detailId);
+  }, [detailId, tasks, aiEnabled, triggerCompleteCriteria]);
 
   const resetSample = useCallback(async () => {
     try {
