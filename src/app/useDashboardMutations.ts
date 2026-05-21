@@ -21,6 +21,7 @@ import {
   reorderTasksById,
 } from "@/features/task-stack/reorderTasks";
 import { triggerCategorize } from "@/features/task-stack/triggerCategorize";
+import { triggerCompleteCriteria } from "@/features/task-stack/triggerCompleteCriteria";
 import { triggerDecompose } from "@/features/task-stack/triggerDecompose";
 import { triggerResplit } from "@/features/task-stack/triggerResplit";
 import {
@@ -117,6 +118,12 @@ export type DashboardMutations = {
    * 出し、完了後 (成功 / 失敗 / skipped 問わず) tasks を invalidate する。
    */
   triggerResplitWithOptimistic: (id: string) => void;
+  /**
+   * #245 / ADR 0064 / 0066 / 0067: AI 後追い完了条件補完。タスク詳細画面を開いた
+   * ときに fire-and-forget で `/api/ai/complete-criteria` を叩く。optimistic UI は
+   * 持たない (補完は裏で進む)。完了後に tasks を invalidate して補完値を refetch する。
+   */
+  triggerCompleteCriteria: (id: string) => void;
 };
 
 /**
@@ -833,6 +840,18 @@ export function useDashboardMutations(): DashboardMutations {
     [queryClient],
   );
 
+  // #245 / ADR 0064 / 0066 / 0067: 詳細画面の閲覧時に AI 後追い補完を fire-and-forget で
+  // 起動する。createTaskWithAi の triggerDecompose / triggerCategorize と同じく、完了後に
+  // tasks を invalidate して補完値を refetch する (補完は未補完フィールドにのみ書かれる)。
+  const triggerCompleteCriteriaWithInvalidate = useCallback(
+    (id: string) => {
+      void triggerCompleteCriteria(id).finally(() => {
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.tasks });
+      });
+    },
+    [queryClient],
+  );
+
   return {
     toggleDone: (id) => toggleDoneMutation.mutate(id),
     updateBody: (id, body) => updateBodyMutation.mutate({ id, body }),
@@ -864,5 +883,6 @@ export function useDashboardMutations(): DashboardMutations {
     deleteTask: (id) => deleteTaskMutation.mutate(id),
     triggerDecomposeWithOptimistic,
     triggerResplitWithOptimistic,
+    triggerCompleteCriteria: triggerCompleteCriteriaWithInvalidate,
   };
 }
